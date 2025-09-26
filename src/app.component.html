@@ -1,0 +1,332 @@
+<div class="flex flex-col h-screen antialiased text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-950">
+  <!-- Header -->
+  <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg border-b border-slate-900/10 dark:border-white/10 p-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center space-x-4">
+      <h1 class="text-xl font-bold text-indigo-600 dark:text-indigo-400">{{ 'appTitle' | translate }}</h1>
+      <div class="hidden sm:flex items-center rounded-lg p-1">
+        <button (click)="currentView.set('list')" [class.text-indigo-600]="currentView() === 'list'" [class.dark:text-indigo-400]="currentView() === 'list'" [class.font-semibold]="currentView() === 'list'" class="px-3 py-1 text-sm text-slate-600 dark:text-slate-300 rounded-md transition-colors hover:text-indigo-600 dark:hover:text-indigo-400">{{ 'viewList' | translate }}</button>
+        <button (click)="currentView.set('week')" [class.text-indigo-600]="currentView() === 'week'" [class.dark:text-indigo-400]="currentView() === 'week'" [class.font-semibold]="currentView() === 'week'" class="px-3 py-1 text-sm text-slate-600 dark:text-slate-300 rounded-md transition-colors hover:text-indigo-600 dark:hover:text-indigo-400">{{ 'viewWeek' | translate }}</button>
+        <button (click)="currentView.set('month')" [class.text-indigo-600]="currentView() === 'month'" [class.dark:text-indigo-400]="currentView() === 'month'" [class.font-semibold]="currentView() === 'month'" class="px-3 py-1 text-sm text-slate-600 dark:text-slate-300 rounded-md transition-colors hover:text-indigo-600 dark:hover:text-indigo-400">{{ 'viewMonth' | translate }}</button>
+      </div>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button (click)="openNewShiftForm()" class="hidden sm:flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-px">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+        <span class="font-semibold">{{ 'addShift' | translate }}</span>
+      </button>
+      <button (click)="openModal('settings')" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile View Switcher -->
+  <div class="sm:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg p-2 border-b border-slate-900/10 dark:border-white/10">
+    <div class="flex items-center justify-center bg-slate-200 dark:bg-slate-800 rounded-lg p-1">
+      <button (click)="currentView.set('list')" [class.bg-white]="currentView() === 'list'" [class.dark:bg-slate-950]="currentView() === 'list'" [class.text-indigo-600]="currentView() === 'list'" class="w-full px-3 py-1.5 text-sm font-semibold rounded-md transition-colors">{{ 'viewList' | translate }}</button>
+      <button (click)="currentView.set('week')" [class.bg-white]="currentView() === 'week'" [class.dark:bg-slate-950]="currentView() === 'week'" [class.text-indigo-600]="currentView() === 'week'" class="w-full px-3 py-1.5 text-sm font-semibold rounded-md transition-colors">{{ 'viewWeek' | translate }}</button>
+      <button (click)="currentView.set('month')" [class.bg-white]="currentView() === 'month'" [class.dark:bg-slate-950]="currentView() === 'month'" [class.text-indigo-600]="currentView() === 'month'" class="w-full px-3 py-1.5 text-sm font-semibold rounded-md transition-colors">{{ 'viewMonth' | translate }}</button>
+    </div>
+  </div>
+  
+  <!-- Main Content -->
+  <main class="flex-grow overflow-y-auto">
+    <!-- View Header -->
+    <div class="sticky top-0 sm:top-[65px] bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-lg p-3 flex items-center justify-between z-20 border-b border-slate-900/10 dark:border-white/10">
+        @if (currentView() !== 'list') {
+            <div class="flex items-center">
+                <button (click)="currentView() === 'month' ? changeMonth(-1) : changeWeek(-1)" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+                </button>
+                <button (click)="currentView() === 'month' ? changeMonth(1) : changeWeek(1)" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                </button>
+                <button (click)="goToToday()" class="ml-4 px-4 py-1.5 text-sm font-semibold bg-slate-200 dark:bg-slate-800 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">{{ 'today' | translate }}</button>
+            </div>
+        } @else {
+            <div></div> <!-- Placeholder to maintain layout -->
+        }
+        <h2 class="text-lg font-semibold tracking-tight capitalize">
+          @if (currentView() === 'month') {
+            {{ currentDate() | langDate:'monthYear' }}
+          } @else if(currentView() === 'week') {
+            {{ weekDays()[0].date | langDate:'dayMonth' }} - {{ weekDays()[6].date | langDate:'dayMonth' }}
+          } @else {
+            {{ 'viewList' | translate }}
+          }
+        </h2>
+    </div>
+
+    <!-- Calendar View -->
+    @if (currentView() === 'month') {
+      <div class="flex flex-col h-full">
+        <div class="calendar-grid p-1 text-xs font-bold text-center text-slate-500 dark:text-slate-400 border-b border-slate-900/10 dark:border-white/10 capitalize">
+          <div class="py-2">{{ '2024-01-01' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-02' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-03' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-04' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-05' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-06' | langDate:'shortDayName' }}</div> 
+          <div class="py-2">{{ '2024-01-07' | langDate:'shortDayName' }}</div>
+        </div>
+        <div class="calendar-grid flex-grow">
+          @for (day of monthDays(); track day.date) {
+            <div class="border-r border-b border-slate-900/10 dark:border-white/10 p-1 flex flex-col min-h-[120px]" [class.bg-slate-100/50]="!day.isCurrentMonth" [class.dark:bg-black/10]="!day.isCurrentMonth">
+              <div class="text-sm font-semibold flex items-center justify-center h-7 w-7" [class.text-slate-400]="!day.isCurrentMonth" [class.dark:text-slate-600]="!day.isCurrentMonth" [class.bg-indigo-600]="day.isToday" [class.text-white]="day.isToday" [class.rounded-full]="day.isToday">
+                {{ day.date | langDate:'dayNumber' }}
+              </div>
+              <div class="flex-grow mt-1 space-y-1 overflow-y-auto scrollbar-hidden">
+                @for (shift of day.shifts; track shift.id) {
+                   <div (click)="openEditShiftForm(shift)" class="flex items-center gap-1.5 p-1 rounded-md cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800/80">
+                    <div class="w-2 h-2 rounded-full shrink-0" [class]="'bg-' + shift.color + '-500'"></div>
+                    <p class="text-xs font-medium truncate text-slate-700 dark:text-slate-300">{{ shift.title }}</p>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Week View -->
+    @if (currentView() === 'week') {
+      <div class="flex flex-col h-full">
+        <div class="grid grid-cols-7 text-center font-bold text-slate-500 dark:text-slate-400 border-b border-slate-900/10 dark:border-white/10 capitalize">
+          @for (day of weekDays(); track day.date) {
+            <div class="p-2 border-r border-slate-900/10 dark:border-white/10" [class.text-indigo-600]="day.isToday" [class.dark:text-indigo-400]="day.isToday">
+              <div>{{ day.date | langDate:'shortDayName' }}</div>
+              <div class="text-2xl font-bold">{{ day.date | langDate:'dayNumber' }}</div>
+            </div>
+          }
+        </div>
+        <div class="grid grid-cols-7 flex-grow overflow-auto">
+          @for (day of weekDays(); track day.date) {
+            <div class="border-r border-slate-900/10 dark:border-white/10 p-2 space-y-2">
+              @for (shift of day.shifts; track shift.id) {
+                <div (click)="openEditShiftForm(shift)" [class]="getColorClasses(shift.color, 'bg')" class="p-2 rounded-lg cursor-pointer hover:shadow-lg transition-shadow">
+                  <p class="font-semibold text-sm truncate">{{ shift.title }}</p>
+                  <p class="text-xs">{{ shift.start | langDate:'time' }} - {{ shift.end | langDate:'time' }}</p>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- List View -->
+    @if (currentView() === 'list') {
+      <div class="p-4 space-y-3">
+        @if (listShifts().length > 0) {
+          @for (shift of listShifts(); track shift.id) {
+            <div class="relative bg-white dark:bg-slate-800/50 p-4 rounded-xl shadow-sm flex items-center space-x-4 hover:shadow-md transition-shadow duration-300 overflow-hidden">
+              <div class="absolute left-0 top-0 bottom-0 w-1.5" [class]="'bg-' + shift.color + '-500'"></div>
+              <div class="flex flex-col items-center justify-center w-16 shrink-0">
+                <p class="text-3xl font-bold text-slate-800 dark:text-slate-100">{{ shift.start | langDate:'dayNumber' }}</p>
+                <p class="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{{ shift.start | langDate:'shortMonthName' }}</p>
+              </div>
+              <div class="flex-grow min-w-0 border-l border-slate-200 dark:border-slate-700 pl-4">
+                <p class="font-bold text-lg truncate">{{ shift.title }}</p>
+                <p class="text-slate-500 dark:text-slate-400 truncate">{{ shift.start | langDate:'shortDate' }} &middot; {{ shift.start | langDate:'time' }} - {{ shift.end | langDate:'time' }}</p>
+              </div>
+               <div class="flex items-center space-x-1 shrink-0">
+                <button (click)="openEditShiftForm(shift)" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" [title]="'editShift' | translate">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                </button>
+                <button (click)="confirmDelete(shift)" class="p-2 rounded-full hover:bg-rose-100 dark:hover:bg-rose-800/50 transition-colors" [title]="'delete' | translate">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-rose-500 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                </button>
+              </div>
+            </div>
+          }
+        } @else {
+          <div class="text-center py-16 text-slate-500 dark:text-slate-400">
+             <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+             <p class="mt-4 font-semibold">{{ 'noShifts' | translate }}</p>
+          </div>
+        }
+      </div>
+    }
+  </main>
+  
+  <!-- Floating Action Button for mobile -->
+  <div class="sm:hidden fixed bottom-6 right-6 z-40">
+    <button (click)="openNewShiftForm()" class="bg-indigo-600 text-white rounded-full p-4 shadow-lg hover:bg-indigo-700 transition-transform duration-200 hover:scale-110 active:scale-95">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+    </button>
+  </div>
+</div>
+
+
+<!-- Modals -->
+@if (activeModal() !== 'none') {
+  <div class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <!-- Shift Form Modal -->
+    @if (activeModal() === 'form') {
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg dark:text-slate-200 modal-fade-in" (click)="$event.stopPropagation()">
+        <form (ngSubmit)="handleFormSubmit()">
+          <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-2xl font-bold">{{ (editingShift() ? 'editShift' : 'newShift') | translate }}</h3>
+          </div>
+          <div class="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+            <div>
+              <label class="font-semibold text-sm mb-1 block">{{ 'title' | translate }}</label>
+              <input type="text" [(ngModel)]="shiftTitle" name="title" required class="w-full p-2.5 border-0 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="font-semibold text-sm mb-1 block">{{ 'startDate' | translate }}</label>
+                <input type="date" [(ngModel)]="shiftStartDate" name="startDate" required class="w-full p-2.5 border-0 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow">
+              </div>
+              <div>
+                <label class="font-semibold text-sm mb-1 block">{{ 'startTime' | translate }}</label>
+                <input type="time" [(ngModel)]="shiftStartTime" name="startTime" required class="w-full p-2.5 border-0 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow">
+              </div>
+            </div>
+             <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="font-semibold text-sm mb-1 block">{{ 'endDate' | translate }}</label>
+                <input type="date" [(ngModel)]="shiftEndDate" name="endDate" required class="w-full p-2.5 border-0 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow">
+              </div>
+              <div>
+                <label class="font-semibold text-sm mb-1 block">{{ 'endTime' | translate }}</label>
+                <input type="time" [(ngModel)]="shiftEndTime" name="endTime" required class="w-full p-2.5 border-0 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-shadow">
+              </div>
+            </div>
+            <div>
+              <label class="font-semibold text-sm mb-2 block">{{ 'color' | translate }}</label>
+              <div class="flex flex-wrap gap-2">
+                @for (color of colors; track color) {
+                  <button type="button" (click)="shiftColor.set(color)" class="w-9 h-9 rounded-full transition-transform hover:scale-110" [class]="'bg-' + color + '-400'" [class.ring-2]="shiftColor() === color" [class.ring-offset-2]="shiftColor() === color" [class.ring-indigo-500]="shiftColor() === color" [class.dark:ring-offset-slate-800]="shiftColor() === color"></button>
+                }
+              </div>
+            </div>
+            <div>
+              <label class="flex items-center space-x-3 p-1">
+                <input type="checkbox" [(ngModel)]="shiftIsRecurring" name="isRecurring" class="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700">
+                <span class="font-semibold">{{ 'repetition' | translate }}</span>
+              </label>
+              @if (shiftIsRecurring()) {
+                <div class="mt-2 grid grid-cols-2 gap-4 bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
+                  <select [ngModel]="shiftRepetition().frequency" (change)="onFrequencyChange($event)" name="repFreq" class="w-full p-2.5 border-0 rounded-lg bg-white dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none">
+                    @for (freq of repFrequencies; track freq) {
+                      <option [value]="freq">{{ ('every' | translate) + ' ' + (freq | translate) }}</option>
+                    }
+                  </select>
+                  <select [ngModel]="shiftRepetition().interval" (change)="onRepetitionIntervalChange($event)" name="repInt" class="w-full p-2.5 border-0 rounded-lg bg-white dark:bg-slate-600 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none">
+                     @for (interval of repIntervals[shiftRepetition().frequency]; track interval) {
+                      <option [value]="interval">{{ interval }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </div>
+          </div>
+          <div class="p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center rounded-b-2xl">
+             @if(editingShift()) {
+              <button type="button" (click)="confirmDelete(editingShift()!)" class="text-rose-600 dark:text-rose-400 font-semibold hover:underline">
+                  {{ 'delete' | translate }}
+              </button>
+             } @else {
+              <div></div>
+             }
+            <div class="flex space-x-2">
+              <button type="button" (click)="closeModal()" class="px-5 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'cancel' | translate }}</button>
+              <button type="submit" class="px-5 py-2.5 rounded-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">{{ 'save' | translate }}</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    }
+
+    <!-- Settings Modal -->
+    @if (activeModal() === 'settings') {
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md dark:text-slate-200 modal-fade-in" (click)="$event.stopPropagation()">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-2xl font-bold">{{ 'settings' | translate }}</h3>
+        </div>
+        <div class="p-6 space-y-6">
+          <div class="space-y-2">
+            <label class="font-semibold text-sm">{{ 'language' | translate }}</label>
+            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1 w-min">
+              <button (click)="translationService.setLanguage('it')" [class.bg-white]="translationService.language() === 'it'" [class.dark:bg-slate-900]="translationService.language() === 'it'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-colors">IT</button>
+              <button (click)="translationService.setLanguage('en')" [class.bg-white]="translationService.language() === 'en'" [class.dark:bg-slate-900]="translationService.language() === 'en'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-colors">EN</button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="font-semibold text-sm">{{ 'theme' | translate }}</label>
+            <div class="flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1 w-min">
+              <button (click)="theme.set('light')" [class.bg-white]="theme() === 'light'" [class.dark:bg-slate-900]="theme() === 'light'" class="px-3 py-1.5 text-sm font-semibold rounded-md transition-colors flex items-center space-x-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.706-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 14.464A1 1 0 106.465 13.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 11a1 1 0 100-2H4a1 1 0 100 2h1zM4.54 5.46a1 1 0 010-1.414l.707-.707a1 1 0 111.414 1.414l-.707-.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                <span>{{ 'light' | translate }}</span>
+              </button>
+              <button (click)="theme.set('dark')" [class.bg-white]="theme() === 'dark'" [class.dark:bg-slate-900]="theme() === 'dark'" class="px-3 py-1.5 text-sm font-semibold rounded-md transition-colors flex items-center space-x-2">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg>
+                 <span>{{ 'dark' | translate }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <h4 class="font-semibold text-sm">{{ 'backupRestore' | translate }}</h4>
+            <div class="space-y-2">
+              <button (click)="exportBackup()" class="w-full flex items-center justify-center space-x-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600 font-semibold py-3 rounded-lg transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                <span>{{ 'exportBackup' | translate }}</span>
+              </button>
+              <button (click)="triggerImport()" class="w-full flex items-center justify-center space-x-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-600 font-semibold py-3 rounded-lg transition-colors">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                 <span>{{ 'importBackup' | translate }}</span>
+                 <input type="file" id="importFile" class="hidden" (change)="importBackup($event)" accept=".json">
+              </button>
+            </div>
+          </div>
+          
+          <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+             <button (click)="confirmReset()" class="w-full bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400 hover:bg-rose-200 dark:hover:bg-rose-900 font-semibold py-3 rounded-lg transition-colors">{{ 'resetAllData' | translate }}</button>
+          </div>
+        </div>
+        <div class="p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end rounded-b-2xl">
+          <button (click)="closeModal()" class="px-5 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'cancel' | translate }}</button>
+        </div>
+      </div>
+    }
+
+    <!-- Confirmation Modals -->
+    @if (activeModal() === 'deleteConfirm' || activeModal() === 'deleteSeriesConfirm' || activeModal() === 'resetConfirm' || activeModal() === 'editSeriesConfirm') {
+       <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center dark:text-slate-200 modal-fade-in" (click)="$event.stopPropagation()">
+        
+        @if(activeModal() === 'editSeriesConfirm') {
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        } @else {
+            <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-12 w-12 text-amber-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+        }
+
+        <p class="mt-4 text-lg font-semibold">
+          @if (activeModal() === 'deleteConfirm') { {{ 'deleteShiftConfirm' | translate }} }
+          @if (activeModal() === 'deleteSeriesConfirm') { {{ 'deleteSeriesConfirm' | translate }} }
+          @if (activeModal() === 'editSeriesConfirm') { {{ 'editSeriesConfirm' | translate }} }
+          @if (activeModal() === 'resetConfirm') { {{ 'resetConfirm' | translate }} }
+        </p>
+
+        <div class="mt-6 flex flex-col space-y-2">
+            @if(activeModal() === 'deleteSeriesConfirm') {
+                 <button (click)="executeDelete(true)" class="w-full px-4 py-2.5 rounded-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors">{{ 'deleteAllFollowing' | translate }}</button>
+                 <button (click)="executeDelete(false)" class="w-full px-4 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'deleteThisOccurrence' | translate }}</button>
+            } @else if(activeModal() === 'editSeriesConfirm') {
+                 <button (click)="executeEdit(true)" class="w-full px-4 py-2.5 rounded-lg font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">{{ 'editAllFollowing' | translate }}</button>
+                 <button (click)="executeEdit(false)" class="w-full px-4 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'editThisOccurrence' | translate }}</button>
+            } @else if(activeModal() === 'deleteConfirm') {
+                <button (click)="executeDelete()" class="w-full px-4 py-2.5 rounded-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors">{{ 'delete' | translate }}</button>
+                <button (click)="closeModal()" class="w-full px-4 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'cancel' | translate }}</button>
+            } @else if(activeModal() === 'resetConfirm') {
+                 <button (click)="executeReset()" class="w-full px-4 py-2.5 rounded-lg font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors">{{ 'resetAllData' | translate }}</button>
+                 <button (click)="closeModal()" class="w-full px-4 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">{{ 'cancel' | translate }}</button>
+            }
+        </div>
+       </div>
+    }
+  </div>
+}
