@@ -7,15 +7,7 @@ import { TranslationService } from './services/translation.service';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 
-type View = 'list' | 'week' | 'month';
-type Modal = 'none' | 'form' | 'settings' | 'deleteConfirm' | 'deleteSeriesConfirm' | 'resetConfirm' | 'editSeriesConfirm';
-
-interface Day {
-    date: Date;
-    isToday: boolean;
-    isCurrentMonth: boolean;
-    shifts: Shift[];
-}
+type Modal = 'none' | 'form' | 'settings' | 'deleteConfirm' | 'deleteSeriesConfirm' | 'resetConfirm' | 'editSeriesConfirm' | 'searchDate';
 
 @Component({
   selector: 'app-root',
@@ -24,17 +16,6 @@ interface Day {
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
-    .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(7, minmax(0, 1fr));
-    }
-    .scrollbar-hidden::-webkit-scrollbar {
-        display: none;
-    }
-    .scrollbar-hidden {
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
-    }
     @keyframes fadeIn {
         from { opacity: 0; transform: scale(0.97); }
         to { opacity: 1; transform: scale(1); }
@@ -52,9 +33,7 @@ export class AppComponent {
   
   // UI State
   theme: WritableSignal<'light' | 'dark'>;
-  currentView = signal<View>('list');
   activeModal = signal<Modal>('none');
-  currentDate = signal(new Date());
   
   // Form & Edit State
   editingShift: WritableSignal<Shift | null> = signal(null);
@@ -71,6 +50,11 @@ export class AppComponent {
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
 
+  // List view state
+  listVisibleCount = signal(50);
+  searchDate = signal<Date | null>(null);
+  searchDateInput = signal('');
+
   // Constants
   colors = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
   repFrequencies = ['days', 'weeks', 'months', 'year'];
@@ -82,9 +66,8 @@ export class AppComponent {
   };
 
   // Derived State (Computed Signals)
-  monthDays = computed(() => this.generateMonth(this.currentDate()));
-  weekDays = computed(() => this.generateWeek(this.currentDate()));
-  listShifts = computed(() => this.generateList(this.currentDate()));
+  allListShifts = computed(() => this.generateList());
+  listShifts = computed(() => this.allListShifts().slice(0, this.listVisibleCount()));
   
   // Methods
   constructor() {
@@ -104,88 +87,33 @@ export class AppComponent {
     });
     
     this.resetForm();
+    this.searchDateInput.set(this.datePipe.transform(new Date(), 'yyyy-MM-dd')!);
   }
   
-  private generateMonth(date: Date): Day[] {
-    const shifts = this.shiftService.shifts();
-    const startDate = new Date(date.getFullYear(), date.getMonth(), 1);
-    const endDate = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  private generateList() {
+    const allShifts = this.shiftService.shifts()
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
-    const days: Day[] = [];
-    
-    // Day of the week (0=Sun, 1=Mon...). We want Monday to be the first day.
-    let dayOfWeek = startDate.getDay();
-    if (dayOfWeek === 0) dayOfWeek = 7; // Sunday is 7
-
-    // Add padding days from previous month
-    for (let i = 1; i < dayOfWeek; i++) {
-        const d = new Date(startDate);
-        d.setDate(d.getDate() - (dayOfWeek - i));
-        days.push({ date: d, isToday: false, isCurrentMonth: false, shifts: [] });
+    const search = this.searchDate();
+    if (search) {
+      const searchDayStart = new Date(search);
+      searchDayStart.setHours(0, 0, 0, 0);
+      const searchDayEnd = new Date(search);
+      searchDayEnd.setHours(23, 59, 59, 999);
+      
+      return allShifts.filter(s => {
+        const shiftStart = new Date(s.start);
+        return shiftStart >= searchDayStart && shiftStart <= searchDayEnd;
+      });
     }
     
-    // Add days of current month
-    for (let i = 1; i <= endDate.getDate(); i++) {
-        const d = new Date(date.getFullYear(), date.getMonth(), i);
-        const dayShifts = shifts.filter(s => this.isSameDay(new Date(s.start), d)).sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-        days.push({ date: d, isToday: this.isSameDay(d, new Date()), isCurrentMonth: true, shifts: dayShifts });
-    }
-
-    // Add padding days from next month
-    let remaining = 42 - days.length; // 6 weeks * 7 days
-    for (let i = 1; i <= remaining; i++) {
-        const d = new Date(endDate);
-        d.setDate(d.getDate() + i);
-        days.push({ date: d, isToday: false, isCurrentMonth: false, shifts: [] });
-    }
-
-    return days;
-  }
-  
-  private generateWeek(date: Date) {
-    const shifts = this.shiftService.shifts();
-    const startOfWeek = new Date(date);
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-    startOfWeek.setDate(diff);
-    
-    const week: Day[] = [];
-    for (let i=0; i<7; i++) {
-        const d = new Date(startOfWeek);
-        d.setDate(d.getDate() + i);
-        const dayShifts = shifts.filter(s => this.isSameDay(new Date(s.start), d)).sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-        week.push({ date: d, isToday: this.isSameDay(d, new Date()), isCurrentMonth: true, shifts: dayShifts });
-    }
-    return week;
-  }
-  
-  private generateList(date: Date) {
-    return this.shiftService.shifts()
-      .filter(s => new Date(s.start) >= new Date())
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-      .slice(0, 50); // Limit to next 50 shifts
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return allShifts.filter(s => new Date(s.start) >= today);
   }
 
-  isSameDay(d1: Date, d2: Date) {
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  }
-
-  changeMonth(offset: number) {
-    const newDate = new Date(this.currentDate());
-    newDate.setMonth(newDate.getMonth() + offset);
-    this.currentDate.set(newDate);
-  }
-
-  changeWeek(offset: number) {
-    const newDate = new Date(this.currentDate());
-    newDate.setDate(newDate.getDate() + (offset * 7));
-    this.currentDate.set(newDate);
-  }
-
-  goToToday() {
-    this.currentDate.set(new Date());
+  loadMoreShifts() {
+    this.listVisibleCount.update(c => c + 50);
   }
 
   openModal(modal: Modal) {
@@ -194,7 +122,7 @@ export class AppComponent {
 
   closeModal() {
     this.activeModal.set('none');
-    this.resetForm();
+    // Don't reset form here, as it clears pending data for confirmations
   }
   
   openNewShiftForm() {
@@ -239,11 +167,13 @@ export class AppComponent {
       } else {
         const updatedShift: Shift = { ...editing, ...shiftData };
         this.shiftService.updateShift(updatedShift);
-        this.closeModal();
+        this.activeModal.set('none');
+        this.resetForm();
       }
     } else {
         this.shiftService.addShift(shiftData);
-        this.closeModal();
+        this.activeModal.set('none');
+        this.resetForm();
     }
   }
 
@@ -260,8 +190,8 @@ export class AppComponent {
       const updatedShift: Shift = { ...editing, ...shiftData, isRecurring: false, repetition: undefined };
       this.shiftService.updateShift(updatedShift);
     }
-    this.closeModal();
-    this.pendingShiftData.set(null);
+    this.activeModal.set('none');
+    this.resetForm();
   }
 
 
@@ -311,8 +241,26 @@ export class AppComponent {
     } else {
         this.shiftService.deleteShift(shift.id);
     }
+    this.activeModal.set('none');
+    this.resetForm();
+  }
+
+  // --- Search Logic ---
+  handleDateSearch() {
+    if (this.searchDateInput()) {
+      const dateParts = this.searchDateInput().split('-').map(Number);
+      const year = dateParts[0];
+      const month = dateParts[1] - 1; // Month is 0-indexed in JS Date
+      const day = dateParts[2];
+      this.searchDate.set(new Date(year, month, day));
+      this.listVisibleCount.set(50); // Reset pagination for new search
+    }
     this.closeModal();
-    this.shiftToDelete.set(null);
+  }
+
+  clearSearch() {
+    this.searchDate.set(null);
+    this.listVisibleCount.set(50); // Reset pagination
   }
 
   // --- Settings Logic ---

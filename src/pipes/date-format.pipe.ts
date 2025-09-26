@@ -21,20 +21,17 @@ export class LangDatePipe implements PipeTransform {
         case 'shortDate':
             dateFormat = lang === 'it' ? 'dd/MM/yyyy' : 'MM/dd/yyyy';
             break;
-        case 'dayMonth':
-             dateFormat = lang === 'it' ? 'd MMM' : 'MMM d';
-             break;
-        case 'monthYear':
-             dateFormat = 'MMMM yyyy';
-             break;
         case 'dayNumber':
              dateFormat = 'd';
              break;
-        case 'shortDayName':
-             dateFormat = 'EEE';
-             break;
         case 'shortMonthName':
              dateFormat = 'MMM';
+             break;
+        case 'shortMonthAndYear':
+             dateFormat = 'MMM yy';
+             break;
+        case 'shortDayName':
+             dateFormat = 'EEE';
              break;
         case 'time':
              dateFormat = 'HH:mm';

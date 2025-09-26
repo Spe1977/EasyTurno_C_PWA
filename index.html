@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EasyTurno</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#4f46e5"/>
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- iOS PWA Meta Tags -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+PHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIHJ4PSI3NyIgZmlsbD0iIzRmNDZlNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIyNTYiIGZvbnQtZmFtaWx5PSJJbnRlciwgc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IndoaXRlIiBkeT0iLjA1ZW0iPkVUPC90ZXh0Pjwvc3ZnPg==">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -13,6 +23,23 @@
   <style>
     body { font-family: 'Inter', sans-serif; }
     @import url('https://rsms.me/inter/inter.css');
+
+    /* Custom scrollbar for dark mode */
+    .dark ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    .dark ::-webkit-scrollbar-track {
+      background: #0f172a; /* Corresponds to dark:bg-slate-900 */
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background-color: #64748b; /* A lighter slate for better contrast */
+      border-radius: 6px;
+      border: 3px solid #0f172a; /* Creates padding and matches track */
+    }
+     .dark ::-webkit-scrollbar-thumb:hover {
+      background-color: #94a3b8; /* Even lighter on hover */
+    }
   </style>
 <script type="importmap">
 {
@@ -35,5 +62,14 @@
 </head>
 <body class="bg-slate-100 dark:bg-slate-900">
   <app-root></app-root>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service worker registered.', reg))
+          .catch(err => console.error('Service worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
