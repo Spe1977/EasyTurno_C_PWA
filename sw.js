@@ -1,7 +1,9 @@
 const CACHE_NAME = 'easyturno-cache-v1';
 const CACHE_ASSETS = [
     '/',
-    '/index.html'
+    '/index.html',
+    '/manifest.webmanifest',
+    '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
