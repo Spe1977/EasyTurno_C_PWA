@@ -103,13 +103,16 @@ export class AppComponent {
       
       return allShifts.filter(s => {
         const shiftStart = new Date(s.start);
-        return shiftStart >= searchDayStart && shiftStart <= searchDayEnd;
+        const shiftEnd = new Date(s.end);
+        // A shift is relevant for a given day if it overlaps with that day at any point.
+        return shiftStart <= searchDayEnd && shiftEnd >= searchDayStart;
       });
     }
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return allShifts.filter(s => new Date(s.start) >= today);
+    // In the default list, show shifts that haven't ended yet.
+    return allShifts.filter(s => new Date(s.end) >= today);
   }
 
   loadMoreShifts() {
