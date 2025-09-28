@@ -6,6 +6,7 @@
   <title>EasyTurno</title>
 
   <!-- PWA Meta Tags -->
+  <meta name="description" content="A complete and intuitive PWA for managing single and recurring work shifts.">
   <meta name="theme-color" content="#4f46e5"/>
   <link rel="manifest" href="manifest.webmanifest">
 
@@ -67,8 +68,7 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        const swUrl = `${location.origin}/sw.js`;
-        navigator.serviceWorker.register(swUrl)
+        navigator.serviceWorker.register('/sw.js')
           .then(reg => console.log('Service worker registered.', reg))
           .catch(err => console.error('Service worker registration failed:', err));
       });

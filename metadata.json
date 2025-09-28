@@ -1,5 +1,5 @@
 {
   "name": "EasyTurno",
-  "description": "A complete and intuitive PWA for managing single and recurring work shifts. Features multiple views (list, week, month), multi-language support (IT/EN), customizable colors, and local backup/restore functionality. No registration required.",
+  "description": "An installable PWA for managing work shifts. Features multiple views, multi-language support, customizable colors, and local backup/restore. Works offline. No registration required.",
   "requestFramePermissions": []
 }
