@@ -1,4 +1,4 @@
-const CACHE_NAME = 'easyturno-cache-v2'; // Bump version to force update
+const CACHE_NAME = 'easyturno-cache-v3'; // Bump version to force update
 const CACHE_ASSETS = [
     '/',
     '/index.html',

@@ -88,6 +88,17 @@ export class AppComponent {
     
     this.resetForm();
     this.searchDateInput.set(this.datePipe.transform(new Date(), 'yyyy-MM-dd')!);
+    this.checkUrlForActions();
+  }
+
+  private checkUrlForActions() {
+    const urlParams = new URLSearchParams(this.document.location.search);
+    if (urlParams.get('action') === 'add_shift') {
+        this.openNewShiftForm();
+        // Clean the URL to avoid re-triggering on reload
+        const newUrl = this.document.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+    }
   }
   
   private generateList() {
