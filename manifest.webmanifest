@@ -1,0 +1,78 @@
+{
+  "name": "EasyTurno",
+  "short_name": "EasyTurno",
+  "description": "Un'app PWA completa e intuitiva per la gestione dei turni di lavoro singoli e ricorrenti.",
+  "id": "/?source=pwa",
+  "start_url": "/",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
+  "categories": [
+    "productivity",
+    "business",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Aggiungi nuovo turno",
+      "short_name": "Nuovo Turno",
+      "description": "Crea rapidamente un nuovo turno di lavoro",
+      "url": "/?action=add_shift",
+      "icons": [{ "src": "icon.svg", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "https://i.imgur.com/Kbd2B4t.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Visualizzazione principale della lista dei turni"
+    },
+    {
+      "src": "https://i.imgur.com/vHqJc08.png",
+      "sizes": "1080x2340",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Modulo di creazione di un nuovo turno"
+    },
+     {
+      "src": "https://i.imgur.com/6EaWd8K.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Visualizzazione su dispositivi desktop"
+    }
+  ]
+}
