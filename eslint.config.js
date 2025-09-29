@@ -38,6 +38,17 @@ export default [
     },
   },
   {
+    files: ['sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+      },
+    },
+  },
+  {
     ignores: ['dist/**', 'node_modules/**'],
   },
 ];
