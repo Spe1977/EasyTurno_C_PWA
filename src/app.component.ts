@@ -323,7 +323,7 @@ export class AppComponent {
   }
 
   // Helper for Tailwind classes
-  getColorClasses(color: string, type: 'bg' | 'text' | 'border'): string {
+  getColorClasses(color: string): string {
     const intensity = { bg: 100, text: 700, border: 500 };
     const darkIntensity = { bg: 500, text: 300, border: 400 };
     return `bg-${color}-${intensity.bg} text-${color}-${intensity.text} border-${color}-${intensity.border} dark:bg-${color}-${darkIntensity.bg}/20 dark:text-${color}-${darkIntensity.text} dark:border-${color}-${darkIntensity.border}`;

@@ -4,7 +4,7 @@ import { Injectable, signal } from '@angular/core';
 export class TranslationService {
   language = signal<'it' | 'en'>(this.getInitialLanguage());
 
-  private translations: any = {
+  private translations: Record<'it' | 'en', Record<string, string>> = {
     it: {
       'appTitle': 'EasyTurno',
       'addShift': 'Aggiungi Turno',

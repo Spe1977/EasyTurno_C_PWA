@@ -115,7 +115,7 @@ export class ShiftService {
         return true;
       }
       return false;
-    } catch (e) {
+    } catch {
       return false;
     }
   }

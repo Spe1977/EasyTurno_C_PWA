@@ -12,7 +12,7 @@ export class LangDatePipe implements PipeTransform {
   private translationService = inject(TranslationService);
   private datePipe = inject(DatePipe);
 
-  transform(value: any, format: string = 'mediumDate'): any {
+  transform(value: Date | string | number | null | undefined, format: string = 'mediumDate'): string | null {
     const lang = this.translationService.language();
     const locale = lang === 'it' ? 'it-IT' : 'en-US';
     let dateFormat: string;
