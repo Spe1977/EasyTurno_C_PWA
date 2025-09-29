@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="it" data-beasties-container>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EasyTurno</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="description" content="A complete and intuitive PWA for managing single and recurring work shifts.">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- iOS PWA Meta Tags -->
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    @import url('https://rsms.me/inter/inter.css');
+
+    /* Custom scrollbar for dark mode */
+    .dark ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    .dark ::-webkit-scrollbar-track {
+      background: #0f172a; /* Corresponds to dark:bg-slate-900 */
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background-color: #64748b; /* A lighter slate for better contrast */
+      border-radius: 6px;
+      border: 3px solid #0f172a; /* Creates padding and matches track */
+    }
+     .dark ::-webkit-scrollbar-thumb:hover {
+      background-color: #94a3b8; /* Even lighter on hover */
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "rxjs": "https://aistudiocdn.com/rxjs@^7.8.2?conditions=es2015",
+    "rxjs/operators": "https://aistudiocdn.com/rxjs@^7.8.2/operators?conditions=es2015",
+    "rxjs/ajax": "https://aistudiocdn.com/rxjs@^7.8.2/ajax?conditions=es2015",
+    "rxjs/webSocket": "https://aistudiocdn.com/rxjs@^7.8.2/webSocket?conditions=es2015",
+    "rxjs/testing": "https://aistudiocdn.com/rxjs@^7.8.2/testing?conditions=es2015",
+    "rxjs/fetch": "https://aistudiocdn.com/rxjs@^7.8.2/fetch?conditions=es2015",
+    "@angular/common": "https://next.esm.sh/@angular/common@^20.3.2?external=rxjs",
+    "@angular/core": "https://next.esm.sh/@angular/core@^20.3.2?external=rxjs",
+    "@angular/platform-browser": "https://next.esm.sh/@angular/platform-browser@^20.3.2?external=rxjs",
+    "@angular/compiler": "https://next.esm.sh/@angular/compiler@^20.3.2?external=rxjs",
+    "@angular/forms": "https://next.esm.sh/@angular/forms@^20.3.2?external=rxjs",
+    "@angular/common/locales/it": "https://next.esm.sh/@angular/common@^20.3.2/locales/it?external=rxjs"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900">
+  <app-root></app-root>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service worker registered.', reg))
+          .catch(err => console.error('Service worker registration failed:', err));
+      });
+    }
+  </script>
+<script src="main-APEBNACR.js" type="module"></script></body>
+</html>

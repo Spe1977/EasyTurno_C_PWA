@@ -1,0 +1,50 @@
+{
+  "name": "EasyTurno",
+  "short_name": "EasyTurno",
+  "description": "App per la gestione dei turni di lavoro, semplice e offline-first.",
+  "start_url": "/?source=pwa",
+  "display": "standalone",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Aggiungi Turno",
+      "short_name": "Nuovo Turno",
+      "description": "Apre il modulo per creare un nuovo turno",
+      "url": "/?action=add_shift",
+      "icons": [{ "src": "icon.svg", "sizes": "96x96" }]
+    }
+  ]
+}
