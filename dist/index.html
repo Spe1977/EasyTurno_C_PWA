@@ -22,8 +22,8 @@
     }
   </script>
   <style>
-    body { font-family: 'Inter', sans-serif; }
     @import url('https://rsms.me/inter/inter.css');
+    body { font-family: 'Inter', sans-serif; }
 
     /* Custom scrollbar for dark mode */
     .dark ::-webkit-scrollbar {
@@ -60,9 +60,11 @@
   }
 }
 </script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/ts-browser"></script>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900">
   <app-root></app-root>
+  <script type="ts-module" src="index.tsx"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -72,5 +74,5 @@
       });
     }
   </script>
-<script src="main-APEBNACR.js" type="module"></script></body>
+<script src="main-ZOS63JUG.js" type="module"></script></body>
 </html>

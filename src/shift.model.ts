@@ -4,13 +4,21 @@ export interface Repetition {
   interval: number;
 }
 
+export interface Allowance {
+  name: string; // Custom name for the allowance
+  amount: number; // Amount of the allowance
+}
+
 export interface Shift {
   id: string; // Unique ID for this specific shift instance
   seriesId: string; // ID to group recurring shifts
-  title:string;
+  title: string;
   start: string; // ISO Date string
   end: string; // ISO Date string
   color: string; // e.g., 'sky', 'green'
   isRecurring: boolean;
   repetition?: Repetition;
+  notes?: string; // Optional notes field
+  overtimeHours?: number; // Overtime hours
+  allowances?: Allowance[]; // Array of allowances
 }

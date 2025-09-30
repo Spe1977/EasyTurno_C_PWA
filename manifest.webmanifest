@@ -1,11 +1,12 @@
 {
   "name": "EasyTurno",
   "short_name": "EasyTurno",
+  "description": "A simple shift management app.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3367D6",
-  "description": "A simple shift management app.",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
+  "orientation": "any",
   "icons": [
     {
       "src": "icons/icon-192.png",

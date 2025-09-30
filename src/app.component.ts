@@ -1,13 +1,13 @@
 import { Component, ChangeDetectionStrategy, signal, computed, inject, WritableSignal, effect } from '@angular/core';
 import { CommonModule, DatePipe, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Shift, Repetition } from './shift.model';
+import { Shift, Repetition, Allowance } from './shift.model';
 import { ShiftService } from './services/shift.service';
 import { TranslationService } from './services/translation.service';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 
-type Modal = 'none' | 'form' | 'settings' | 'deleteConfirm' | 'deleteSeriesConfirm' | 'resetConfirm' | 'editSeriesConfirm' | 'searchDate';
+type Modal = 'none' | 'form' | 'settings' | 'deleteConfirm' | 'deleteSeriesConfirm' | 'resetConfirm' | 'editSeriesConfirm' | 'searchDate' | 'statistics';
 
 @Component({
   selector: 'app-root',
@@ -30,7 +30,10 @@ export class AppComponent {
   translationService = inject(TranslationService);
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
-  
+
+  // Make Object available in template
+  Object = Object;
+
   // UI State
   theme: WritableSignal<'light' | 'dark'>;
   activeModal = signal<Modal>('none');
@@ -46,9 +49,16 @@ export class AppComponent {
   shiftColor = signal('sky');
   shiftIsRecurring = signal(false);
   shiftRepetition = signal<Repetition>({ frequency: 'days', interval: 1 });
+  shiftNotes = signal('');
+  shiftOvertimeHours = signal<number>(0);
+  shiftAllowances = signal<Allowance[]>([]);
 
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
+
+  // Statistics state
+  statsStartDate = signal('');
+  statsEndDate = signal('');
 
   // List view state
   listVisibleCount = signal(50);
@@ -59,10 +69,10 @@ export class AppComponent {
   colors = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
   repFrequencies = ['days', 'weeks', 'months', 'year'];
   repIntervals = {
-    days: [1, 3, 5, 8, 10, 15],
-    weeks: [1, 2, 3, 4, 5, 6],
-    months: [1, 2, 3, 4, 6],
-    year: [1]
+    days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    year: [1, 2, 3, 4, 5]
   };
 
   // Derived State (Computed Signals)
@@ -85,9 +95,16 @@ export class AppComponent {
         this.document.documentElement.classList.remove('dark');
       }
     });
-    
+
     this.resetForm();
     this.searchDateInput.set(this.datePipe.transform(new Date(), 'yyyy-MM-dd')!);
+
+    // Initialize statistics date range (last 30 days by default)
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    this.statsStartDate.set(this.datePipe.transform(thirtyDaysAgo, 'yyyy-MM-dd')!);
+    this.statsEndDate.set(this.datePipe.transform(today, 'yyyy-MM-dd')!);
+
     this.checkUrlForActions();
   }
 
@@ -154,6 +171,9 @@ export class AppComponent {
     this.shiftEndTime.set(this.datePipe.transform(shift.end, 'HH:mm')!);
     this.shiftColor.set(shift.color);
     this.shiftIsRecurring.set(shift.isRecurring);
+    this.shiftNotes.set(shift.notes || '');
+    this.shiftOvertimeHours.set(shift.overtimeHours || 0);
+    this.shiftAllowances.set(shift.allowances || []);
     if(shift.repetition) {
         this.shiftRepetition.set(shift.repetition);
     }
@@ -163,7 +183,7 @@ export class AppComponent {
   handleFormSubmit() {
     const start = new Date(`${this.shiftStartDate()}T${this.shiftStartTime()}`).toISOString();
     const end = new Date(`${this.shiftEndDate()}T${this.shiftEndTime()}`).toISOString();
-    
+
     const shiftData = {
         title: this.shiftTitle(),
         start,
@@ -171,6 +191,9 @@ export class AppComponent {
         color: this.shiftColor(),
         isRecurring: this.shiftIsRecurring(),
         repetition: this.shiftIsRecurring() ? this.shiftRepetition() : undefined,
+        notes: this.shiftNotes() || undefined,
+        overtimeHours: this.shiftOvertimeHours() > 0 ? this.shiftOvertimeHours() : undefined,
+        allowances: this.shiftAllowances().length > 0 ? this.shiftAllowances() : undefined,
     };
 
     const editing = this.editingShift();
@@ -220,6 +243,9 @@ export class AppComponent {
     this.shiftColor.set('indigo');
     this.shiftIsRecurring.set(false);
     this.shiftRepetition.set({ frequency: 'days', interval: 1 });
+    this.shiftNotes.set('');
+    this.shiftOvertimeHours.set(0);
+    this.shiftAllowances.set([]);
     this.editingShift.set(null);
     this.pendingShiftData.set(null);
     this.shiftToDelete.set(null);
@@ -320,6 +346,94 @@ export class AppComponent {
     this.shiftService.deleteAllShifts();
     this.closeModal();
     alert(this.translationService.translate('resetSuccess'));
+  }
+
+  // --- Allowances Management ---
+  addAllowance() {
+    const newAllowance: Allowance = { name: '', amount: 0 };
+    this.shiftAllowances.update(allowances => [...allowances, newAllowance]);
+  }
+
+  removeAllowance(index: number) {
+    this.shiftAllowances.update(allowances =>
+      allowances.filter((_, i) => i !== index)
+    );
+  }
+
+  updateAllowanceName(index: number, event: Event) {
+    const name = (event.target as HTMLInputElement).value;
+    this.shiftAllowances.update(allowances =>
+      allowances.map((a, i) => i === index ? { ...a, name } : a)
+    );
+  }
+
+  updateAllowanceAmount(index: number, event: Event) {
+    const amount = Number((event.target as HTMLInputElement).value);
+    this.shiftAllowances.update(allowances =>
+      allowances.map((a, i) => i === index ? { ...a, amount } : a)
+    );
+  }
+
+  // --- Statistics ---
+  statsData = computed(() => {
+    const start = new Date(this.statsStartDate());
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(this.statsEndDate());
+    end.setHours(23, 59, 59, 999);
+
+    const filteredShifts = this.shiftService.shifts().filter(shift => {
+      const shiftStart = new Date(shift.start);
+      return shiftStart >= start && shiftStart <= end;
+    });
+
+    const totalShifts = filteredShifts.length;
+
+    // Calculate total work hours
+    const totalHours = filteredShifts.reduce((sum, shift) => {
+      const start = new Date(shift.start);
+      const end = new Date(shift.end);
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      return sum + hours;
+    }, 0);
+
+    // Calculate total overtime hours
+    const totalOvertime = filteredShifts.reduce((sum, shift) => {
+      return sum + (shift.overtimeHours || 0);
+    }, 0);
+
+    // Group shifts by title
+    const shiftsByTitle = filteredShifts.reduce((acc, shift) => {
+      if (!acc[shift.title]) {
+        acc[shift.title] = 0;
+      }
+      acc[shift.title]++;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Group allowances by name
+    const allowancesByName = filteredShifts.reduce((acc, shift) => {
+      if (shift.allowances) {
+        shift.allowances.forEach(allowance => {
+          if (!acc[allowance.name]) {
+            acc[allowance.name] = 0;
+          }
+          acc[allowance.name] += allowance.amount;
+        });
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      totalShifts,
+      totalHours,
+      totalOvertime,
+      shiftsByTitle,
+      allowancesByName
+    };
+  });
+
+  openStatistics() {
+    this.openModal('statistics');
   }
 
   // Helper for Tailwind classes
