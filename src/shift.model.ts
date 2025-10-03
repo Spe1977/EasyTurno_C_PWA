@@ -18,6 +18,10 @@ export interface Allowance {
   amount: number; // Amount of the allowance
 }
 
+export interface AllowanceWithId extends Allowance {
+  _id: string; // Internal ID for tracking in UI (not persisted)
+}
+
 export interface Shift {
   id: string; // Unique ID for this specific shift instance
   seriesId: string; // ID to group recurring shifts

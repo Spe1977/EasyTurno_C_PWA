@@ -10,7 +10,7 @@ import {
 import { CommonModule, DatePipe, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Capacitor } from '@capacitor/core';
-import { Shift, Repetition, Allowance, ShiftColor } from './shift.model';
+import { Shift, Repetition, AllowanceWithId, ShiftColor } from './shift.model';
 import { ShiftService } from './services/shift.service';
 import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
@@ -19,7 +19,6 @@ import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 import { ToastContainerComponent } from './components/toast-container.component';
 import { ShiftListItemComponent } from './components/shift-list-item.component';
-import { ModalFocusDirective } from './directives/modal-focus.directive';
 
 type Modal =
   | 'none'
@@ -42,7 +41,6 @@ type Modal =
     LangDatePipe,
     ToastContainerComponent,
     ShiftListItemComponent,
-    ModalFocusDirective,
   ],
   providers: [DatePipe],
   templateUrl: './app.component.html',
@@ -73,9 +71,6 @@ export class AppComponent {
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
 
-  // Make Object available in template
-  Object = Object;
-
   // Native platform detection
   isNativePlatform = Capacitor.isNativePlatform;
 
@@ -85,6 +80,8 @@ export class AppComponent {
   // UI State
   theme: WritableSignal<'light' | 'dark'>;
   activeModal = signal<Modal>('none');
+  isImporting = signal(false);
+  isExporting = signal(false);
 
   // Form & Edit State
   editingShift: WritableSignal<Shift | null> = signal(null);
@@ -99,7 +96,7 @@ export class AppComponent {
   shiftRepetition = signal<Repetition>({ frequency: 'days', interval: 1 });
   shiftNotes = signal('');
   shiftOvertimeHours = signal<number>(0);
-  shiftAllowances = signal<Allowance[]>([]);
+  shiftAllowances = signal<AllowanceWithId[]>([]);
 
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
@@ -149,16 +146,65 @@ export class AppComponent {
       }
     });
 
+    // Keyboard shortcuts
+    effect(
+      () => {
+        const handleKeyboard = (e: KeyboardEvent) => {
+          // Ctrl/Cmd + N = New shift
+          if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+            e.preventDefault();
+            this.openNewShiftForm();
+          }
+          // Escape = Close modal
+          if (e.key === 'Escape' && this.activeModal() !== 'none') {
+            e.preventDefault();
+            this.closeModal();
+          }
+          // Ctrl/Cmd + S = Open statistics (when in settings)
+          if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
+            e.preventDefault();
+            this.openStatistics();
+          }
+        };
+
+        window.addEventListener('keydown', handleKeyboard);
+
+        // Cleanup on destroy
+        return () => window.removeEventListener('keydown', handleKeyboard);
+      },
+      { allowSignalWrites: true }
+    );
+
     this.resetForm();
-    this.searchDateInput.set(this.datePipe.transform(new Date(), 'yyyy-MM-dd') ?? '');
+
+    // Initialize search date with proper error handling
+    const searchDate = this.datePipe.transform(new Date(), 'yyyy-MM-dd');
+    if (!searchDate) {
+      console.error('Failed to format search date, using fallback');
+      const fallback = new Date().toISOString().split('T')[0];
+      this.searchDateInput.set(fallback ?? '');
+    } else {
+      this.searchDateInput.set(searchDate);
+    }
 
     // Initialize statistics date range (configurable default days)
     const today = new Date();
     const defaultDaysAgo = new Date(
       today.getTime() - this.STATS_DEFAULT_DAYS * 24 * 60 * 60 * 1000
     );
-    this.statsStartDate.set(this.datePipe.transform(defaultDaysAgo, 'yyyy-MM-dd') ?? '');
-    this.statsEndDate.set(this.datePipe.transform(today, 'yyyy-MM-dd') ?? '');
+    const statsStart = this.datePipe.transform(defaultDaysAgo, 'yyyy-MM-dd');
+    const statsEnd = this.datePipe.transform(today, 'yyyy-MM-dd');
+
+    if (!statsStart || !statsEnd) {
+      console.error('Failed to format stats dates, using fallback');
+      const fallbackStart = defaultDaysAgo.toISOString().split('T')[0];
+      const fallbackEnd = today.toISOString().split('T')[0];
+      this.statsStartDate.set(fallbackStart ?? '');
+      this.statsEndDate.set(fallbackEnd ?? '');
+    } else {
+      this.statsStartDate.set(statsStart);
+      this.statsEndDate.set(statsEnd);
+    }
 
     // Initialize notifications (solo su native platform)
     if (Capacitor.isNativePlatform()) {
@@ -240,15 +286,38 @@ export class AppComponent {
   openEditShiftForm(shift: Shift) {
     this.editingShift.set(shift);
     this.shiftTitle.set(shift.title);
-    this.shiftStartDate.set(this.datePipe.transform(shift.start, 'yyyy-MM-dd') ?? '');
-    this.shiftStartTime.set(this.datePipe.transform(shift.start, 'HH:mm') ?? '');
-    this.shiftEndDate.set(this.datePipe.transform(shift.end, 'yyyy-MM-dd') ?? '');
-    this.shiftEndTime.set(this.datePipe.transform(shift.end, 'HH:mm') ?? '');
+
+    // Handle date formatting with proper error handling
+    const startDate = this.datePipe.transform(shift.start, 'yyyy-MM-dd');
+    const startTime = this.datePipe.transform(shift.start, 'HH:mm');
+    const endDate = this.datePipe.transform(shift.end, 'yyyy-MM-dd');
+    const endTime = this.datePipe.transform(shift.end, 'HH:mm');
+
+    if (!startDate || !startTime || !endDate || !endTime) {
+      console.error('Failed to format shift dates, using ISO fallback');
+      const start = new Date(shift.start);
+      const end = new Date(shift.end);
+      this.shiftStartDate.set(start.toISOString().split('T')[0] ?? '');
+      this.shiftStartTime.set(start.toTimeString().slice(0, 5));
+      this.shiftEndDate.set(end.toISOString().split('T')[0] ?? '');
+      this.shiftEndTime.set(end.toTimeString().slice(0, 5));
+    } else {
+      this.shiftStartDate.set(startDate);
+      this.shiftStartTime.set(startTime);
+      this.shiftEndDate.set(endDate);
+      this.shiftEndTime.set(endTime);
+    }
+
     this.shiftColor.set(shift.color);
     this.shiftIsRecurring.set(shift.isRecurring);
     this.shiftNotes.set(shift.notes || '');
     this.shiftOvertimeHours.set(shift.overtimeHours || 0);
-    this.shiftAllowances.set(shift.allowances || []);
+    // Add _id to existing allowances for UI tracking
+    const allowancesWithId: AllowanceWithId[] = (shift.allowances || []).map(a => ({
+      ...a,
+      _id: crypto.randomUUID(),
+    }));
+    this.shiftAllowances.set(allowancesWithId);
     if (shift.repetition) {
       this.shiftRepetition.set(shift.repetition);
     }
@@ -283,7 +352,11 @@ export class AppComponent {
       repetition: this.shiftIsRecurring() ? this.shiftRepetition() : undefined,
       notes: this.shiftNotes() || undefined,
       overtimeHours: this.shiftOvertimeHours() > 0 ? this.shiftOvertimeHours() : undefined,
-      allowances: this.shiftAllowances().length > 0 ? this.shiftAllowances() : undefined,
+      // Remove _id before saving (only for UI tracking)
+      allowances:
+        this.shiftAllowances().length > 0
+          ? this.shiftAllowances().map(({ _id, ...allowance }) => allowance)
+          : undefined,
       timezone: userTimezone,
     };
 
@@ -331,10 +404,26 @@ export class AppComponent {
     const now = new Date();
     const oneHourLater = new Date(now.getTime() + this.ONE_HOUR_MS);
     this.shiftTitle.set('');
-    this.shiftStartDate.set(this.datePipe.transform(now, 'yyyy-MM-dd') ?? '');
-    this.shiftStartTime.set(this.datePipe.transform(now, 'HH:mm') ?? '');
-    this.shiftEndDate.set(this.datePipe.transform(oneHourLater, 'yyyy-MM-dd') ?? '');
-    this.shiftEndTime.set(this.datePipe.transform(oneHourLater, 'HH:mm') ?? '');
+
+    // Handle date formatting with proper error handling
+    const startDate = this.datePipe.transform(now, 'yyyy-MM-dd');
+    const startTime = this.datePipe.transform(now, 'HH:mm');
+    const endDate = this.datePipe.transform(oneHourLater, 'yyyy-MM-dd');
+    const endTime = this.datePipe.transform(oneHourLater, 'HH:mm');
+
+    if (!startDate || !startTime || !endDate || !endTime) {
+      console.error('Failed to format reset dates, using ISO fallback');
+      this.shiftStartDate.set(now.toISOString().split('T')[0] ?? '');
+      this.shiftStartTime.set(now.toTimeString().slice(0, 5));
+      this.shiftEndDate.set(oneHourLater.toISOString().split('T')[0] ?? '');
+      this.shiftEndTime.set(oneHourLater.toTimeString().slice(0, 5));
+    } else {
+      this.shiftStartDate.set(startDate);
+      this.shiftStartTime.set(startTime);
+      this.shiftEndDate.set(endDate);
+      this.shiftEndTime.set(endTime);
+    }
+
     this.shiftColor.set('indigo');
     this.shiftIsRecurring.set(false);
     this.shiftRepetition.set({ frequency: 'days', interval: 1 });
@@ -397,15 +486,35 @@ export class AppComponent {
 
   // --- Search Logic ---
   handleDateSearch() {
-    if (this.searchDateInput()) {
-      const dateParts = this.searchDateInput().split('-').map(Number);
-      const year: number = dateParts[0] ?? 0;
-      const month: number = (dateParts[1] ?? 1) - 1; // Month is 0-indexed in JS Date
-      const day: number = dateParts[2] ?? 1;
-      this.searchDate.set(new Date(year, month, day));
-      this.listVisibleCount.set(this.INITIAL_LIST_SIZE); // Reset pagination for new search
+    const input = this.searchDateInput();
+    if (!input) {
+      this.closeModal();
+      return;
     }
-    this.closeModal();
+
+    try {
+      // Use native Date parsing for ISO format
+      const date = new Date(input);
+
+      // Validate the date is valid
+      if (isNaN(date.getTime())) {
+        this.toastService.error('Invalid date format. Please use YYYY-MM-DD.');
+        return;
+      }
+
+      // Validate the date is reasonable (not year 0 or negative)
+      if (date.getFullYear() < 1900 || date.getFullYear() > 2100) {
+        this.toastService.error('Please enter a date between 1900 and 2100.');
+        return;
+      }
+
+      this.searchDate.set(date);
+      this.listVisibleCount.set(this.INITIAL_LIST_SIZE); // Reset pagination for new search
+      this.closeModal();
+    } catch (error) {
+      console.error('Date parsing error:', error);
+      this.toastService.error('Failed to parse date. Please check the format.');
+    }
   }
 
   clearSearch() {
@@ -415,14 +524,23 @@ export class AppComponent {
 
   // --- Settings Logic ---
   exportBackup() {
-    const data = JSON.stringify(this.shiftService.shifts(), null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'easyturno_backup.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    this.isExporting.set(true);
+    try {
+      const data = JSON.stringify(this.shiftService.shifts(), null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'easyturno_backup.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toastService.success(this.translationService.translate('exportSuccess'));
+    } catch (error) {
+      console.error('Export failed:', error);
+      this.toastService.error(this.translationService.translate('exportError'));
+    } finally {
+      this.isExporting.set(false);
+    }
   }
 
   triggerImport() {
@@ -433,7 +551,9 @@ export class AppComponent {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
+    this.isImporting.set(true);
     const reader = new FileReader();
+
     reader.onload = e => {
       const result = e.target?.result;
       if (typeof result === 'string') {
@@ -446,8 +566,15 @@ export class AppComponent {
           this.toastService.error(message, 5000);
         }
       }
+      this.isImporting.set(false);
       this.closeModal();
     };
+
+    reader.onerror = () => {
+      this.toastService.error(this.translationService.translate('importError'));
+      this.isImporting.set(false);
+    };
+
     reader.readAsText(file);
   }
 
@@ -463,7 +590,11 @@ export class AppComponent {
 
   // --- Allowances Management ---
   addAllowance() {
-    const newAllowance: Allowance = { name: '', amount: 0 };
+    const newAllowance: AllowanceWithId = {
+      name: '',
+      amount: 0,
+      _id: crypto.randomUUID(),
+    };
     this.shiftAllowances.update(allowances => [...allowances, newAllowance]);
   }
 
@@ -486,59 +617,74 @@ export class AppComponent {
   }
 
   // --- Statistics ---
-  // Optimized single-pass algorithm for calculating all statistics at once
-  statsData = computed(() => {
+  // Computed date range for stats (memoized)
+  private statsDateRange = computed(() => {
     const start = new Date(this.statsStartDate());
     start.setHours(0, 0, 0, 0);
-    const startTime = start.getTime();
-
     const end = new Date(this.statsEndDate());
     end.setHours(23, 59, 59, 999);
-    const endTime = end.getTime();
+    return {
+      startTime: start.getTime(),
+      endTime: end.getTime(),
+    };
+  });
 
-    // Single-pass algorithm: calculate all stats in one iteration
-    return this.shiftService.shifts().reduce(
-      (acc, shift) => {
-        const shiftStartTime = new Date(shift.start).getTime();
+  // Pre-filtered shifts for stats (memoized separately)
+  private filteredStatsShifts = computed(() => {
+    const { startTime, endTime } = this.statsDateRange();
+    return this.shiftService.shifts().filter(shift => {
+      const shiftStart = new Date(shift.start).getTime();
+      return shiftStart >= startTime && shiftStart <= endTime;
+    });
+  });
 
-        // Filter and accumulate in one pass
-        if (shiftStartTime >= startTime && shiftStartTime <= endTime) {
-          // Count total shifts
-          acc.totalShifts++;
+  // Optimized stats calculation with early exit
+  statsData = computed(() => {
+    const shifts = this.filteredStatsShifts();
 
-          // Calculate work hours
-          const shiftEndTime = new Date(shift.end).getTime();
-          const hours = (shiftEndTime - shiftStartTime) / (1000 * 60 * 60);
-          acc.totalHours += hours;
-
-          // Add overtime hours
-          acc.totalOvertime += shift.overtimeHours || 0;
-
-          // Group by title
-          const currentTitleCount = acc.shiftsByTitle[shift.title];
-          acc.shiftsByTitle[shift.title] = (currentTitleCount ?? 0) + 1;
-
-          // Accumulate allowances
-          if (shift.allowances) {
-            shift.allowances.forEach(allowance => {
-              const currentAllowanceTotal = acc.allowancesByName[allowance.name];
-              acc.allowancesByName[allowance.name] =
-                (currentAllowanceTotal ?? 0) + allowance.amount;
-            });
-          }
-        }
-
-        return acc;
-      },
-      {
+    // Early exit for empty results
+    if (shifts.length === 0) {
+      return {
         totalShifts: 0,
         totalHours: 0,
         totalOvertime: 0,
         shiftsByTitle: {} as Record<string, number>,
         allowancesByName: {} as Record<string, number>,
+      };
+    }
+
+    // Single-pass accumulation
+    const stats = {
+      totalShifts: shifts.length,
+      totalHours: 0,
+      totalOvertime: 0,
+      shiftsByTitle: {} as Record<string, number>,
+      allowancesByName: {} as Record<string, number>,
+    };
+
+    for (const shift of shifts) {
+      // Calculate hours
+      const hours = (new Date(shift.end).getTime() - new Date(shift.start).getTime()) / 3_600_000;
+      stats.totalHours += hours;
+      stats.totalOvertime += shift.overtimeHours ?? 0;
+
+      // Group by title
+      stats.shiftsByTitle[shift.title] = (stats.shiftsByTitle[shift.title] ?? 0) + 1;
+
+      // Accumulate allowances
+      if (shift.allowances?.length) {
+        for (const { name, amount } of shift.allowances) {
+          stats.allowancesByName[name] = (stats.allowancesByName[name] ?? 0) + amount;
+        }
       }
-    );
+    }
+
+    return stats;
   });
+
+  // Type-safe computed signals for template iteration (removes Object exposure)
+  statsShiftTitles = computed(() => Object.keys(this.statsData().shiftsByTitle));
+  statsAllowanceNames = computed(() => Object.keys(this.statsData().allowancesByName));
 
   openStatistics() {
     this.openModal('statistics');

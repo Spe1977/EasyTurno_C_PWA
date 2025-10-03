@@ -213,7 +213,11 @@ describe('AppComponent - Integration Tests', () => {
       expect(component.shiftColor()).toBe('green');
       expect(component.shiftNotes()).toBe('Test notes');
       expect(component.shiftOvertimeHours()).toBe(2);
-      expect(component.shiftAllowances()).toEqual([{ name: 'Meal', amount: 15 }]);
+      // Check allowances (now includes _id for UI tracking)
+      expect(component.shiftAllowances()).toHaveLength(1);
+      expect(component.shiftAllowances()[0].name).toBe('Meal');
+      expect(component.shiftAllowances()[0].amount).toBe(15);
+      expect(component.shiftAllowances()[0]._id).toBeDefined();
     });
 
     it('should switch between different modals', () => {
@@ -528,7 +532,9 @@ describe('AppComponent - Integration Tests', () => {
       component.addAllowance();
 
       expect(component.shiftAllowances()).toHaveLength(1);
-      expect(component.shiftAllowances()[0]).toEqual({ name: '', amount: 0 });
+      expect(component.shiftAllowances()[0].name).toBe('');
+      expect(component.shiftAllowances()[0].amount).toBe(0);
+      expect(component.shiftAllowances()[0]._id).toBeDefined();
     });
 
     it('should update allowance name', () => {
@@ -569,10 +575,11 @@ describe('AppComponent - Integration Tests', () => {
       component.updateAllowanceName(1, { target: { value: 'Transport' } } as any);
       component.updateAllowanceAmount(1, { target: { value: '10' } } as any);
 
-      expect(component.shiftAllowances()).toEqual([
-        { name: 'Meal', amount: 15 },
-        { name: 'Transport', amount: 10 },
-      ]);
+      expect(component.shiftAllowances()).toHaveLength(2);
+      expect(component.shiftAllowances()[0].name).toBe('Meal');
+      expect(component.shiftAllowances()[0].amount).toBe(15);
+      expect(component.shiftAllowances()[1].name).toBe('Transport');
+      expect(component.shiftAllowances()[1].amount).toBe(10);
     });
   });
 

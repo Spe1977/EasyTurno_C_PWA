@@ -70,6 +70,15 @@ export default [
     },
   },
   {
+    files: ['**/*.js'],
+    languageOptions: {
+      globals: {
+        module: 'readonly',
+        require: 'readonly',
+      },
+    },
+  },
+  {
     ignores: [
       'dist/**',
       'node_modules/**',

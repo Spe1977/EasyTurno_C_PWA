@@ -1,5 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { Shift } from '../shift.model';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { LangDatePipe } from '../pipes/date-format.pipe';
@@ -7,44 +6,46 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
 @Component({
   selector: 'app-shift-list-item',
   standalone: true,
-  imports: [CommonModule, TranslatePipe, LangDatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe, LangDatePipe],
   template: `
     <div
       class="relative flex items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
     >
-      <div class="absolute bottom-0 left-0 top-0 w-3" [class]="'bg-' + shift.color + '-500'"></div>
+      <div
+        class="absolute bottom-0 left-0 top-0 w-1.5"
+        [class]="'bg-' + shift().color + '-500'"
+      ></div>
       <div class="flex w-16 shrink-0 flex-col items-center justify-center">
         <p
           class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400"
         >
-          {{ shift.start | langDate: 'shortDayName' }}
+          {{ shift().start | langDate: 'shortDayName' }}
         </p>
         <p class="-my-0.5 text-2xl font-bold text-slate-800 dark:text-slate-100">
-          {{ shift.start | langDate: 'dayNumber' }}
+          {{ shift().start | langDate: 'dayNumber' }}
         </p>
         <p class="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          {{ shift.start | langDate: 'shortMonthAndYear' }}
+          {{ shift().start | langDate: 'shortMonthAndYear' }}
         </p>
       </div>
       <div class="min-w-0 flex-grow border-l border-slate-200 pl-4 dark:border-slate-700">
-        <p class="truncate text-lg font-bold">{{ shift.title }}</p>
+        <p class="truncate text-lg font-bold">{{ shift().title }}</p>
         <p class="truncate text-slate-500 dark:text-slate-400">
-          {{ shift.start | langDate: 'time' }} - {{ shift.end | langDate: 'time' }}
+          {{ shift().start | langDate: 'time' }} - {{ shift().end | langDate: 'time' }}
         </p>
-        @if (shift.notes) {
+        @if (shift().notes) {
           <p class="mt-1 truncate text-sm italic text-slate-400 dark:text-slate-500">
-            {{ shift.notes }}
+            {{ shift().notes }}
           </p>
         }
       </div>
       <div class="flex shrink-0 items-center space-x-1">
         <button
           data-cy="edit-shift-btn"
-          (click)="edit.emit(shift)"
+          (click)="edit.emit(shift())"
           class="rounded-full p-2 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
-          [attr.aria-label]="'editShift' | translate"
-          type="button"
+          [title]="'editShift' | translate"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -53,7 +54,6 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
-            aria-hidden="true"
           >
             <path
               stroke-linecap="round"
@@ -64,10 +64,9 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
         </button>
         <button
           data-cy="delete-shift-btn"
-          (click)="delete.emit(shift)"
+          (click)="deleteShift.emit(shift())"
           class="rounded-full p-2 transition-colors hover:bg-rose-100 dark:hover:bg-rose-800/50"
-          [attr.aria-label]="'delete' | translate"
-          type="button"
+          [title]="'delete' | translate"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -76,7 +75,6 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
-            aria-hidden="true"
           >
             <path
               stroke-linecap="round"
@@ -90,7 +88,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
   `,
 })
 export class ShiftListItemComponent {
-  @Input({ required: true }) shift!: Shift;
-  @Output() edit = new EventEmitter<Shift>();
-  @Output() delete = new EventEmitter<Shift>();
+  shift = input.required<Shift>();
+  edit = output<Shift>();
+  deleteShift = output<Shift>();
 }
