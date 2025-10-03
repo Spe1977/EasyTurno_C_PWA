@@ -39,8 +39,11 @@ The application uses Angular's signal-based reactive state management:
 
 ### Key Services
 
-- **ShiftService** (`src/services/shift.service.ts`) - Manages shift CRUD operations, recurring shift generation, and localStorage persistence
+- **ShiftService** (`src/services/shift.service.ts`) - Manages shift CRUD operations, recurring shift generation, and encrypted localStorage persistence
+- **CryptoService** (`src/services/crypto.service.ts`) - Handles AES-GCM 256-bit encryption/decryption for secure data storage
 - **TranslationService** (`src/services/translation.service.ts`) - Handles internationalization
+- **NotificationService** (`src/services/notification.service.ts`) - Manages local notifications for shift reminders (Capacitor native platforms)
+- **ToastService** (`src/services/toast.service.ts`) - Displays temporary toast notifications to users
 
 ### Data Models
 
@@ -55,10 +58,13 @@ The application uses Angular's signal-based reactive state management:
 
 ### PWA Features
 
-- Offline-first design with localStorage persistence
+- Offline-first design with encrypted localStorage persistence
 - Web app manifest with shortcuts for quick shift creation
 - Service worker for caching (sw.js)
 - Responsive design supporting mobile and desktop
+- Content Security Policy (CSP) for XSS protection
+- Subresource Integrity (SRI) for CDN scripts
+- AES-GCM 256-bit encryption for sensitive data at rest
 
 ### Recurring Shifts Logic
 
@@ -92,6 +98,15 @@ The app generates individual shift instances for recurring patterns rather than 
 - Responsive design with color-coded summary cards
 - Empty state handling with appropriate messaging
 
+### Security Features
+
+- **Content Security Policy (CSP)**: Restricts resource origins to prevent XSS attacks
+- **Subresource Integrity (SRI)**: Validates CDN scripts to prevent tampering
+- **Data Encryption**: AES-GCM 256-bit encryption for localStorage data
+- **Device-Based Key**: Encryption key derived from device fingerprint (no password required)
+- **Backward Compatibility**: Automatic detection and migration of legacy unencrypted data
+- **Secure Error Handling**: Graceful degradation when encryption fails
+
 ### Development Notes
 
 - Uses Angular's OnPush change detection strategy for performance
@@ -102,6 +117,7 @@ The app generates individual shift instances for recurring patterns rather than 
 - Object.keys() made available in templates for iterating over statistical data
 - Automatic date/time synchronization: when start date/time is changed, end date/time automatically aligns
 - Color-coded shift cards with customizable left border (3px width)
+- CryptoService uses Web Crypto API (mocked in Jest tests for compatibility)
 
 ### Code Quality & Roadmap
 
