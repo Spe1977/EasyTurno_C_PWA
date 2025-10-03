@@ -1,3 +1,12 @@
+export type ShiftColor =
+  | 'sky'
+  | 'green'
+  | 'amber'
+  | 'rose'
+  | 'indigo'
+  | 'teal'
+  | 'fuchsia'
+  | 'slate';
 
 export interface Repetition {
   frequency: 'days' | 'weeks' | 'months' | 'year';
@@ -15,7 +24,7 @@ export interface Shift {
   title: string;
   start: string; // ISO Date string
   end: string; // ISO Date string
-  color: string; // e.g., 'sky', 'green'
+  color: ShiftColor; // e.g., 'sky', 'green'
   isRecurring: boolean;
   repetition?: Repetition;
   notes?: string; // Optional notes field

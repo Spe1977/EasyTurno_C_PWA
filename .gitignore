@@ -25,3 +25,8 @@ dist-ssr
 
 # Angular cache
 .angular/
+
+# Cypress
+cypress/screenshots
+cypress/videos
+cypress/downloads

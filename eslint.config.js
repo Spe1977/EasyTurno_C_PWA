@@ -1,9 +1,12 @@
 import js from '@eslint/js';
 import typescript from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
+import prettierConfig from 'eslint-config-prettier';
+import prettierPlugin from 'eslint-plugin-prettier';
 
 export default [
   js.configs.recommended,
+  prettierConfig,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -11,6 +14,7 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
+        project: './tsconfig.json',
       },
       globals: {
         window: 'readonly',
@@ -22,19 +26,36 @@ export default [
         Event: 'readonly',
         HTMLSelectElement: 'readonly',
         HTMLInputElement: 'readonly',
+        HTMLElement: 'readonly',
         Blob: 'readonly',
         URL: 'readonly',
         FileReader: 'readonly',
         alert: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        DOMException: 'readonly',
+        KeyboardEvent: 'readonly',
       },
     },
     plugins: {
       '@typescript-eslint': typescript,
+      prettier: prettierPlugin,
     },
     rules: {
       ...typescript.configs.recommended.rules,
-      '@typescript-eslint/no-unused-vars': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'prettier/prettier': 'error',
     },
   },
   {
@@ -49,6 +70,15 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '**/*.spec.ts',
+      'coverage/**',
+      'setup-jest.js',
+      'cypress/**',
+      'cypress.config.ts',
+      'capacitor.config.ts',
+    ],
   },
 ];

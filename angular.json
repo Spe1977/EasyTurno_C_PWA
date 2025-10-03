@@ -18,10 +18,12 @@
             },
             "browser": "index.tsx",
             "tsConfig": "tsconfig.json",
+            "styles": ["src/styles.css"],
             "assets": [
               "manifest.webmanifest",
               "sw.js",
-              "icon.svg"
+              "icon.svg",
+              "src/assets"
             ]
           },
           "configurations": {
@@ -53,5 +55,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": "f251b5dd-9f04-4eda-b784-f4cc3aa8ebf3"
   }
 }
