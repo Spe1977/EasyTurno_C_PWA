@@ -1,4 +1,4 @@
-const CACHE_NAME = 'easyturno-cache-v3'; // Bump version to force update
+const CACHE_NAME = 'easyturno-cache-v4'; // Bump version to force update
 const CACHE_ASSETS = [
     '/',
     '/index.html',
@@ -45,6 +45,13 @@ self.addEventListener('install', (event) => {
                 return Promise.all(promises);
             })
     );
+});
+
+// Listen for SKIP_WAITING message
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 self.addEventListener('activate', (event) => {

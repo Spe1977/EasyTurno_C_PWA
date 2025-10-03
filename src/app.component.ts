@@ -15,6 +15,7 @@ import { ShiftService } from './services/shift.service';
 import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
 import { NotificationService, NotificationSettings } from './services/notification.service';
+import { SwUpdateService } from './services/sw-update.service';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 import { ToastContainerComponent } from './components/toast-container.component';
@@ -68,6 +69,7 @@ export class AppComponent {
   translationService = inject(TranslationService);
   toastService = inject(ToastService);
   notificationService = inject(NotificationService);
+  swUpdateService = inject(SwUpdateService);
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
 
@@ -131,6 +133,9 @@ export class AppComponent {
 
   // Methods
   constructor() {
+    // Check for Service Worker updates
+    void this.swUpdateService.checkForUpdates();
+
     // Initialize theme and create effect
     const storedTheme = localStorage.getItem('easyturno_theme') as 'light' | 'dark' | null;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

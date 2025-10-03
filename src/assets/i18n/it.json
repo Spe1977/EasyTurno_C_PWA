@@ -73,5 +73,8 @@
   "30minBefore": "30 minuti prima",
   "1hourBefore": "1 ora prima",
   "2hoursBefore": "2 ore prima",
-  "3hoursBefore": "3 ore prima"
+  "3hoursBefore": "3 ore prima",
+  "updateAvailable": "Nuova versione disponibile",
+  "updateAvailableDesc": "C'è un aggiornamento pronto per l'installazione",
+  "updateNow": "Aggiorna Ora"
 }
