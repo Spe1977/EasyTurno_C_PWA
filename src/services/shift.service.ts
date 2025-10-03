@@ -2,6 +2,7 @@ import { Injectable, signal, effect, inject } from '@angular/core';
 import { Shift, Repetition } from '../shift.model';
 import { ToastService } from './toast.service';
 import { NotificationService } from './notification.service';
+import { CryptoService } from './crypto.service';
 
 @Injectable({ providedIn: 'root' })
 export class ShiftService {
@@ -13,6 +14,7 @@ export class ShiftService {
 
   private toastService = inject(ToastService);
   private notificationService = inject(NotificationService);
+  private cryptoService = inject(CryptoService);
   shifts = signal<Shift[]>([]);
 
   constructor() {
@@ -24,13 +26,51 @@ export class ShiftService {
 
   private loadShiftsFromStorage() {
     const data = localStorage.getItem(this.STORAGE_KEY);
-    this.shifts.set(data ? JSON.parse(data) : []);
+    if (!data) {
+      this.shifts.set([]);
+      return;
+    }
+
+    // Check if data is encrypted
+    if (this.cryptoService.isEncrypted(data)) {
+      // Decrypt data asynchronously
+      this.cryptoService
+        .decrypt(data)
+        .then(decrypted => {
+          this.shifts.set(JSON.parse(decrypted));
+        })
+        .catch(error => {
+          console.error('Failed to decrypt shifts:', error);
+          this.toastService.error('Failed to load shifts. Data may be corrupted.', 5000);
+          this.shifts.set([]);
+        });
+    } else {
+      // Legacy unencrypted data - load and re-save encrypted
+      try {
+        const shifts = JSON.parse(data);
+        this.shifts.set(shifts);
+        // Will be automatically re-saved as encrypted via effect
+      } catch (error) {
+        console.error('Failed to parse shifts:', error);
+        this.shifts.set([]);
+      }
+    }
   }
 
   private saveShiftsToStorage(shifts: Shift[]) {
     try {
       const data = JSON.stringify(shifts);
-      localStorage.setItem(this.STORAGE_KEY, data);
+
+      // Encrypt data before storing
+      this.cryptoService
+        .encrypt(data)
+        .then(encrypted => {
+          localStorage.setItem(this.STORAGE_KEY, encrypted);
+        })
+        .catch(error => {
+          console.error('Failed to encrypt shifts:', error);
+          this.toastService.error('Failed to save shifts securely. Please try again.', 4000);
+        });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'QuotaExceededError') {
         console.error('LocalStorage quota exceeded. Cannot save shifts.');

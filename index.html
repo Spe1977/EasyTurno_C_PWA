@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EasyTurno</title>
 
+  <!-- Security: Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://aistudiocdn.com https://next.esm.sh; style-src 'self' 'unsafe-inline' https://rsms.me https://cdn.tailwindcss.com; font-src 'self' https://rsms.me; img-src 'self' data: blob:; connect-src 'self' https://aistudiocdn.com https://next.esm.sh; worker-src 'self' blob:; manifest-src 'self';">
+
   <!-- PWA Meta Tags -->
   <meta name="description" content="A complete and intuitive PWA for managing single and recurring work shifts.">
   <meta name="theme-color" content="#4f46e5"/>
@@ -15,7 +18,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"
+          integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+          crossorigin="anonymous"></script>
   <script>
     tailwind.config = {
       darkMode: "class",
@@ -43,6 +48,8 @@
       background-color: #94a3b8; /* Even lighter on hover */
     }
   </style>
+<!-- Note: importmap resources are loaded dynamically via ESM and cannot use SRI.
+     Security relies on CSP connect-src restrictions and HTTPS transport security. -->
 <script type="importmap">
 {
   "imports": {
@@ -61,7 +68,9 @@
   }
 }
 </script>
-<script type="module" src="https://cdn.jsdelivr.net/npm/ts-browser"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/ts-browser"
+        integrity="sha384-w3fUKKz6WXtefqVTwJtk2cfrHno382twV7wduZ1D5My1Nu7qPW+GnJUMktkCihE1"
+        crossorigin="anonymous"></script>
 </head>
 <body class="bg-slate-100 dark:bg-slate-900">
   <app-root></app-root>

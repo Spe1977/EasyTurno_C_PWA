@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EasyTurno</title>
 
+  <!-- Security: Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://aistudiocdn.com https://next.esm.sh; style-src 'self' 'unsafe-inline' https://rsms.me https://cdn.tailwindcss.com; font-src 'self' https://rsms.me; img-src 'self' data: blob:; connect-src 'self' https://aistudiocdn.com https://next.esm.sh; worker-src 'self' blob:; manifest-src 'self';">
+
   <!-- PWA Meta Tags -->
   <meta name="description" content="A complete and intuitive PWA for managing single and recurring work shifts.">
   <meta name="theme-color" content="#4f46e5">
@@ -15,7 +18,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com" integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb" crossorigin="anonymous"></script>
   <script>
     tailwind.config = {
       darkMode: "class",
@@ -43,6 +46,8 @@
       background-color: #94a3b8; /* Even lighter on hover */
     }
   </style>
+<!-- Note: importmap resources are loaded dynamically via ESM and cannot use SRI.
+     Security relies on CSP connect-src restrictions and HTTPS transport security. -->
 <script type="importmap">
 {
   "imports": {
@@ -61,7 +66,7 @@
   }
 }
 </script>
-<script type="module" src="https://cdn.jsdelivr.net/npm/ts-browser"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/ts-browser" integrity="sha384-w3fUKKz6WXtefqVTwJtk2cfrHno382twV7wduZ1D5My1Nu7qPW+GnJUMktkCihE1" crossorigin="anonymous"></script>
 <style>*,:before,:after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / .5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }*,:before,:after{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}:before,:after{--tw-content:""}html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,"Apple Color Emoji","Segoe UI Emoji",Segoe UI Symbol,"Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.dark\:bg-slate-900:is(.dark *){--tw-bg-opacity:1;background-color:rgb(15 23 42 / var(--tw-bg-opacity, 1))}</style><link rel="stylesheet" href="styles-ECTVVTNX.css" media="print" onload="this.media='all'"><noscript><link rel="stylesheet" href="styles-ECTVVTNX.css"></noscript></head>
 <body class="bg-slate-100 dark:bg-slate-900">
   <app-root></app-root>
@@ -75,5 +80,5 @@
       });
     }
   </script>
-<link rel="modulepreload" href="chunk-F24YEUKG.js"><script src="main-JQOVX2SB.js" type="module"></script></body>
+<link rel="modulepreload" href="chunk-F24YEUKG.js"><script src="main-HULGQIJV.js" type="module"></script></body>
 </html>
