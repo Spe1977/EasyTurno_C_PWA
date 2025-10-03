@@ -7,7 +7,7 @@ import { Injectable } from '@angular/core';
  * Key derivation is based on device fingerprint to avoid requiring user passwords.
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class CryptoService {
   private readonly DEVICE_KEY_NAME = 'easyturno_device_key';
@@ -69,11 +69,7 @@ export class CryptoService {
       const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
 
       // Encrypt the data
-      const encrypted = await crypto.subtle.encrypt(
-        { name: this.ALGORITHM, iv },
-        key,
-        data
-      );
+      const encrypted = await crypto.subtle.encrypt({ name: this.ALGORITHM, iv }, key, data);
 
       // Combine IV + encrypted data
       const combined = new Uint8Array(iv.length + encrypted.byteLength);
@@ -106,11 +102,7 @@ export class CryptoService {
       const data = combinedArray.slice(this.IV_LENGTH);
 
       // Decrypt
-      const decrypted = await crypto.subtle.decrypt(
-        { name: this.ALGORITHM, iv },
-        key,
-        data
-      );
+      const decrypted = await crypto.subtle.decrypt({ name: this.ALGORITHM, iv }, key, data);
 
       // Convert back to string
       const decoder = new TextDecoder();

@@ -65,23 +65,27 @@ export class ShiftService {
       this.cryptoService
         .encrypt(data)
         .then(encrypted => {
-          localStorage.setItem(this.STORAGE_KEY, encrypted);
+          try {
+            localStorage.setItem(this.STORAGE_KEY, encrypted);
+          } catch (error) {
+            if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+              console.error('LocalStorage quota exceeded. Cannot save shifts.');
+              this.toastService.error(
+                'Storage limit reached. Please export and remove old shifts to free up space.',
+                5000
+              );
+            } else {
+              throw error;
+            }
+          }
         })
         .catch(error => {
           console.error('Failed to encrypt shifts:', error);
-          this.toastService.error('Failed to save shifts securely. Please try again.', 4000);
+          this.toastService.error('Failed to save shifts. Please try again.', 4000);
         });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.error('LocalStorage quota exceeded. Cannot save shifts.');
-        this.toastService.error(
-          'Storage limit reached. Please export and remove old shifts to free up space.',
-          5000
-        );
-      } else {
-        console.error('Failed to save shifts to localStorage:', error);
-        this.toastService.error('Failed to save shifts. Please try again.', 4000);
-      }
+      console.error('Failed to save shifts to localStorage:', error);
+      this.toastService.error('Failed to save shifts. Please try again.', 4000);
     }
   }
 

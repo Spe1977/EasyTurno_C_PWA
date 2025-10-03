@@ -1,11 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { ShiftService } from './shift.service';
 import { ToastService } from './toast.service';
+import { CryptoService } from './crypto.service';
 import { Shift, Repetition } from '../shift.model';
 
 describe('ShiftService', () => {
   let service: ShiftService;
   let toastService: ToastService;
+  let cryptoService: CryptoService;
   let localStorageMock: { [key: string]: string };
 
   beforeEach(() => {
@@ -21,12 +23,24 @@ describe('ShiftService', () => {
       delete localStorageMock[key];
     });
 
+    // Mock CryptoService
+    const mockCryptoService = {
+      encrypt: jest.fn().mockImplementation(async (data: string) => data),
+      decrypt: jest.fn().mockImplementation(async (data: string) => data),
+      isEncrypted: jest.fn().mockReturnValue(false),
+    };
+
     TestBed.configureTestingModule({
-      providers: [ShiftService, ToastService],
+      providers: [
+        ShiftService,
+        ToastService,
+        { provide: CryptoService, useValue: mockCryptoService },
+      ],
     });
 
     service = TestBed.inject(ShiftService);
     toastService = TestBed.inject(ToastService);
+    cryptoService = TestBed.inject(CryptoService);
   });
 
   afterEach(() => {
@@ -363,7 +377,8 @@ describe('ShiftService', () => {
       const errorSpy = jest.spyOn(toastService, 'error');
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Mock setItem to throw QuotaExceededError
+      // Mock encrypt to succeed but setItem to throw QuotaExceededError
+      (cryptoService.encrypt as jest.Mock).mockImplementation(async (data: string) => data);
       jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
         const error = new DOMException('QuotaExceededError', 'QuotaExceededError');
         throw error;
@@ -397,10 +412,8 @@ describe('ShiftService', () => {
       const errorSpy = jest.spyOn(toastService, 'error');
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Mock setItem to throw generic error
-      jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new Error('Generic storage error');
-      });
+      // Mock encrypt to throw generic error
+      (cryptoService.encrypt as jest.Mock).mockRejectedValue(new Error('Encryption error'));
 
       const shiftData = {
         title: 'Shift with Error',
@@ -415,7 +428,7 @@ describe('ShiftService', () => {
       // Wait for effect to run
       setTimeout(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Failed to save shifts to localStorage:',
+          'Failed to encrypt shifts:',
           expect.any(Error)
         );
         expect(errorSpy).toHaveBeenCalledWith('Failed to save shifts. Please try again.', 4000);
@@ -429,12 +442,29 @@ describe('ShiftService', () => {
       TestBed.resetTestingModule();
       localStorageMock['easyturno_shifts'] = 'corrupted-json-data-{';
 
+      // Mock CryptoService
+      const mockCryptoService = {
+        encrypt: jest.fn().mockImplementation(async (data: string) => data),
+        decrypt: jest.fn().mockRejectedValue(new Error('Decryption failed')),
+        isEncrypted: jest.fn().mockReturnValue(true),
+      };
+
       TestBed.configureTestingModule({
-        providers: [ShiftService, ToastService],
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: mockCryptoService },
+        ],
       });
 
-      // Should throw during service initialization
-      expect(() => TestBed.inject(ShiftService)).toThrow();
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Should not throw, but handle error gracefully
+      const newService = TestBed.inject(ShiftService);
+      expect(newService).toBeTruthy();
+      expect(newService.shifts()).toEqual([]);
+
+      consoleErrorSpy.mockRestore();
     });
 
     it('should handle empty localStorage gracefully', () => {

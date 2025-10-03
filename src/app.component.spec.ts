@@ -4,6 +4,7 @@ import { ShiftService } from './services/shift.service';
 import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
 import { NotificationService } from './services/notification.service';
+import { CryptoService } from './services/crypto.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 
@@ -44,9 +45,23 @@ describe('AppComponent - Integration Tests', () => {
       })),
     });
 
+    // Mock CryptoService
+    const mockCryptoService = {
+      encrypt: jest.fn().mockImplementation(async (data: string) => data),
+      decrypt: jest.fn().mockImplementation(async (data: string) => data),
+      isEncrypted: jest.fn().mockReturnValue(false),
+    };
+
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [ShiftService, TranslationService, ToastService, NotificationService, DatePipe],
+      providers: [
+        ShiftService,
+        TranslationService,
+        ToastService,
+        NotificationService,
+        DatePipe,
+        { provide: CryptoService, useValue: mockCryptoService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(AppComponent);
