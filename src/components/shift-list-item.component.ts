@@ -10,11 +10,19 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
   imports: [TranslatePipe, LangDatePipe],
   template: `
     <div
-      class="relative flex items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
+      (click)="view.emit(shift())"
+      class="relative flex cursor-pointer items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
     >
       <div
         class="absolute bottom-0 left-0 top-0 w-1.5"
-        [class]="'bg-' + shift().color + '-500'"
+        [class.bg-sky-500]="shift().color === 'sky'"
+        [class.bg-green-500]="shift().color === 'green'"
+        [class.bg-amber-500]="shift().color === 'amber'"
+        [class.bg-rose-500]="shift().color === 'rose'"
+        [class.bg-indigo-500]="shift().color === 'indigo'"
+        [class.bg-teal-500]="shift().color === 'teal'"
+        [class.bg-fuchsia-500]="shift().color === 'fuchsia'"
+        [class.bg-slate-500]="shift().color === 'slate'"
       ></div>
       <div class="flex w-16 shrink-0 flex-col items-center justify-center">
         <p
@@ -43,7 +51,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
       <div class="flex shrink-0 items-center space-x-1">
         <button
           data-cy="edit-shift-btn"
-          (click)="edit.emit(shift())"
+          (click)="edit.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
           [title]="'editShift' | translate"
         >
@@ -64,7 +72,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
         </button>
         <button
           data-cy="delete-shift-btn"
-          (click)="deleteShift.emit(shift())"
+          (click)="deleteShift.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-rose-100 dark:hover:bg-rose-800/50"
           [title]="'delete' | translate"
         >
@@ -89,6 +97,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
 })
 export class ShiftListItemComponent {
   shift = input.required<Shift>();
+  view = output<Shift>();
   edit = output<Shift>();
   deleteShift = output<Shift>();
 }

@@ -799,8 +799,7 @@ describe('AppComponent - Integration Tests', () => {
       component.shiftEndTime.set('16:00');
 
       // Change start date
-      const event = { target: { value: '2025-10-20' } } as any;
-      component.onStartDateChange(event);
+      component.onStartDateChange('2025-10-20');
 
       expect(component.shiftEndDate()).toBe('2025-10-20');
     });
@@ -812,8 +811,7 @@ describe('AppComponent - Integration Tests', () => {
       component.shiftEndTime.set('16:00');
 
       // Change start time
-      const event = { target: { value: '10:00' } } as any;
-      component.onStartTimeChange(event);
+      component.onStartTimeChange('10:00');
 
       // End time should be set to the new start time (auto-alignment)
       expect(component.shiftEndTime()).toBe('10:00');

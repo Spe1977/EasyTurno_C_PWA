@@ -452,16 +452,12 @@ export class AppComponent {
     this.shiftRepetition.update(r => ({ ...r, interval }));
   }
 
-  onStartDateChange(event: Event) {
-    const newStartDate = (event.target as HTMLInputElement).value;
-    this.shiftStartDate.set(newStartDate);
+  onStartDateChange(newStartDate: string) {
     // Align end date to start date automatically
     this.shiftEndDate.set(newStartDate);
   }
 
-  onStartTimeChange(event: Event) {
-    const newStartTime = (event.target as HTMLInputElement).value;
-    this.shiftStartTime.set(newStartTime);
+  onStartTimeChange(newStartTime: string) {
     // Align end time to start time automatically
     this.shiftEndTime.set(newStartTime);
   }

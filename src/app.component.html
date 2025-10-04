@@ -127,14 +127,17 @@
     }
 
     <!-- List View -->
-    <div class="space-y-3 p-4">
+    <div class="p-4">
       @if (listShifts().length > 0) {
         @for (shift of listShifts(); track shift.id) {
-          <app-shift-list-item
-            [shift]="shift"
-            (edit)="openEditShiftForm($event)"
-            (deleteShift)="confirmDelete($event)"
-          />
+          <div class="mb-3">
+            <app-shift-list-item
+              [shift]="shift"
+              (view)="openEditShiftForm($event)"
+              (edit)="openEditShiftForm($event)"
+              (deleteShift)="confirmDelete($event)"
+            />
+          </div>
         }
         @if (listShifts().length < allListShifts().length) {
           <div class="pt-2 text-center">
@@ -232,6 +235,7 @@
                   data-cy="shift-start-date"
                   type="date"
                   [(ngModel)]="shiftStartDate"
+                  (ngModelChange)="onStartDateChange($event)"
                   name="startDate"
                   required
                   class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
@@ -245,6 +249,7 @@
                   data-cy="shift-start-time"
                   type="time"
                   [(ngModel)]="shiftStartTime"
+                  (ngModelChange)="onStartTimeChange($event)"
                   name="startTime"
                   required
                   class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
@@ -283,7 +288,14 @@
                     type="button"
                     (click)="shiftColor.set(color)"
                     class="h-9 w-9 rounded-full transition-transform hover:scale-110"
-                    [class]="'bg-' + color + '-400'"
+                    [class.bg-sky-400]="color === 'sky'"
+                    [class.bg-green-400]="color === 'green'"
+                    [class.bg-amber-400]="color === 'amber'"
+                    [class.bg-rose-400]="color === 'rose'"
+                    [class.bg-indigo-400]="color === 'indigo'"
+                    [class.bg-teal-400]="color === 'teal'"
+                    [class.bg-fuchsia-400]="color === 'fuchsia'"
+                    [class.bg-slate-400]="color === 'slate'"
                     [class.ring-2]="shiftColor() === color"
                     [class.ring-offset-2]="shiftColor() === color"
                     [class.ring-indigo-500]="shiftColor() === color"
