@@ -814,6 +814,12 @@
             >
               {{ 'deleteThisOccurrence' | translate }}
             </button>
+            <button
+              (click)="closeModal()"
+              class="w-full rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+            >
+              {{ 'cancel' | translate }}
+            </button>
           } @else if (activeModal() === 'editSeriesConfirm') {
             <button
               (click)="executeEdit(true)"
@@ -826,6 +832,12 @@
               class="w-full rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
             >
               {{ 'editThisOccurrence' | translate }}
+            </button>
+            <button
+              (click)="closeModal()"
+              class="w-full rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+            >
+              {{ 'cancel' | translate }}
             </button>
           } @else if (activeModal() === 'deleteConfirm') {
             <button

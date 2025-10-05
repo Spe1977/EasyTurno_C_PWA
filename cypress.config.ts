@@ -13,7 +13,7 @@ export default defineConfig({
   component: {
     devServer: {
       framework: 'angular',
-      bundler: 'vite',
+      bundler: 'webpack',
     },
     specPattern: '**/*.cy.ts',
   },
