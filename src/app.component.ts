@@ -155,57 +155,48 @@ export class AppComponent {
     });
 
     // Keyboard shortcuts
-    effect(
-      () => {
-        const handleKeyboard = (e: KeyboardEvent) => {
-          // Ctrl/Cmd + N = New shift
-          if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-            e.preventDefault();
-            this.openNewShiftForm();
-          }
-          // Escape = Close modal
-          if (e.key === 'Escape' && this.activeModal() !== 'none') {
-            e.preventDefault();
-            this.closeModal();
-          }
-          // Ctrl/Cmd + S = Open statistics (when in settings)
-          if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
-            e.preventDefault();
-            this.openStatistics();
-          }
-        };
+    effect(() => {
+      const handleKeyboard = (e: KeyboardEvent) => {
+        // Ctrl/Cmd + N = New shift
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+          e.preventDefault();
+          this.openNewShiftForm();
+        }
+        // Escape = Close modal
+        if (e.key === 'Escape' && this.activeModal() !== 'none') {
+          e.preventDefault();
+          this.closeModal();
+        }
+        // Ctrl/Cmd + S = Open statistics (when in settings)
+        if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
+          e.preventDefault();
+          this.openStatistics();
+        }
+      };
 
-        window.addEventListener('keydown', handleKeyboard);
+      window.addEventListener('keydown', handleKeyboard);
 
-        // Cleanup on destroy
-        return () => window.removeEventListener('keydown', handleKeyboard);
-      },
-      { allowSignalWrites: true }
-    );
+      // Cleanup on destroy
+      return () => window.removeEventListener('keydown', handleKeyboard);
+    });
 
     // Open decryption-error modal when ShiftService reports a decrypt failure
-    effect(
-      () => {
-        if (this.shiftService.decryptionError()) {
-          this.openModal('decryptionError');
-        }
-      },
-      { allowSignalWrites: true }
-    );
+    effect(() => {
+      if (this.shiftService.decryptionError()) {
+        this.openModal('decryptionError');
+      }
+    });
 
     // Navigate to a shift when the user taps a native notification
-    effect(
-      () => {
-        const shiftId = this.notificationService.pendingShiftId();
-        if (!shiftId) return;
-        const shift = this.shiftService.shifts().find(s => s.id === shiftId);
-        if (shift) {
-          this.openEditShiftForm(shift);
-        }
-        this.notificationService.pendingShiftId.set(null);
-      },
-      { allowSignalWrites: true }
-    );
+    effect(() => {
+      const shiftId = this.notificationService.pendingShiftId();
+      if (!shiftId) return;
+      const shift = this.shiftService.shifts().find(s => s.id === shiftId);
+      if (shift) {
+        this.openEditShiftForm(shift);
+      }
+      this.notificationService.pendingShiftId.set(null);
+    });
 
     this.resetForm();
 
