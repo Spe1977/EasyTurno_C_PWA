@@ -133,8 +133,15 @@ export class ShiftService {
   }
 
   private addMonths(date: Date, months: number): Date {
+    const originalDay = date.getDate();
     const result = new Date(date);
+    // Set day to 1 first to avoid overflow during the month transition
+    // (e.g. Jan 31 + 1 month would otherwise become Mar 3 instead of Feb 28)
+    result.setDate(1);
     result.setMonth(result.getMonth() + months);
+    // Clamp to the last valid day of the target month
+    const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+    result.setDate(Math.min(originalDay, lastDay));
     return result;
   }
 

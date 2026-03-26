@@ -191,6 +191,20 @@ export class AppComponent {
       { allowSignalWrites: true }
     );
 
+    // Navigate to a shift when the user taps a native notification
+    effect(
+      () => {
+        const shiftId = this.notificationService.pendingShiftId();
+        if (!shiftId) return;
+        const shift = this.shiftService.shifts().find(s => s.id === shiftId);
+        if (shift) {
+          this.openEditShiftForm(shift);
+        }
+        this.notificationService.pendingShiftId.set(null);
+      },
+      { allowSignalWrites: true }
+    );
+
     this.resetForm();
 
     // Initialize search date with proper error handling
@@ -353,6 +367,18 @@ export class AppComponent {
     // Validate end > start
     if (end <= start) {
       this.toastService.error(this.translationService.translate('endMustBeAfterStart'));
+      return;
+    }
+
+    // Validate overtime hours
+    if (this.shiftOvertimeHours() < 0) {
+      this.toastService.error(this.translationService.translate('invalidOvertimeHours'));
+      return;
+    }
+
+    // Validate allowance names are not empty
+    if (this.shiftAllowances().some(a => a.name.trim() === '')) {
+      this.toastService.error(this.translationService.translate('allowanceNameRequired'));
       return;
     }
 

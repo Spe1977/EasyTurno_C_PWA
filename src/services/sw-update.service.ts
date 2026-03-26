@@ -1,11 +1,12 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, OnDestroy, signal } from '@angular/core';
 
 @Injectable({
   providedIn: 'root',
 })
-export class SwUpdateService {
+export class SwUpdateService implements OnDestroy {
   updateAvailable = signal(false);
   private registration: ServiceWorkerRegistration | null = null;
+  private intervalId: ReturnType<typeof setInterval> | null = null;
 
   async checkForUpdates(): Promise<void> {
     if (!('serviceWorker' in navigator)) {
@@ -17,7 +18,7 @@ export class SwUpdateService {
 
       // Check for updates every 60 seconds
       // eslint-disable-next-line no-undef
-      setInterval(() => {
+      this.intervalId = setInterval(() => {
         void this.registration?.update();
       }, 60000);
 
@@ -39,6 +40,12 @@ export class SwUpdateService {
       });
     } catch (error) {
       console.error('Service Worker registration failed:', error);
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
     }
   }
 

@@ -77,6 +77,8 @@
   "updateAvailable": "Nuova versione disponibile",
   "updateAvailableDesc": "C'è un aggiornamento pronto per l'installazione",
   "updateNow": "Aggiorna Ora",
+  "invalidOvertimeHours": "Le ore di straordinario non possono essere negative",
+  "allowanceNameRequired": "Il nome dell'indennità non può essere vuoto",
   "decryptionErrorTitle": "Impossibile leggere i dati",
   "decryptionErrorMessage": "I dati salvati non possono essere decifrati, probabilmente perché la chiave di cifratura è cambiata. Puoi azzerare l'app oppure chiudere questo avviso per mantenere i dati inaccessibili fino al ripristino di un backup.",
   "decryptionResetData": "Azzera tutti i dati",

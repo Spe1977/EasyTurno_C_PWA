@@ -77,6 +77,8 @@
   "updateAvailable": "New version available",
   "updateAvailableDesc": "An update is ready to install",
   "updateNow": "Update Now",
+  "invalidOvertimeHours": "Overtime hours cannot be negative",
+  "allowanceNameRequired": "Allowance name cannot be empty",
   "decryptionErrorTitle": "Unable to read data",
   "decryptionErrorMessage": "The saved data cannot be decrypted, likely because the encryption key has changed. You can reset the app or close this dialog to keep the unreadable data until you restore a backup.",
   "decryptionResetData": "Reset all data",

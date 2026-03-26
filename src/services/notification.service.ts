@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, ScheduleOptions, PendingResult } from '@capacitor/local-notifications';
 import { Shift } from '../shift.model';
@@ -15,6 +15,13 @@ export class NotificationService {
   private notificationIdCounter = 0;
   private notificationIdMap = new Map<string, number>();
 
+  /**
+   * Set to the shiftId when the user taps a notification.
+   * AppComponent observes this and opens the edit form for that shift.
+   * Reset to null after the navigation has been handled.
+   */
+  pendingShiftId = signal<string | null>(null);
+
   async initialize(): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
       console.warn('NotificationService: Running on web, native features disabled');
@@ -28,10 +35,13 @@ export class NotificationService {
       return false;
     }
 
-    // Listener per click su notifica
+    // Listener per click su notifica — naviga al turno corrispondente
     await LocalNotifications.addListener('localNotificationActionPerformed', notification => {
-      console.warn('Notification clicked:', notification);
-      // TODO: Naviga al turno specifico
+      const extra = notification.notification.extra as { shiftId?: string } | undefined;
+      const shiftId = extra?.shiftId;
+      if (shiftId) {
+        this.pendingShiftId.set(shiftId);
+      }
     });
 
     // Initialize counter from existing notifications
