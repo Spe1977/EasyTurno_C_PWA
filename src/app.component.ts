@@ -30,7 +30,8 @@ type Modal =
   | 'resetConfirm'
   | 'editSeriesConfirm'
   | 'searchDate'
-  | 'statistics';
+  | 'statistics'
+  | 'decryptionError';
 
 @Component({
   selector: 'app-root',
@@ -176,6 +177,16 @@ export class AppComponent {
 
         // Cleanup on destroy
         return () => window.removeEventListener('keydown', handleKeyboard);
+      },
+      { allowSignalWrites: true }
+    );
+
+    // Open decryption-error modal when ShiftService reports a decrypt failure
+    effect(
+      () => {
+        if (this.shiftService.decryptionError()) {
+          this.openModal('decryptionError');
+        }
       },
       { allowSignalWrites: true }
     );
@@ -587,6 +598,18 @@ export class AppComponent {
     this.shiftService.deleteAllShifts();
     this.closeModal();
     this.toastService.success(this.translationService.translate('resetSuccess'));
+  }
+
+  executeDecryptionReset() {
+    this.shiftService.resetAfterDecryptionError();
+    this.closeModal();
+    this.toastService.success(this.translationService.translate('resetSuccess'));
+  }
+
+  dismissDecryptionError() {
+    // User chooses to keep the unreadable data — just close the modal.
+    // The app will remain empty until the user exports/imports a backup.
+    this.closeModal();
   }
 
   // --- Allowances Management ---

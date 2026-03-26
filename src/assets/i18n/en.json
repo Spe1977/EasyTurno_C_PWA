@@ -76,5 +76,9 @@
   "3hoursBefore": "3 hours before",
   "updateAvailable": "New version available",
   "updateAvailableDesc": "An update is ready to install",
-  "updateNow": "Update Now"
+  "updateNow": "Update Now",
+  "decryptionErrorTitle": "Unable to read data",
+  "decryptionErrorMessage": "The saved data cannot be decrypted, likely because the encryption key has changed. You can reset the app or close this dialog to keep the unreadable data until you restore a backup.",
+  "decryptionResetData": "Reset all data",
+  "decryptionKeepData": "Keep data (close)"
 }
