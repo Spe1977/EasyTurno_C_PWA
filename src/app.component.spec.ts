@@ -555,7 +555,7 @@ describe('AppComponent - Integration Tests', () => {
     it('should update allowance name', () => {
       component.addAllowance();
 
-      const event = { target: { value: 'Transport' } } as any;
+      const event = { target: { value: 'Transport' } } as unknown as Event;
       component.updateAllowanceName(0, event);
 
       expect(component.shiftAllowances()[0].name).toBe('Transport');
@@ -564,7 +564,7 @@ describe('AppComponent - Integration Tests', () => {
     it('should update allowance amount', () => {
       component.addAllowance();
 
-      const event = { target: { value: '25.50' } } as any;
+      const event = { target: { value: '25.50' } } as unknown as Event;
       component.updateAllowanceAmount(0, event);
 
       expect(component.shiftAllowances()[0].amount).toBe(25.5);
@@ -718,7 +718,7 @@ describe('AppComponent - Integration Tests', () => {
       global.URL.revokeObjectURL = jest.fn();
       const createElementSpy = jest.spyOn(document, 'createElement');
       const clickMock = jest.fn();
-      createElementSpy.mockReturnValue({ click: clickMock } as any);
+      createElementSpy.mockReturnValue({ click: clickMock } as unknown as HTMLAnchorElement);
 
       shiftService.addShift({
         title: 'Export Test',
@@ -751,7 +751,7 @@ describe('AppComponent - Integration Tests', () => {
       const file = new File([JSON.stringify(validData)], 'shifts.json', {
         type: 'application/json',
       });
-      const event = { target: { files: [file] } } as any;
+      const event = { target: { files: [file] } } as unknown as Event;
 
       component.importBackup(event);
 

@@ -22,6 +22,7 @@
             "assets": [
               "manifest.webmanifest",
               "sw.js",
+              "tailwind-init.js",
               "icon.svg",
               "src/assets"
             ]

@@ -5,8 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EasyTurno</title>
 
-  <!-- Security: Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://aistudiocdn.com https://next.esm.sh; style-src 'self' 'unsafe-inline' https://rsms.me https://cdn.tailwindcss.com; font-src 'self' https://rsms.me; img-src 'self' data: blob:; connect-src 'self' https://aistudiocdn.com https://next.esm.sh; worker-src 'self' blob:; manifest-src 'self';">
+  <!-- Security: Content Security Policy
+       'unsafe-eval' in script-src is required by ts-browser (TypeScript
+       browser compiler) and Angular's JIT compiler loaded via CDN.
+       'unsafe-inline' has been removed from script-src by extracting all
+       inline scripts to external files (tailwind-init.js, sw-register.js).
+       'unsafe-inline' in style-src is still required by Tailwind Play CDN,
+       which injects generated <style> tags directly into the DOM at runtime. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://aistudiocdn.com https://next.esm.sh; style-src 'self' 'unsafe-inline' https://rsms.me https://cdn.tailwindcss.com; font-src 'self' https://rsms.me; img-src 'self' data: blob:; connect-src 'self' https://aistudiocdn.com https://next.esm.sh; worker-src 'self' blob:; manifest-src 'self';">
 
   <!-- PWA Meta Tags -->
   <meta name="description" content="A complete and intuitive PWA for managing single and recurring work shifts.">
@@ -18,14 +24,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+  <!-- tailwind-init.js must come before the CDN script so darkMode is set
+       before Tailwind starts processing the DOM. -->
+  <script src="/tailwind-init.js"></script>
   <script src="https://cdn.tailwindcss.com"
           integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
           crossorigin="anonymous"></script>
-  <script>
-    tailwind.config = {
-      darkMode: "class",
-    }
-  </script>
   <style>
     @import url('https://rsms.me/inter/inter.css');
 
@@ -75,14 +79,8 @@
 <body class="bg-slate-100 dark:bg-slate-900">
   <app-root></app-root>
   <script type="ts-module" src="index.tsx"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then(reg => console.log('Service worker registered.', reg))
-          .catch(err => console.error('Service worker registration failed:', err));
-      });
-    }
-  </script>
+  <!-- Service worker registration is handled by SwUpdateService (sw-update.service.ts).
+       The redundant inline registration has been removed to allow omitting
+       'unsafe-inline' from the Content Security Policy script-src directive. -->
 </body>
 </html>

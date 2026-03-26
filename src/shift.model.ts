@@ -9,7 +9,8 @@ export type ShiftColor =
   | 'slate';
 
 export interface Repetition {
-  frequency: 'days' | 'weeks' | 'months' | 'year';
+  /** 'year' is kept for backward compatibility with data stored before the rename. */
+  frequency: 'days' | 'weeks' | 'months' | 'years' | 'year';
   interval: number;
 }
 

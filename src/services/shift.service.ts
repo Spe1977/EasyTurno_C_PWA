@@ -197,7 +197,8 @@ export class ShiftService {
           case 'months':
             currentStartDate = this.addMonths(currentStartDate, repetition.interval);
             break;
-          case 'year':
+          case 'year': // legacy value — falls through to 'years'
+          case 'years':
             currentStartDate = this.addYears(currentStartDate, repetition.interval);
             break;
         }

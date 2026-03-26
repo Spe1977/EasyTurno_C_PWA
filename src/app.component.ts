@@ -120,12 +120,13 @@ export class AppComponent {
   private readonly ONE_HOUR_MS = 60 * 60 * 1000;
 
   colors: ShiftColor[] = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
-  repFrequencies = ['days', 'weeks', 'months', 'year'];
+  repFrequencies = ['days', 'weeks', 'months', 'years'];
   repIntervals: Record<Repetition['frequency'], number[]> = {
     days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    year: [1, 2, 3, 4, 5],
+    years: [1, 2, 3, 4, 5],
+    year: [1, 2, 3, 4, 5], // legacy — kept for data stored before the rename
   };
 
   // Derived State (Computed Signals)
@@ -569,6 +570,8 @@ export class AppComponent {
   // --- Settings Logic ---
   exportBackup() {
     this.isExporting.set(true);
+    // Warn the user that the exported file is unencrypted plaintext JSON.
+    this.toastService.warning(this.translationService.translate('exportUnencryptedInfo'));
     try {
       const data = JSON.stringify(this.shiftService.shifts(), null, 2);
       const blob = new Blob([data], { type: 'application/json' });
