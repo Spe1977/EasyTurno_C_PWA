@@ -394,9 +394,9 @@ describe('AppComponent - Integration Tests', () => {
       // Clear any existing shifts
       shiftService.deleteAllShifts();
 
-      // Add test shifts
+      // Add test shifts (use a future date so they appear in the "upcoming" list)
       for (let i = 0; i < 100; i++) {
-        const date = new Date('2025-10-15');
+        const date = new Date('2028-01-01');
         date.setDate(date.getDate() + i);
         shiftService.addShift({
           title: `Shift ${i}`,
@@ -420,23 +420,23 @@ describe('AppComponent - Integration Tests', () => {
     });
 
     it('should filter shifts by search date', () => {
-      const searchDate = new Date('2025-10-20');
+      const searchDate = new Date('2028-01-06');
       component.searchDate.set(searchDate);
 
       const filteredShifts = component.listShifts();
 
-      // Should only show shifts on 2025-10-20
+      // Should only show shifts on 2028-01-06
       expect(filteredShifts.length).toBeGreaterThan(0);
       filteredShifts.forEach(shift => {
         const shiftDate = new Date(shift.start);
-        expect(shiftDate.getDate()).toBe(20);
-        expect(shiftDate.getMonth()).toBe(9); // October (0-indexed)
-        expect(shiftDate.getFullYear()).toBe(2025);
+        expect(shiftDate.getDate()).toBe(6);
+        expect(shiftDate.getMonth()).toBe(0); // January (0-indexed)
+        expect(shiftDate.getFullYear()).toBe(2028);
       });
     });
 
     it('should clear search and show all upcoming shifts', () => {
-      component.searchDate.set(new Date('2025-10-20'));
+      component.searchDate.set(new Date('2028-01-06'));
       expect(component.searchDate()).not.toBeNull();
 
       component.clearSearch();

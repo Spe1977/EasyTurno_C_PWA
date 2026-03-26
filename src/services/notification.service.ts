@@ -24,7 +24,7 @@ export class NotificationService {
 
   async initialize(): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
-      console.log('NotificationService: Running on web, native features disabled');
+      console.warn('NotificationService: Running on web, native features disabled');
       return false;
     }
 
@@ -141,7 +141,7 @@ export class NotificationService {
 
       if (notifications.length > 0) {
         await LocalNotifications.schedule({ notifications });
-        console.log(`Scheduled ${notifications.length} notification(s) for shift: ${shift.id}`);
+        console.warn(`Scheduled ${notifications.length} notification(s) for shift: ${shift.id}`);
       }
     } catch (error) {
       console.error('Failed to schedule shift notifications:', error);
@@ -161,7 +161,7 @@ export class NotificationService {
         await LocalNotifications.cancel({
           notifications: toCancel.map(n => ({ id: n.id })),
         });
-        console.log(`Cancelled ${toCancel.length} notification(s) for shift: ${shiftId}`);
+        console.warn(`Cancelled ${toCancel.length} notification(s) for shift: ${shiftId}`);
       }
     } catch (error) {
       console.error('Failed to cancel shift notifications:', error);
@@ -178,7 +178,7 @@ export class NotificationService {
         await LocalNotifications.cancel({
           notifications: pending.notifications.map(n => ({ id: n.id })),
         });
-        console.log(`Cancelled all ${pending.notifications.length} notifications`);
+        console.warn(`Cancelled all ${pending.notifications.length} notifications`);
       }
     } catch (error) {
       console.error('Failed to cancel all notifications:', error);

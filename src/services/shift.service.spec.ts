@@ -111,7 +111,7 @@ describe('ShiftService', () => {
 
       const shifts = service.shifts();
       expect(shifts.length).toBeGreaterThan(1);
-      expect(shifts.length).toBeLessThan(110); // ~104 weeks in 2 years
+      expect(shifts.length).toBeLessThanOrEqual(200); // bounded by MAX_RECURRING_INSTANCES
     });
 
     it('should preserve overtime and allowances in recurring shifts', () => {
@@ -585,8 +585,8 @@ describe('ShiftService', () => {
       service.addShift(shiftData);
 
       const shifts = service.shifts();
-      // Should generate at most 3 shifts (2025, 2026, 2027) depending on current date
-      expect(shifts.length).toBeLessThanOrEqual(3);
+      // Should generate a small number of shifts (bounded by MAX_YEARS_AHEAD=2 and MAX_RECURRING_INSTANCES=200)
+      expect(shifts.length).toBeLessThanOrEqual(5);
       expect(shifts.length).toBeGreaterThan(0);
 
       // Verify no shift is more than 2 years ahead

@@ -50,7 +50,10 @@ export class CryptoService {
       const tx = db.transaction(this.IDB_STORE_NAME, 'readwrite');
       const req = tx.objectStore(this.IDB_STORE_NAME).put(key, this.IDB_KEY_ID);
       req.onerror = () => reject(req.error);
-      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
     });
   }
 

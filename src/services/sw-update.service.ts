@@ -17,7 +17,6 @@ export class SwUpdateService implements OnDestroy {
       this.registration = await navigator.serviceWorker.register('/sw.js');
 
       // Check for updates every 60 seconds
-      // eslint-disable-next-line no-undef
       this.intervalId = setInterval(() => {
         void this.registration?.update();
       }, 60000);
