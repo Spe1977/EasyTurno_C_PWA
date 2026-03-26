@@ -254,12 +254,21 @@ export class AppComponent {
     }
   }
 
-  // Cache sorted shifts to avoid re-sorting on every computation
-  private sortedShifts = computed(() => {
-    return this.shiftService
-      .shifts()
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  });
+  // Pre-compute timestamps once per shifts-list change so that all
+  // subsequent sort/filter operations work on plain numbers instead of
+  // creating new Date objects on every comparator/predicate call.
+  private normalizedShifts = computed(() =>
+    this.shiftService.shifts().map(s => ({
+      ...s,
+      startTime: Date.parse(s.start),
+      endTime: Date.parse(s.end),
+    }))
+  );
+
+  // Cache sorted shifts; spread to avoid mutating the computed array.
+  private sortedShifts = computed(() =>
+    [...this.normalizedShifts()].sort((a, b) => a.startTime - b.startTime)
+  );
 
   // Cache today boundary timestamp to avoid recreating Date object
   private todayBoundary = computed(() => {
@@ -281,17 +290,14 @@ export class AppComponent {
       searchDayEnd.setHours(23, 59, 59, 999);
       const searchDayEndTime = searchDayEnd.getTime();
 
-      return allShifts.filter(s => {
-        const shiftStartTime = new Date(s.start).getTime();
-        const shiftEndTime = new Date(s.end).getTime();
-        // A shift is relevant for a given day if it overlaps with that day at any point.
-        return shiftStartTime <= searchDayEndTime && shiftEndTime >= searchDayStartTime;
-      });
+      return allShifts.filter(
+        s => s.startTime <= searchDayEndTime && s.endTime >= searchDayStartTime
+      );
     }
 
     const todayTime = this.todayBoundary();
     // In the default list, show shifts that haven't ended yet.
-    return allShifts.filter(s => new Date(s.end).getTime() >= todayTime);
+    return allShifts.filter(s => s.endTime >= todayTime);
   }
 
   loadMoreShifts() {
@@ -679,13 +685,13 @@ export class AppComponent {
     };
   });
 
-  // Pre-filtered shifts for stats (memoized separately)
+  // Pre-filtered shifts for stats (memoized separately).
+  // Uses normalizedShifts so no Date objects are created in the predicate.
   private filteredStatsShifts = computed(() => {
     const { startTime, endTime } = this.statsDateRange();
-    return this.shiftService.shifts().filter(shift => {
-      const shiftStart = new Date(shift.start).getTime();
-      return shiftStart >= startTime && shiftStart <= endTime;
-    });
+    return this.normalizedShifts().filter(
+      shift => shift.startTime >= startTime && shift.startTime <= endTime
+    );
   });
 
   // Optimized stats calculation with early exit
@@ -713,8 +719,8 @@ export class AppComponent {
     };
 
     for (const shift of shifts) {
-      // Calculate hours
-      const hours = (new Date(shift.end).getTime() - new Date(shift.start).getTime()) / 3_600_000;
+      // Calculate hours using pre-computed timestamps (no Date allocation)
+      const hours = (shift.endTime - shift.startTime) / 3_600_000;
       stats.totalHours += hours;
       stats.totalOvertime += shift.overtimeHours ?? 0;
 
