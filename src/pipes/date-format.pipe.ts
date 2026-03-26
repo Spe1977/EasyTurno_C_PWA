@@ -5,6 +5,11 @@ import { TranslationService } from '../services/translation.service';
 @Pipe({
   name: 'langDate',
   standalone: true,
+  // pure: false is intentional — the formatted output depends on
+  // TranslationService.language() (a runtime signal) to choose locale and
+  // date-format pattern (e.g. dd/MM/yyyy vs MM/dd/yyyy).  A pure pipe would
+  // cache the result keyed on (value, format) and ignore locale changes, so
+  // dates would not reformat when the user switches language.
   pure: false,
 })
 export class LangDatePipe implements PipeTransform {
