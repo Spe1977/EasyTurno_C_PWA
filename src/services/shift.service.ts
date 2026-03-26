@@ -17,6 +17,20 @@ export class ShiftService {
   private cryptoService = inject(CryptoService);
   shifts = signal<Shift[]>([]);
 
+  /**
+   * Becomes true only after the initial load from storage completes
+   * (either synchronously for legacy data, or after async decryption).
+   * Saves are blocked until this flag is set to prevent the effect() from
+   * overwriting stored data with an empty array before decryption finishes.
+   */
+  private isLoaded = false;
+
+  /**
+   * Set to true when decryption fails so that the UI can prompt the user
+   * to decide whether to reset data or keep the (unreadable) ciphertext.
+   */
+  decryptionError = signal(false);
+
   constructor() {
     this.loadShiftsFromStorage();
     effect(() => {
@@ -27,6 +41,8 @@ export class ShiftService {
   private loadShiftsFromStorage() {
     const data = localStorage.getItem(this.STORAGE_KEY);
     if (!data) {
+      // Nothing stored yet — allow saves immediately
+      this.isLoaded = true;
       this.shifts.set([]);
       return;
     }
@@ -37,27 +53,48 @@ export class ShiftService {
       this.cryptoService
         .decrypt(data)
         .then(decrypted => {
+          // Enable saves BEFORE updating the signal so the effect that fires
+          // immediately after the signal change is not blocked.
+          this.isLoaded = true;
           this.shifts.set(JSON.parse(decrypted));
         })
         .catch(error => {
           console.error('Failed to decrypt shifts:', error);
-          this.toastService.error('Failed to load shifts. Data may be corrupted.', 5000);
-          this.shifts.set([]);
+          // Do NOT clear data automatically — let the user decide.
+          // Saves remain blocked (isLoaded stays false) to avoid overwriting
+          // the ciphertext with an empty array.
+          this.decryptionError.set(true);
         });
     } else {
-      // Legacy unencrypted data - load and re-save encrypted
+      // Legacy unencrypted data — load and re-save encrypted
       try {
-        const shifts = JSON.parse(data);
+        const shifts = JSON.parse(data) as Shift[];
+        this.isLoaded = true;
         this.shifts.set(shifts);
         // Will be automatically re-saved as encrypted via effect
       } catch (error) {
         console.error('Failed to parse shifts:', error);
+        this.isLoaded = true;
         this.shifts.set([]);
       }
     }
   }
 
+  /**
+   * Called when the user explicitly confirms they want to reset all data
+   * after a decryption failure.
+   */
+  resetAfterDecryptionError() {
+    this.decryptionError.set(false);
+    this.isLoaded = true;
+    this.shifts.set([]);
+  }
+
   private saveShiftsToStorage(shifts: Shift[]) {
+    // Guard: do not save until the initial load has completed to avoid
+    // overwriting stored ciphertext with an empty array.
+    if (!this.isLoaded) return;
+
     try {
       const data = JSON.stringify(shifts);
 

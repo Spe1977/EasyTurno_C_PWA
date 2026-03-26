@@ -10,48 +10,96 @@ import { Injectable } from '@angular/core';
   providedIn: 'root',
 })
 export class CryptoService {
-  private readonly DEVICE_KEY_NAME = 'easyturno_device_key';
+  /** @deprecated Used only for migration from old localStorage key */
+  private readonly LEGACY_KEY_NAME = 'easyturno_device_key';
   private readonly KEY_LENGTH = 256;
   private readonly ALGORITHM = 'AES-GCM';
   private readonly IV_LENGTH = 12; // 96 bits for AES-GCM
   private readonly SALT_LENGTH = 16;
+  private readonly IDB_DB_NAME = 'easyturno_keystore';
+  private readonly IDB_STORE_NAME = 'keys';
+  private readonly IDB_KEY_ID = 'deviceKey';
+
+  // ── IndexedDB helpers ────────────────────────────────────────────────────
+
+  private openIDB(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(this.IDB_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(this.IDB_STORE_NAME);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  private async getKeyFromIDB(): Promise<CryptoKey | null> {
+    const db = await this.openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.IDB_STORE_NAME, 'readonly');
+      const req = tx.objectStore(this.IDB_STORE_NAME).get(this.IDB_KEY_ID);
+      req.onsuccess = () => resolve((req.result as CryptoKey | undefined) ?? null);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => db.close();
+    });
+  }
+
+  private async saveKeyToIDB(key: CryptoKey): Promise<void> {
+    const db = await this.openIDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(this.IDB_STORE_NAME, 'readwrite');
+      const req = tx.objectStore(this.IDB_STORE_NAME).put(key, this.IDB_KEY_ID);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+    });
+  }
+
+  // ── Key management ───────────────────────────────────────────────────────
 
   /**
-   * Gets or generates a device-specific encryption key
-   * The key is stored in localStorage but is cryptographically secure
+   * Gets or generates a device-specific encryption key.
+   * The key is stored as a non-extractable CryptoKey in IndexedDB so that
+   * raw key bytes are never exposed to JavaScript or serialised to disk as
+   * plain text.  On first run after the upgrade, a legacy key found in
+   * localStorage is migrated and then removed.
    */
   private async getDeviceKey(): Promise<CryptoKey> {
-    // Try to load existing key
-    const storedKey = localStorage.getItem(this.DEVICE_KEY_NAME);
+    // 1. Try IndexedDB (secure, non-extractable storage)
+    try {
+      const idbKey = await this.getKeyFromIDB();
+      if (idbKey) return idbKey;
+    } catch (error) {
+      console.warn('Failed to load key from IndexedDB, will try migration', error);
+    }
 
-    if (storedKey) {
+    // 2. Migrate legacy key from localStorage (one-time)
+    const legacyRaw = localStorage.getItem(this.LEGACY_KEY_NAME);
+    if (legacyRaw) {
       try {
-        // Import the stored key
-        const keyData = this.base64ToArrayBuffer(storedKey);
-        return await crypto.subtle.importKey(
+        const keyData = this.base64ToArrayBuffer(legacyRaw);
+        const migratedKey = await crypto.subtle.importKey(
           'raw',
           keyData,
           { name: this.ALGORITHM, length: this.KEY_LENGTH },
-          false,
+          false, // non-extractable after migration
           ['encrypt', 'decrypt']
         );
+        await this.saveKeyToIDB(migratedKey);
+        localStorage.removeItem(this.LEGACY_KEY_NAME);
+        return migratedKey;
       } catch (error) {
-        console.warn('Failed to import stored key, generating new one', error);
+        console.warn('Failed to migrate legacy key, generating new one', error);
       }
     }
 
-    // Generate new key
-    const key = await crypto.subtle.generateKey(
+    // 3. Generate a new non-extractable key and persist it in IndexedDB
+    const newKey = await crypto.subtle.generateKey(
       { name: this.ALGORITHM, length: this.KEY_LENGTH },
-      true, // extractable
+      false, // non-extractable: raw bytes never leave the crypto engine
       ['encrypt', 'decrypt']
     );
-
-    // Store the key for future use
-    const exportedKey = await crypto.subtle.exportKey('raw', key);
-    localStorage.setItem(this.DEVICE_KEY_NAME, this.arrayBufferToBase64(exportedKey));
-
-    return key;
+    await this.saveKeyToIDB(newKey);
+    return newKey;
   }
 
   /**
