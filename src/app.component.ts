@@ -118,6 +118,7 @@ export class AppComponent {
   private readonly INITIAL_LIST_SIZE = 50;
   private readonly LIST_LOAD_INCREMENT = 50;
   private readonly ONE_HOUR_MS = 60 * 60 * 1000;
+  private readonly MAX_TITLE_LENGTH = 100;
 
   colors: ShiftColor[] = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
   repFrequencies = ['days', 'weeks', 'months', 'years'];
@@ -239,7 +240,9 @@ export class AppComponent {
 
     // Initialize notifications (solo su native platform)
     if (Capacitor.isNativePlatform()) {
-      void this.notificationService.initialize();
+      this.notificationService.initialize().catch(err => {
+        console.error('Notification initialization failed:', err);
+      });
     }
 
     this.checkUrlForActions();
@@ -259,11 +262,14 @@ export class AppComponent {
   // subsequent sort/filter operations work on plain numbers instead of
   // creating new Date objects on every comparator/predicate call.
   private normalizedShifts = computed(() =>
-    this.shiftService.shifts().map(s => ({
-      ...s,
-      startTime: Date.parse(s.start),
-      endTime: Date.parse(s.end),
-    }))
+    this.shiftService
+      .shifts()
+      .map(s => ({
+        ...s,
+        startTime: Date.parse(s.start),
+        endTime: Date.parse(s.end),
+      }))
+      .filter(s => !isNaN(s.startTime) && !isNaN(s.endTime))
   );
 
   // Cache sorted shifts; spread to avoid mutating the computed array.
@@ -368,6 +374,11 @@ export class AppComponent {
       return;
     }
 
+    if (this.shiftTitle().trim().length > this.MAX_TITLE_LENGTH) {
+      this.toastService.error(this.translationService.translate('shiftTitleTooLong'));
+      return;
+    }
+
     const start = new Date(`${this.shiftStartDate()}T${this.shiftStartTime()}`);
     const end = new Date(`${this.shiftEndDate()}T${this.shiftEndTime()}`);
 
@@ -386,6 +397,12 @@ export class AppComponent {
     // Validate allowance names are not empty
     if (this.shiftAllowances().some(a => a.name.trim() === '')) {
       this.toastService.error(this.translationService.translate('allowanceNameRequired'));
+      return;
+    }
+
+    // Validate allowance amounts are not negative
+    if (this.shiftAllowances().some(a => a.amount < 0)) {
+      this.toastService.error(this.translationService.translate('invalidAllowanceAmount'));
       return;
     }
 
@@ -602,19 +619,25 @@ export class AppComponent {
     const reader = new FileReader();
 
     reader.onload = e => {
-      const result = e.target?.result;
-      if (typeof result === 'string') {
-        const importResult = this.shiftService.importShifts(result);
-        if (importResult.success) {
-          const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
-          this.toastService.success(message);
-        } else {
-          const message = `${this.translationService.translate('importError')}${importResult.error ? ': ' + importResult.error : ''}`;
-          this.toastService.error(message, 5000);
+      try {
+        const result = e.target?.result;
+        if (typeof result === 'string') {
+          const importResult = this.shiftService.importShifts(result);
+          if (importResult.success) {
+            const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
+            this.toastService.success(message);
+          } else {
+            const message = `${this.translationService.translate('importError')}${importResult.error ? ': ' + importResult.error : ''}`;
+            this.toastService.error(message, 5000);
+          }
         }
+      } catch (error) {
+        console.error('Unexpected error during import:', error);
+        this.toastService.error(this.translationService.translate('importError'));
+      } finally {
+        this.isImporting.set(false);
+        this.closeModal();
       }
-      this.isImporting.set(false);
-      this.closeModal();
     };
 
     reader.onerror = () => {

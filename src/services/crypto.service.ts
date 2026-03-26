@@ -24,6 +24,10 @@ export class CryptoService {
 
   private openIDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
+      if (typeof indexedDB === 'undefined') {
+        reject(new Error('IndexedDB is not available in this environment'));
+        return;
+      }
       const req = indexedDB.open(this.IDB_DB_NAME, 1);
       req.onupgradeneeded = () => {
         req.result.createObjectStore(this.IDB_STORE_NAME);
@@ -101,7 +105,15 @@ export class CryptoService {
       false, // non-extractable: raw bytes never leave the crypto engine
       ['encrypt', 'decrypt']
     );
-    await this.saveKeyToIDB(newKey);
+    try {
+      await this.saveKeyToIDB(newKey);
+    } catch (saveError) {
+      console.warn(
+        'IndexedDB is unavailable (private browsing?). The encryption key will not persist across sessions.',
+        saveError
+      );
+      // Return the key for this session even without persistence
+    }
     return newKey;
   }
 
@@ -111,6 +123,9 @@ export class CryptoService {
    * @returns Base64-encoded encrypted data (includes IV)
    */
   async encrypt(plaintext: string): Promise<string> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      throw new Error('Web Crypto API is not available in this context.');
+    }
     try {
       const key = await this.getDeviceKey();
       const encoder = new TextEncoder();
@@ -141,6 +156,9 @@ export class CryptoService {
    * @returns Decrypted plaintext string
    */
   async decrypt(encryptedBase64: string): Promise<string> {
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      throw new Error('Web Crypto API is not available in this context.');
+    }
     try {
       const key = await this.getDeviceKey();
 

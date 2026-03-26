@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, OnDestroy, signal } from '@angular/core';
 
 export interface Toast {
   id: string;
@@ -8,8 +8,9 @@ export interface Toast {
 }
 
 @Injectable({ providedIn: 'root' })
-export class ToastService {
+export class ToastService implements OnDestroy {
   toasts = signal<Toast[]>([]);
+  private timeoutIds = new Map<string, ReturnType<typeof setTimeout>>();
 
   show(message: string, type: Toast['type'] = 'info', duration = 3000) {
     const id = crypto.randomUUID();
@@ -18,7 +19,8 @@ export class ToastService {
     this.toasts.update(toasts => [...toasts, toast]);
 
     if (duration > 0) {
-      setTimeout(() => this.dismiss(id), duration);
+      const tid = setTimeout(() => this.dismiss(id), duration);
+      this.timeoutIds.set(id, tid);
     }
   }
 
@@ -39,10 +41,21 @@ export class ToastService {
   }
 
   dismiss(id: string) {
+    const tid = this.timeoutIds.get(id);
+    if (tid !== undefined) {
+      clearTimeout(tid);
+      this.timeoutIds.delete(id);
+    }
     this.toasts.update(toasts => toasts.filter(t => t.id !== id));
   }
 
   dismissAll() {
+    this.timeoutIds.forEach(tid => clearTimeout(tid));
+    this.timeoutIds.clear();
     this.toasts.set([]);
+  }
+
+  ngOnDestroy(): void {
+    this.dismissAll();
   }
 }

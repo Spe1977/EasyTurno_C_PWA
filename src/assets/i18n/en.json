@@ -83,6 +83,8 @@
   "updateNow": "Update Now",
   "invalidOvertimeHours": "Overtime hours cannot be negative",
   "allowanceNameRequired": "Allowance name cannot be empty",
+  "shiftTitleTooLong": "Title cannot exceed 100 characters",
+  "invalidAllowanceAmount": "Allowance amount cannot be negative",
   "decryptionErrorTitle": "Unable to read data",
   "decryptionErrorMessage": "The saved data cannot be decrypted, likely because the encryption key has changed. You can reset the app or close this dialog to keep the unreadable data until you restore a backup.",
   "decryptionResetData": "Reset all data",

@@ -33,6 +33,7 @@ export default [
         alert: 'readonly',
         console: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
         indexedDB: 'readonly',

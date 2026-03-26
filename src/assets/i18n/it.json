@@ -83,6 +83,8 @@
   "updateNow": "Aggiorna Ora",
   "invalidOvertimeHours": "Le ore di straordinario non possono essere negative",
   "allowanceNameRequired": "Il nome dell'indennità non può essere vuoto",
+  "shiftTitleTooLong": "Il titolo non può superare 100 caratteri",
+  "invalidAllowanceAmount": "L'importo dell'indennità non può essere negativo",
   "decryptionErrorTitle": "Impossibile leggere i dati",
   "decryptionErrorMessage": "I dati salvati non possono essere decifrati, probabilmente perché la chiave di cifratura è cambiata. Puoi azzerare l'app oppure chiudere questo avviso per mantenere i dati inaccessibili fino al ripristino di un backup.",
   "decryptionResetData": "Azzera tutti i dati",

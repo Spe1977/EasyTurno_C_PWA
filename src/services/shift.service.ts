@@ -11,6 +11,7 @@ export class ShiftService {
   private readonly MAX_YEARS_AHEAD = 2;
   private readonly MAX_NOTIFICATION_PREVIEW = 10;
   private readonly DAYS_PER_WEEK = 7;
+  private readonly MAX_IMPORT_SHIFTS = 10_000;
 
   private toastService = inject(ToastService);
   private notificationService = inject(NotificationService);
@@ -112,7 +113,7 @@ export class ShiftService {
                 5000
               );
             } else {
-              throw error;
+              console.error('Failed to save to localStorage:', error);
             }
           }
         })
@@ -244,6 +245,10 @@ export class ShiftService {
 
       if (!Array.isArray(data)) {
         return { success: false, error: 'Invalid format: expected array' };
+      }
+
+      if (data.length > this.MAX_IMPORT_SHIFTS) {
+        return { success: false, error: `Too many shifts (max ${this.MAX_IMPORT_SHIFTS})` };
       }
 
       const validShifts = data.filter(item => this.isValidShift(item));
