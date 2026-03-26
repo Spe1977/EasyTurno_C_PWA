@@ -88,5 +88,14 @@
   "decryptionErrorTitle": "Impossibile leggere i dati",
   "decryptionErrorMessage": "I dati salvati non possono essere decifrati, probabilmente perché la chiave di cifratura è cambiata. Puoi azzerare l'app oppure chiudere questo avviso per mantenere i dati inaccessibili fino al ripristino di un backup.",
   "decryptionResetData": "Azzera tutti i dati",
-  "decryptionKeepData": "Mantieni i dati (chiudi)"
+  "decryptionKeepData": "Mantieni i dati (chiudi)",
+  "exporting": "Esportazione in corso...",
+  "importing": "Importazione in corso...",
+  "invalidDateFormat": "Formato data non valido. Usa YYYY-MM-DD.",
+  "invalidDateRange": "Inserisci una data tra il 1900 e il 2100.",
+  "noDataInRange": "Nessun turno in questo periodo. Prova a modificare il range di date.",
+  "notifDayBeforeTitle": "Promemoria turno domani",
+  "notifDayBeforeBody": "Turno domani",
+  "selectColor": "Seleziona colore",
+  "storageLimitReached": "Spazio di archiviazione esaurito. Esporta ed elimina i turni più vecchi per liberare spazio."
 }

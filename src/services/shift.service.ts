@@ -3,6 +3,7 @@ import { Shift, Repetition } from '../shift.model';
 import { ToastService } from './toast.service';
 import { NotificationService } from './notification.service';
 import { CryptoService } from './crypto.service';
+import { TranslationService } from './translation.service';
 
 @Injectable({ providedIn: 'root' })
 export class ShiftService {
@@ -16,6 +17,7 @@ export class ShiftService {
   private toastService = inject(ToastService);
   private notificationService = inject(NotificationService);
   private cryptoService = inject(CryptoService);
+  private translationService = inject(TranslationService);
   shifts = signal<Shift[]>([]);
 
   /**
@@ -57,7 +59,7 @@ export class ShiftService {
           // Enable saves BEFORE updating the signal so the effect that fires
           // immediately after the signal change is not blocked.
           this.isLoaded = true;
-          this.shifts.set(JSON.parse(decrypted));
+          this.shifts.set(this.migrateLegacyShiftData(JSON.parse(decrypted)));
         })
         .catch(error => {
           console.error('Failed to decrypt shifts:', error);
@@ -71,7 +73,7 @@ export class ShiftService {
       try {
         const shifts = JSON.parse(data) as Shift[];
         this.isLoaded = true;
-        this.shifts.set(shifts);
+        this.shifts.set(this.migrateLegacyShiftData(shifts));
         // Will be automatically re-saved as encrypted via effect
       } catch (error) {
         console.error('Failed to parse shifts:', error);
@@ -109,7 +111,7 @@ export class ShiftService {
             if (error instanceof DOMException && error.name === 'QuotaExceededError') {
               console.error('LocalStorage quota exceeded. Cannot save shifts.');
               this.toastService.error(
-                'Storage limit reached. Please export and remove old shifts to free up space.',
+                this.translationService.translate('storageLimitReached'),
                 5000
               );
             } else {
@@ -125,6 +127,20 @@ export class ShiftService {
       console.error('Failed to save shifts to localStorage:', error);
       this.toastService.error('Failed to save shifts. Please try again.', 4000);
     }
+  }
+
+  /**
+   * Normalises legacy shift data after loading from storage.
+   * Currently: migrates the obsolete `frequency: 'year'` value to `'years'`
+   * so all stored data converges to the canonical form on next save.
+   */
+  private migrateLegacyShiftData(shifts: Shift[]): Shift[] {
+    return shifts.map(shift => {
+      if (shift.repetition?.frequency === 'year') {
+        return { ...shift, repetition: { ...shift.repetition, frequency: 'years' as const } };
+      }
+      return shift;
+    });
   }
 
   private addDays(date: Date, days: number): Date {

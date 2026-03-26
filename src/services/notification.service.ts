@@ -1,7 +1,8 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, ScheduleOptions, PendingResult } from '@capacitor/local-notifications';
 import { Shift } from '../shift.model';
+import { TranslationService } from './translation.service';
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -14,6 +15,7 @@ export class NotificationService {
   private readonly STORAGE_KEY = 'easyturno_notification_settings';
   private notificationIdCounter = 0;
   private notificationIdMap = new Map<string, number>();
+  private translationService = inject(TranslationService);
 
   /**
    * Set to the shiftId when the user taps a notification.
@@ -109,7 +111,9 @@ export class NotificationService {
       if (reminderTime > now) {
         notifications.push({
           title: `📅 ${shift.title}`,
-          body: `Inizia tra ${settings.reminderMinutesBefore} minuti`,
+          body: this.translationService.translate(
+            this.getReminderKey(settings.reminderMinutesBefore)
+          ),
           id: this.getNotificationId(shift.id, '-reminder'),
           schedule: { at: reminderTime },
           sound: 'default',
@@ -125,10 +129,11 @@ export class NotificationService {
         dayBefore.setDate(dayBefore.getDate() - 1);
         dayBefore.setHours(20, 0, 0, 0); // Ore 20:00 del giorno prima
 
+        const locale = this.translationService.language() === 'it' ? 'it-IT' : 'en-US';
         if (dayBefore > now) {
           notifications.push({
-            title: `🔔 Promemoria turno domani`,
-            body: `${shift.title} - ${shiftStart.toLocaleDateString('it-IT')}`,
+            title: `🔔 ${this.translationService.translate('notifDayBeforeTitle')}`,
+            body: `${shift.title} - ${shiftStart.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}`,
             id: this.getNotificationId(shift.id, '-daybefore'),
             schedule: { at: dayBefore },
             sound: 'default',
@@ -184,6 +189,18 @@ export class NotificationService {
       console.error('Failed to cancel all notifications:', error);
       // Notifiche non critiche - non propagare l'errore
     }
+  }
+
+  /**
+   * Maps a reminder duration (minutes) to the matching i18n key.
+   * Reuses the existing translation keys already shown in the settings UI.
+   */
+  private getReminderKey(minutes: number): string {
+    if (minutes <= 15) return '15minBefore';
+    if (minutes <= 30) return '30minBefore';
+    if (minutes <= 60) return '1hourBefore';
+    if (minutes <= 120) return '2hoursBefore';
+    return '3hoursBefore';
   }
 
   getSettings(): NotificationSettings {

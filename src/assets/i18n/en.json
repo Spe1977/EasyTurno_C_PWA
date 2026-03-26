@@ -88,5 +88,14 @@
   "decryptionErrorTitle": "Unable to read data",
   "decryptionErrorMessage": "The saved data cannot be decrypted, likely because the encryption key has changed. You can reset the app or close this dialog to keep the unreadable data until you restore a backup.",
   "decryptionResetData": "Reset all data",
-  "decryptionKeepData": "Keep data (close)"
+  "decryptionKeepData": "Keep data (close)",
+  "exporting": "Exporting...",
+  "importing": "Importing...",
+  "invalidDateFormat": "Invalid date format. Please use YYYY-MM-DD.",
+  "invalidDateRange": "Please enter a date between 1900 and 2100.",
+  "noDataInRange": "No shifts in this period. Try changing the date range.",
+  "notifDayBeforeTitle": "Tomorrow's shift reminder",
+  "notifDayBeforeBody": "Shift tomorrow",
+  "selectColor": "Select color",
+  "storageLimitReached": "Storage limit reached. Please export and remove old shifts to free up space."
 }

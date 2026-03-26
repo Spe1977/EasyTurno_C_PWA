@@ -1,9 +1,13 @@
-const CACHE_NAME = 'easyturno-cache-v4'; // Bump version to force update
-const CACHE_ASSETS = [
+const CACHE_NAME = 'easyturno-cache-v5'; // Bump version to force update
+
+// Critical local assets — must be available for the app to work offline.
+// A failure here is logged as an error so it's easy to diagnose.
+const LOCAL_ASSETS = [
     '/',
     '/index.html',
     '/manifest.webmanifest',
     '/icon.svg',
+    '/tailwind-init.js',
     // Main script
     '/index.tsx',
     // App files
@@ -14,12 +18,17 @@ const CACHE_ASSETS = [
     '/src/services/translation.service.ts',
     '/src/pipes/date-format.pipe.ts',
     '/src/pipes/translate.pipe.ts',
-    // Styles & Fonts
+    // i18n
+    '/src/assets/i18n/it.json',
+    '/src/assets/i18n/en.json',
+];
+
+// Optional CDN assets — cached opportunistically.
+// A failure is only a warning: the app still works online without these cached.
+const CDN_ASSETS = [
     'https://rsms.me/inter/inter.css',
-    // Core JS libs
     'https://cdn.tailwindcss.com',
     'https://cdn.jsdelivr.net/npm/ts-browser',
-    // Angular & RxJS from importmap
     "https://aistudiocdn.com/rxjs@^7.8.2?conditions=es2015",
     "https://aistudiocdn.com/rxjs@^7.8.2/operators?conditions=es2015",
     "https://next.esm.sh/@angular/common@^20.3.2?external=rxjs",
@@ -32,18 +41,21 @@ const CACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('Opened cache and caching assets');
-                // Use addAll for atomic operation, but it can fail if one asset fails.
-                // For robustness, especially with external URLs, loop and cache individually.
-                const promises = CACHE_ASSETS.map(url => {
-                    return cache.add(url).catch(err => {
-                        console.warn(`Failed to cache ${url}:`, err);
-                    });
-                });
-                return Promise.all(promises);
-            })
+        caches.open(CACHE_NAME).then((cache) => {
+            // Cache local assets individually so one failure doesn't block the rest.
+            const localPromises = LOCAL_ASSETS.map(url =>
+                cache.add(url).catch(err =>
+                    console.error(`[SW] Failed to cache local asset: ${url}`, err)
+                )
+            );
+            // Cache CDN assets opportunistically — failures are non-fatal.
+            const cdnPromises = CDN_ASSETS.map(url =>
+                cache.add(url).catch(err =>
+                    console.warn(`[SW] Optional CDN asset not cached: ${url}`, err)
+                )
+            );
+            return Promise.all([...localPromises, ...cdnPromises]);
+        })
     );
 });
 

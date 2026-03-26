@@ -560,13 +560,13 @@ export class AppComponent {
 
       // Validate the date is valid
       if (isNaN(date.getTime())) {
-        this.toastService.error('Invalid date format. Please use YYYY-MM-DD.');
+        this.toastService.error(this.translationService.translate('invalidDateFormat'));
         return;
       }
 
       // Validate the date is reasonable (not year 0 or negative)
       if (date.getFullYear() < 1900 || date.getFullYear() > 2100) {
-        this.toastService.error('Please enter a date between 1900 and 2100.');
+        this.toastService.error(this.translationService.translate('invalidDateRange'));
         return;
       }
 
@@ -575,7 +575,7 @@ export class AppComponent {
       this.closeModal();
     } catch (error) {
       console.error('Date parsing error:', error);
-      this.toastService.error('Failed to parse date. Please check the format.');
+      this.toastService.error(this.translationService.translate('invalidDateFormat'));
     }
   }
 
