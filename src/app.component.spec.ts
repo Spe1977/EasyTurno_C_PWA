@@ -798,9 +798,13 @@ describe('AppComponent - Integration Tests', () => {
         },
       ];
 
-      const file = new File([JSON.stringify({ encrypted: JSON.stringify(validData) })], 'shifts.json', {
-        type: 'application/json',
-      });
+      const file = new File(
+        [JSON.stringify({ encrypted: JSON.stringify(validData) })],
+        'shifts.json',
+        {
+          type: 'application/json',
+        }
+      );
       const event = { target: { files: [file] } } as any;
 
       component.importBackup(event);

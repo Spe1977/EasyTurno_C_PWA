@@ -24,15 +24,15 @@ PWA per la gestione dei turni di lavoro, offline-first, ottimizzata per mobile.
 
 ## Stack tecnologico
 
-| Tecnologia | Versione |
-|---|---|
-| Angular | 21.2.5 |
-| TypeScript | 5.9.3 |
-| Tailwind CSS | 4.2.2 |
-| Capacitor | 8.3.0 |
-| Jest | 30.2.0 |
-| Cypress | 15.3.0 |
-| Playwright | 1.58.2 |
+| Tecnologia   | Versione |
+| ------------ | -------- |
+| Angular      | 21.2.5   |
+| TypeScript   | 5.9.3    |
+| Tailwind CSS | 4.2.2    |
+| Capacitor    | 8.3.0    |
+| Jest         | 30.2.0   |
+| Cypress      | 15.3.0   |
+| Playwright   | 1.58.2   |
 
 ## Avvio rapido
 
@@ -110,8 +110,9 @@ src/
 ## Sicurezza
 
 - Dati cifrati con AES-GCM 256-bit in localStorage
+- Chiave dispositivo persistita preferibilmente in IndexedDB; fallback legacy su `localStorage` solo dove IndexedDB non e disponibile
 - Backup esportabili in formato cifrato con password utente (`PBKDF2` + `AES-GCM`)
-- Content Security Policy (CSP) piu restrittiva lato script (`script-src 'self'`)
+- Content Security Policy (CSP) irrigidita, con eccezione `unsafe-inline` mantenuta in sviluppo locale per compatibilita con `ng serve`
 - Migrazione automatica dati legacy non cifrati
 
 Nota importante:
@@ -128,7 +129,7 @@ Nota importante:
 - Build verificata con Angular 21.2.5, TypeScript 5.9.3 e Tailwind CSS 4.2.2
 - Unit test: 319/319 verdi
 - Cypress E2E: 55/55 verdi
-- Playwright smoke: 2/2 verdi
+- Playwright browser flows: 7/7 verdi
 - Lint, type check e build locali verificati
 - Residui aperti principali: validazione notifiche native su device fisico e revisione futura della strategia chiavi per lo storage locale
 
@@ -147,6 +148,8 @@ File principali:
 
 - `playwright.config.ts` - configurazione runner, browser e web server
 - `playwright/tests/smoke.spec.ts` - smoke test su bootstrap app, toggle calendario e creazione turno
+- `playwright/tests/app-flows.spec.ts` - flussi browser aggiuntivi: persistenza, CRUD base, tema/lingua, calendario
+- `playwright/tests/helpers.ts` - helper condivisi per bootstrap e creazione turno
 
 ## Licenza
 

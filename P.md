@@ -1,6 +1,6 @@
 # EasyTurno - Documento Unico di Stato e Piano Operativo
 
-Ultimo aggiornamento: 2026-03-27 (Fase 4 — stack riallineato su TypeScript 5.9 supportato)
+Ultimo aggiornamento: 2026-03-27 (Fase 4 — validazione finale e documentazione riallineate dopo commit/push)
 Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 
 ## 1. Funzionalita completate
@@ -62,7 +62,7 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 ### Sicurezza e persistenza
 
 - Salvataggio turni su `localStorage` con cifratura AES-GCM 256-bit (`CryptoService`).
-- Chiave derivata da fingerprint dispositivo (nessuna password richiesta).
+- Chiave dispositivo persistita preferibilmente in IndexedDB come `CryptoKey` non estraibile, con fallback legacy su `localStorage` solo in ambienti senza IndexedDB.
 - Gestione compatibilita con dati legacy non cifrati (migrazione automatica).
 - Gestione errori su import/export, storage e quota exceeded.
 
@@ -82,7 +82,7 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 - `npm run build`: OK (bundle `main` 753.36 KB, `styles` 43.03 KB, totale iniziale 804.89 KB)
 - `npm test`: 11 suite, 319 test, tutti verdi
 - Test Cypress E2E: 55/55 superati (100%) con retry attivo nel rerun completo del 2026-03-26.
-- Test Playwright smoke: 2/2 superati su Chromium il 2026-03-27 (bootstrap app, toggle calendario, creazione turno).
+- Test Playwright browser: 7/7 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario).
 
 ## 2. Gap reali ancora aperti
 
@@ -239,6 +239,33 @@ I seguenti problemi erano documentati nella versione precedente di questo file e
   - File modificati: `package.json`, `package-lock.json`
   - Verifica: `npx tsc --noEmit`, `npm test -- --runInBand` e `npm run build` verdi il 2026-03-27.
 
+- **W. Estensione Playwright oltre gli smoke iniziali e integrazione stabile con il pre-commit — risolto**
+  - Causa: la suite Playwright iniziale copriva solo 2 smoke test. Inoltre il pre-commit (`lint-staged`) falliva sui file Playwright perche `eslint --fix` riceveva file ignorati o fuori dal `tsconfig` analizzato.
+  - Fix applicato:
+    1. Aggiunti `playwright/tests/app-flows.spec.ts` e `playwright/tests/helpers.ts` per coprire persistenza dopo reload, CRUD base, tema/lingua e selezione giorno in calendario.
+    2. Creato `playwright/tsconfig.json` e aggiornato `eslint.config.js` per includere anche i file Playwright nel type-aware linting.
+    3. Aggiornato `lint-staged` in `package.json` con `eslint --fix --no-warn-ignored` per non rompere il commit sui file `*.spec.ts` esclusi.
+  - File modificati: `package.json`, `eslint.config.js`, `playwright/tests/smoke.spec.ts`
+  - File creati: `playwright/tests/app-flows.spec.ts`, `playwright/tests/helpers.ts`, `playwright/tsconfig.json`
+  - Verifica: `npm run test:pw` verde il 2026-03-27 (7/7 test superati) e pre-commit completato con commit reale su `main`.
+
+- **X. `CryptoService` rompeva i test Jest in ambiente senza IndexedDB — risolto**
+  - Causa: dopo l'hardening della persistenza chiavi su IndexedDB, in ambiente Jest/JSDOM `indexedDB` non esisteva. Il pre-commit arrivava ai related tests e fallivano numerosi test di `CryptoService`.
+  - Fix applicato:
+    1. Introdotto rilevamento di disponibilita di IndexedDB.
+    2. Mantenuta la persistenza preferenziale su IndexedDB nel browser reale.
+    3. Introdotto fallback compatibile su `localStorage` per ambienti senza IndexedDB, preservando anche la compatibilita con il formato legacy.
+  - File modificato: `src/services/crypto.service.ts`
+  - Verifica: `npm test -- --runInBand src/services/crypto.service.spec.ts` verde il 2026-03-27 (32/32 test).
+
+- **Y. CSP troppo stretta per il dev server nel browser locale — risolto pragmaticamente**
+  - Causa: con `ng serve`, il browser bloccava inline handler/dev overlay a causa di `script-src 'self'` nel `meta` CSP.
+  - Fix applicato:
+    1. Riammesso `unsafe-inline` in `script-src` nel `meta` CSP usato in sviluppo locale.
+    2. Mantenuta la nota che il prossimo passo corretto, se si vuole stringere la sicurezza in produzione, e separare CSP `dev` e `prod`.
+  - File modificato: `index.html`
+  - Verifica: app nuovamente caricabile su `http://localhost:3000/` il 2026-03-27 senza blocco browser sul dev server.
+
 ### Ancora aperti
 
 #### C. ~~Uso misto `[(ngModel)]` su signal nei template~~ — RISOLTO (2026-03-25)
@@ -286,7 +313,7 @@ Problemi rilevati:
 - Alta. La chiave AES usata per lo storage locale resta salvata nello stesso `localStorage` che contiene i dati cifrati. Questo limita fortemente il valore difensivo della cifratura contro XSS, estensioni malevole, accesso al profilo browser o device compromise.
 - ~~Alta. Il backup esportato e in chiaro (`easyturno_backup.json`)~~ — RISOLTO (2026-03-27): export introdotto in formato cifrato con password utente, KDF `PBKDF2-SHA-256` e import compatibile sia con il nuovo formato cifrato sia con i backup JSON legacy.
 - ~~Media. L'import supporta solo JSON in chiaro~~ — RISOLTO (2026-03-27): l'import riconosce il payload cifrato e richiede la password per la decifratura, mantenendo retrocompatibilita con il formato precedente.
-- ~~Media. La CSP in `index.html` include ancora `script-src 'unsafe-inline' 'unsafe-eval'`~~ — RISOLTO (2026-03-27): `script-src` ridotto a `'self'`, eliminando l'esecuzione inline/eval lato script.
+- ~~Media. La CSP in `index.html` include ancora `script-src 'unsafe-inline' 'unsafe-eval'`~~ — PARZIALMENTE RISOLTO (2026-03-27): rimossi `unsafe-eval` e la parte storica piu permissiva; `unsafe-inline` e stato temporaneamente riammesso per compatibilita del dev server locale. Per una chiusura completa va separata la CSP di sviluppo da quella di produzione.
 - ~~Media. `NotificationService.getSettings()` deserializza `localStorage` con `JSON.parse` senza schema validation o fallback difensivo~~ — RISOLTO (2026-03-27): introdotta sanitizzazione runtime con fallback ai default in caso di payload corrotto o malevolo.
 - ~~Media. `scheduleShiftNotification()` usa `settings.reminderMinutesBefore` senza limiti runtime~~ — RISOLTO (2026-03-27): i valori reminder vengono ora normalizzati su una allowlist supportata prima dello scheduling.
 - ~~Media. Il service worker applica `stale-while-revalidate` a tutte le risorse same-origin con estensione `.json`~~ — RISOLTO (2026-03-27): caching runtime dei JSON ristretto a una allowlist esplicita di asset statici locali.
@@ -305,7 +332,7 @@ Interventi consigliati:
 
 1. Introdurre backup cifrati con password utente e KDF robusta (`PBKDF2`/`scrypt`/`Argon2`, in base ai vincoli platform) separando chiaramente storage locale e formato export.
 2. Rivedere la strategia chiavi: evitare di salvare la chiave raw nello stesso storage dei dati protetti; in alternativa, ridimensionare formalmente il claim di sicurezza nella documentazione/UI.
-3. Stringere la CSP rimuovendo `unsafe-inline` e `unsafe-eval` dove possibile.
+3. Separare CSP di sviluppo e produzione, cosi da poter mantenere `unsafe-inline` solo in locale e rimuoverlo in produzione.
 4. Aggiungere schema validation e fallback sicuri per notification settings e altri payload da `localStorage`.
 5. Limitare dimensione e formato dei file importati prima del parsing completo.
 6. Ridurre lo scope del runtime caching del service worker a una allowlist esplicita di asset statici.
@@ -363,7 +390,7 @@ Esito:
 5. Verificare offline reale su smartphone dopo pulizia cache/installazione fresca.
 6. Validare import/export, ricorrenze, statistiche, ricerca data, calendario e notifiche native su device.
 7. ~~Consolidare snapshot finale delle metriche.~~ — Fatto: quality gate locali rieseguiti il 2026-03-27 (`lint`, `format:check`, `tsc`, `test`, `build`) e documento riallineato allo stato reale del repository.
-8. ~~Integrare Playwright nel repository per smoke browser e CI.~~ — Fatto: setup completo, 2 smoke test Chromium verdi e job CI dedicato il 2026-03-27.
+8. ~~Integrare Playwright nel repository per smoke browser e CI.~~ — Fatto: setup completo, estensione a 7 test browser Chromium verdi e job CI dedicato il 2026-03-27.
 9. ~~Ridurre le vulnerabilita `high` in audit sulle dipendenze dev Angular/build.~~ — Fatto: upgrade patch di `@angular/build`/`@angular/cli`, `high` eliminate e audit ridotto a sole `moderate` residue nel toolchain Jest il 2026-03-27.
 10. ~~Ridurre ulteriormente il residuo `moderate` a basso rischio e riallineare Jest dopo l'integrazione Playwright.~~ — Fatto: override `handlebars@4.7.9`, esclusione `playwright/` da Jest, audit ridotto a 21 `moderate` e `npm test` nuovamente verde il 2026-03-27.
 11. ~~Riallineare il repository a una matrice di peer dependency ufficialmente supportata.~~ — Fatto: TypeScript riportato a `5.9.3`; spariti i peer `invalid` di `@angular/build`, `ts-jest` e `@typescript-eslint`, con quality gate principali confermati verdi il 2026-03-27.
@@ -376,8 +403,8 @@ Nota Playwright:
 - Test Playwright consigliati da implementare in futuro:
   - import/export backup con verifica del ciclo base di persistenza
   - modifica e cancellazione di una ricorrenza
-  - persistenza dopo reload e baseline offline
   - apertura statistiche con verifica del rendering minimo
+  - reset dati con conferma modale
 
 Interventi applicati in questa sessione:
 
@@ -394,7 +421,9 @@ Interventi applicati in questa sessione:
 - Corretta la regressione di `SwUpdateService` che impediva ai test Jest/JSDOM di esercitare la registrazione del service worker.
 - Consolidato il nuovo snapshot metrico locale del 2026-03-27 con esito verde per lint, format, type check, test e build.
 - Integrato Playwright nel repository con config dedicata, smoke suite Chromium, script npm e job CI separato.
-- Verificato fuori sandbox `npm run test:pw` con esito positivo (2/2).
+- Estesa la suite Playwright con helper condivisi e flussi browser aggiuntivi su persistenza, CRUD base, tema/lingua e calendario.
+- Allineato il pre-commit ai file Playwright con `playwright/tsconfig.json` e `eslint --fix --no-warn-ignored` in `lint-staged`.
+- Verificato fuori sandbox `npm run test:pw` con esito positivo (7/7).
 - Aggiornati `@angular/build` e `@angular/cli` alla patch correttiva `21.2.5`, con lockfile rigenerato via `npm install --legacy-peer-deps`.
 - Verificato con `npm audit` il passaggio da 30 vulnerabilita totali (27 moderate, 3 high) a 22 vulnerabilita tutte moderate, residue sul solo stack Jest/Istanbul.
 - Verificato fuori sandbox `npm run build` dopo il bump Angular (`main` 753.36 KB, `styles` 43.03 KB, totale 804.89 KB).
@@ -406,10 +435,11 @@ Interventi applicati in questa sessione:
 - Verificati dopo il downgrade `npx tsc --noEmit`, `npm test -- --runInBand` e `npm run build` con esito positivo.
 - Eseguita review di sicurezza mirata sulle aree critiche applicative (cifratura locale, backup, CSP, notifiche, import file, service worker) e applicato un pacchetto di hardening concreto.
 - Introdotti backup cifrati con password utente (`PBKDF2` + `AES-GCM`) con import retrocompatibile verso il formato JSON legacy.
-- Rimossa la parte piu permissiva della CSP lato script (`unsafe-inline`, `unsafe-eval`).
+- Rimossa la parte storicamente piu permissiva della CSP lato script e mantenuto solo il residuo necessario al dev server locale (`unsafe-inline` in sviluppo).
 - Aggiunta sanitizzazione runtime per notification settings e limiti difensivi ai reminder supportati.
 - Limitato l'import a payload entro soglia e ristretto il runtime caching del service worker ai JSON statici esplicitamente consentiti.
 - Rafforzata l'euristica di riconoscimento dei payload cifrati nello storage locale.
+- Introdotto fallback di `CryptoService` su `localStorage` solo per ambienti senza IndexedDB, preservando la persistenza preferenziale su IndexedDB nel browser reale.
 
 Esito atteso:
 
@@ -428,7 +458,7 @@ Valutazione pratica attuale:
 - Funzionalita: completo
 - Buildability: buona (Angular 21.2, TS 5.9, Tailwind 4.2, Capacitor 8.3 — build verificata anche localmente il 2026-03-27)
 - Manutenibilita: buona (signal API, control flow nativo, OnPush, pure pipes)
-- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 2/2 smoke Playwright verdi, lint OK, type check OK, format OK)
+- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 7/7 Playwright browser verdi, lint OK, type check OK, format OK)
 - Documentazione: completa (README riscritto, P.md allineato)
 - Stack: aggiornato alle ultime major version
 
@@ -441,8 +471,9 @@ Valutazione pratica attuale:
 - `npm run build` -> superato fuori sandbox dopo update `@angular/build`/`@angular/cli` il 2026-03-27 (753.36 KB `main`, 43.03 KB `styles`, 804.89 KB totale iniziale)
 - `npm ls typescript @angular/build ts-jest @typescript-eslint/parser @typescript-eslint/eslint-plugin --depth=0` -> verificato il 2026-03-27: toolchain riallineato su TypeScript 5.9.3, nessun peer `invalid` nel sottoalbero controllato
 - `npm test -- --runInBand` -> superato localmente il 2026-03-27 dopo hardening sicurezza (11 suite, 319 test, 0 falliti)
+- `npm test -- --runInBand src/services/crypto.service.spec.ts` -> superato localmente il 2026-03-27 dopo introduzione fallback IndexedDB/localStorage (32/32 test)
 - `npm run e2e` -> superato fuori sandbox (55/55, 100%, tutte le 5 spec verdi)
-- `npm run test:pw` -> superato fuori sandbox il 2026-03-27 (2 test Playwright smoke verdi su Chromium)
+- `npm run test:pw` -> superato fuori sandbox il 2026-03-27 (7 test Playwright browser verdi su Chromium)
 - `npm install -D @playwright/test --legacy-peer-deps` -> completato il 2026-03-27; audit storico del momento: 28 vulnerabilita totali (25 moderate, 3 high), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo update Angular tooling: 22 vulnerabilita totali (22 moderate, 0 high, 0 critical), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo override `handlebars`: 21 vulnerabilita totali (21 moderate, 0 high, 0 critical), tutte dev-only
