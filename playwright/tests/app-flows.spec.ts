@@ -1,5 +1,11 @@
 import { Dialog, expect, test } from '@playwright/test';
-import { bootEmptyApp, createShift, isoDateDaysFromToday } from './helpers';
+import {
+  bootEmptyApp,
+  createRecurringShift,
+  createShift,
+  isoDateDaysFromToday,
+  openStatistics,
+} from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await bootEmptyApp(page);
@@ -186,4 +192,166 @@ test('exports an encrypted backup and imports it back with the password', async 
 
   await page.reload();
   await expect(page.getByText('Backup Shift')).toBeVisible();
+});
+
+test('edits only one recurring occurrence when confirmed', async ({ page }) => {
+  await createRecurringShift(page, {
+    title: 'Recurring Task',
+    date: isoDateDaysFromToday(1),
+    startTime: '11:00',
+    endTime: '12:00',
+  });
+
+  const recurringTaskTitles = page
+    .locator('[data-cy="shift-title"]')
+    .filter({ hasText: 'Recurring Task' });
+  await expect(recurringTaskTitles.first()).toBeVisible();
+  expect(await recurringTaskTitles.count()).toBeGreaterThan(1);
+
+  await page
+    .getByText('Recurring Task')
+    .first()
+    .locator('../..')
+    .locator('[data-cy="edit-shift-btn"]')
+    .click();
+  await expect(page.locator('[data-cy="shift-title-input"]')).toBeVisible();
+  await page.locator('[data-cy="shift-title-input"]').fill('Modified Instance');
+  await page.locator('[data-cy="save-shift-btn"]').click();
+
+  const confirmModal = page.locator('.modal-fade-in').last();
+  await expect(
+    confirmModal.getByRole('button', { name: /just this event|solo questo evento/i })
+  ).toBeVisible();
+  await confirmModal.getByRole('button', { name: /just this event|solo questo evento/i }).click();
+
+  await expect(page.getByText('Modified Instance')).toBeVisible();
+  await expect(
+    page.locator('[data-cy="shift-title"]').filter({ hasText: 'Recurring Task' }).first()
+  ).toBeVisible();
+});
+
+test('deletes an entire recurring series when confirmed', async ({ page }) => {
+  await createRecurringShift(page, {
+    title: 'Series to Delete',
+    date: isoDateDaysFromToday(1),
+    startTime: '15:00',
+    endTime: '17:00',
+  });
+
+  const seriesTitles = page
+    .locator('[data-cy="shift-title"]')
+    .filter({ hasText: 'Series to Delete' });
+  await expect(seriesTitles.first()).toBeVisible();
+  expect(await seriesTitles.count()).toBeGreaterThan(1);
+
+  await page
+    .getByText('Series to Delete')
+    .first()
+    .locator('../..')
+    .locator('[data-cy="delete-shift-btn"]')
+    .click();
+
+  const confirmModal = page.locator('.modal-fade-in').last();
+  await expect(
+    confirmModal.getByRole('button', { name: /entire series|tutta la serie/i })
+  ).toBeVisible();
+  await confirmModal.getByRole('button', { name: /entire series|tutta la serie/i }).click();
+
+  await expect(
+    page.locator('[data-cy="shift-title"]').filter({ hasText: 'Series to Delete' })
+  ).toHaveCount(0);
+});
+
+test('opens statistics and renders the expected summary sections', async ({ page }) => {
+  await createShift(page, {
+    title: 'Morning Shift',
+    date: isoDateDaysFromToday(1),
+    startTime: '08:00',
+    endTime: '16:00',
+    overtimeHours: '2',
+  });
+
+  await createShift(page, {
+    title: 'Evening Shift',
+    date: isoDateDaysFromToday(2),
+    startTime: '14:00',
+    endTime: '22:00',
+    overtimeHours: '1.5',
+  });
+
+  await openStatistics(page);
+
+  const statsModal = page.locator('.modal-fade-in').last();
+  await statsModal.locator('input[name="statsEndDate"]').fill(isoDateDaysFromToday(3));
+  await expect(statsModal.getByText(/total shifts|totale turni/i)).toBeVisible();
+  await expect(statsModal.getByText(/total hours worked|ore totali lavorate/i)).toBeVisible();
+  await expect(
+    statsModal.getByText(/total overtime hours|totale ore di straordinario/i)
+  ).toBeVisible();
+  await expect(statsModal.getByText(/shifts by type|turni per tipologia/i)).toBeVisible();
+  await expect(statsModal.getByText('Morning Shift')).toBeVisible();
+  await expect(statsModal.getByText('Evening Shift')).toBeVisible();
+});
+
+test('shows an error toast when importing an encrypted backup with the wrong password', async ({
+  page,
+}) => {
+  const backupPassword = 'PlaywrightBackup123!';
+
+  await createShift(page, {
+    title: 'Protected Backup Shift',
+    date: isoDateDaysFromToday(2),
+    startTime: '09:15',
+    endTime: '17:45',
+  });
+
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  const exportPromptQueue = [backupPassword, backupPassword];
+  const exportDialogHandler = async (dialog: Dialog) => {
+    await dialog.accept(exportPromptQueue.shift() ?? '');
+  };
+
+  page.on('dialog', exportDialogHandler);
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('[data-cy="export-btn"]').click(),
+  ]);
+
+  page.off('dialog', exportDialogHandler);
+
+  const backupPath = '/tmp/easyturno_playwright_wrong_password_backup.json';
+  await download.saveAs(backupPath);
+
+  await page.reload();
+  await expect(page.getByText('Protected Backup Shift')).toBeVisible();
+
+  await page.locator('[data-cy="settings-btn"]').click();
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
+    .first()
+    .click();
+
+  const resetModal = page.locator('.modal-fade-in').last();
+  await resetModal
+    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
+    .click();
+  await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
+
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  page.once('dialog', async (dialog: Dialog) => {
+    await dialog.accept('WrongPassword!');
+  });
+
+  await page.locator('#importFile').setInputFiles(backupPath);
+
+  await expect(
+    page.getByRole('alert').getByText(/invalid backup password|password backup non valida/i)
+  ).toBeVisible();
+  await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
 });
