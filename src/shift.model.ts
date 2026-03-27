@@ -9,7 +9,7 @@ export type ShiftColor =
   | 'slate';
 
 export interface Repetition {
-  frequency: 'days' | 'weeks' | 'months' | 'year';
+  frequency: 'days' | 'weeks' | 'months' | 'years';
   interval: number;
 }
 

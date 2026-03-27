@@ -81,7 +81,6 @@ describe('AppComponent - Integration Tests', () => {
     toastService = TestBed.inject(ToastService);
     notificationService = TestBed.inject(NotificationService);
     cryptoService = TestBed.inject(CryptoService);
-    jest.spyOn(window, 'prompt').mockReturnValue('test-password');
   });
 
   afterEach(() => {
@@ -746,7 +745,15 @@ describe('AppComponent - Integration Tests', () => {
         isRecurring: false,
       });
 
-      await component.exportBackup();
+      // Open the password modal via exportBackup()
+      component.exportBackup();
+      expect(component.activeModal()).toBe('passwordPrompt');
+      expect(component.passwordPromptMode()).toBe('export');
+
+      // Simulate user entering and confirming password
+      component.passwordInput.set('test-password');
+      component.passwordConfirmInput.set('test-password');
+      await component.confirmPasswordPrompt();
 
       expect(global.URL.createObjectURL).toHaveBeenCalled();
       expect(clickMock).toHaveBeenCalled();
@@ -809,7 +816,15 @@ describe('AppComponent - Integration Tests', () => {
 
       component.importBackup(event);
 
-      setTimeout(() => {
+      // File reading is async; after it completes the password modal opens
+      setTimeout(async () => {
+        expect(component.activeModal()).toBe('passwordPrompt');
+        expect(component.passwordPromptMode()).toBe('import');
+
+        // Simulate user entering password
+        component.passwordInput.set('test-password');
+        await component.confirmPasswordPrompt();
+
         expect(cryptoService.decryptBackupWithPassword).toHaveBeenCalledWith(
           JSON.stringify({ encrypted: JSON.stringify(validData) }),
           'test-password'

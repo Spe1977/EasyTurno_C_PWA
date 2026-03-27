@@ -1,7 +1,7 @@
 # EasyTurno - Documento Unico di Stato e Piano Operativo
 
 Ultimo aggiornamento: 2026-03-27 (Fase 4 — validazione finale, Playwright esteso e documentazione bilingue riallineata)
-Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
+Workspace analizzato: `spe1977/easyturno_c_pwa`
 
 ## 1. Funzionalita completate
 
@@ -47,7 +47,7 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 
 - Supporto multilingua italiano/inglese.
 - Traduzioni JSON centralizzate in `src/assets/i18n/`.
-- Pipe di traduzione (`TranslatePipe`) e pipe data localizzata (`LangDatePipe`), entrambe pure.
+- Pipe di traduzione (`TranslatePipe`) e pipe data localizzata (`LangDatePipe`), entrambe impure (`pure: false`) per reagire al cambio lingua.
 
 ### PWA, mobile e integrazioni
 
@@ -55,7 +55,7 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 - Icone PWA PNG reali generate per Chrome/Android (`192`, `512`, `maskable`) e favicon dedicata.
 - Service worker per caching (`sw.js`).
 - Rilevamento aggiornamenti PWA con notifica utente (`SwUpdateService`).
-- Configurazione Capacitor 7 presente per deploy nativo Android.
+- Configurazione Capacitor 8 presente per deploy nativo Android.
 - Servizio notifiche locali native presente (solo piattaforme native).
 - Content Security Policy (CSP) e Subresource Integrity (SRI) configurati.
 
@@ -374,7 +374,7 @@ Esito:
 
 ### Fase 3 - Aggiornamento dipendenze major ✅ COMPLETATA (2026-03-25)
 
-1. ~~TypeScript 5.9 -> 6.0~~ — Fatto: aggiornato a 6.0.2. Angular 21 supporta `>=5.9 <6.1`. Build, type check e 307/307 test verdi.
+1. ~~TypeScript 5.9 -> 6.0~~ — Fatto e poi rollback: aggiornato inizialmente a 6.0.2, poi riportato a 5.9.3 per rientrare nel perimetro supportato dei peer dependency (vedi sezione V).
 2. ~~Tailwind 3 -> 4~~ — Fatto: aggiornato a 4.2.2. Migrazione CSS-first: `@import 'tailwindcss'` + `@variant dark (&.dark)` + `@source`. Rimossi `tailwind.config.js`, `autoprefixer`, `postcss.config.cjs`. Creato `postcss.config.json` (unico formato supportato da `@angular/build`). CSS styles passato da 39 KB (v3) a 43 KB (v4, con tutte le classi dinamiche generate).
 3. ~~Capacitor 7 -> 8~~ — Fatto: core 8.3.0, tutti i plugin aggiornati a v8. Nessuna breaking change nel codice applicativo. Validazione device native da fare in Fase 4.
 

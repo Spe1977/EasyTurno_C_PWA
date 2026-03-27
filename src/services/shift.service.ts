@@ -159,6 +159,45 @@ export class ShiftService {
     return result;
   }
 
+  private advanceDate(date: Date, repetition: Repetition): Date {
+    switch (repetition.frequency) {
+      case 'days':
+        return this.addDays(date, repetition.interval);
+      case 'weeks':
+        return this.addDays(date, repetition.interval * this.DAYS_PER_WEEK);
+      case 'months':
+        return this.addMonths(date, repetition.interval);
+      case 'years':
+        return this.addYears(date, repetition.interval);
+    }
+  }
+
+  private generateRecurringInstances(
+    baseShift: Omit<Shift, 'id'>,
+    seriesId: string,
+    repetition: Repetition
+  ): Shift[] {
+    let currentStartDate = new Date(baseShift.start);
+    const shiftDuration = new Date(baseShift.end).getTime() - currentStartDate.getTime();
+    const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
+
+    const generatedShifts: Shift[] = [];
+    let count = 0;
+    while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
+      const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
+      generatedShifts.push({
+        ...baseShift,
+        id: crypto.randomUUID(),
+        seriesId,
+        start: currentStartDate.toISOString(),
+        end: currentEndDate.toISOString(),
+      });
+      currentStartDate = this.advanceDate(currentStartDate, repetition);
+      count++;
+    }
+    return generatedShifts;
+  }
+
   addShift(shiftData: Omit<Shift, 'id' | 'seriesId'> & { repetition?: Repetition }) {
     const settings = this.notificationService.getSettings();
 
@@ -167,54 +206,17 @@ export class ShiftService {
       const newShift: Shift = { ...shiftData, id, seriesId: id };
       this.shifts.update(s => [...s, newShift]);
 
-      // Schedule notification per il nuovo turno
       void this.notificationService.scheduleShiftNotification(newShift, settings);
     } else {
       const seriesId = crypto.randomUUID();
-      const repetition = shiftData.repetition;
-      let currentStartDate = new Date(shiftData.start);
-      const shiftDuration = new Date(shiftData.end).getTime() - currentStartDate.getTime();
+      const generatedShifts = this.generateRecurringInstances(
+        { ...shiftData, seriesId },
+        seriesId,
+        shiftData.repetition
+      );
 
-      // Generate for configurable years ahead from the shift start date
-      const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
-
-      const generatedShifts: Shift[] = [];
-      let count = 0;
-      while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
-        const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
-        const newShift: Shift = {
-          ...shiftData,
-          id: crypto.randomUUID(),
-          seriesId: seriesId,
-          start: currentStartDate.toISOString(),
-          end: currentEndDate.toISOString(),
-        };
-        generatedShifts.push(newShift);
-
-        switch (repetition.frequency) {
-          case 'days':
-            currentStartDate = this.addDays(currentStartDate, repetition.interval);
-            break;
-          case 'weeks':
-            currentStartDate = this.addDays(
-              currentStartDate,
-              repetition.interval * this.DAYS_PER_WEEK
-            );
-            break;
-          case 'months':
-            currentStartDate = this.addMonths(currentStartDate, repetition.interval);
-            break;
-          case 'year':
-            currentStartDate = this.addYears(currentStartDate, repetition.interval);
-            break;
-        }
-        count++;
-      }
-
-      // Single signal update for all generated shifts
       this.shifts.update(s => [...s, ...generatedShifts]);
 
-      // Per recurring: schedula solo prossimi N turni configurabili
       const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
       upcomingShifts.forEach(
         shift => void this.notificationService.scheduleShiftNotification(shift, settings)
@@ -270,7 +272,6 @@ export class ShiftService {
     });
 
     // Generate new series from the updated shift onwards
-    // We need to manually generate shifts to preserve the seriesId
     if (!updatedShift.isRecurring || !updatedShift.repetition) {
       const newShift: Shift = { ...updatedShift, id: crypto.randomUUID(), seriesId };
       this.shifts.update(s => [...s, newShift]);
@@ -278,50 +279,14 @@ export class ShiftService {
       const settings = this.notificationService.getSettings();
       void this.notificationService.scheduleShiftNotification(newShift, settings);
     } else {
-      const repetition = updatedShift.repetition;
-      let currentStartDate = new Date(updatedShift.start);
-      const shiftDuration = new Date(updatedShift.end).getTime() - currentStartDate.getTime();
+      const generatedShifts = this.generateRecurringInstances(
+        { ...updatedShift, seriesId },
+        seriesId,
+        updatedShift.repetition
+      );
 
-      // Generate for configurable years ahead from the shift start date
-      const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
-
-      const generatedShifts: Shift[] = [];
-      let count = 0;
-      while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
-        const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
-        const newShift: Shift = {
-          ...updatedShift,
-          id: crypto.randomUUID(),
-          seriesId: seriesId, // Preserve original seriesId
-          start: currentStartDate.toISOString(),
-          end: currentEndDate.toISOString(),
-        };
-        generatedShifts.push(newShift);
-
-        switch (repetition.frequency) {
-          case 'days':
-            currentStartDate = this.addDays(currentStartDate, repetition.interval);
-            break;
-          case 'weeks':
-            currentStartDate = this.addDays(
-              currentStartDate,
-              repetition.interval * this.DAYS_PER_WEEK
-            );
-            break;
-          case 'months':
-            currentStartDate = this.addMonths(currentStartDate, repetition.interval);
-            break;
-          case 'year':
-            currentStartDate = this.addYears(currentStartDate, repetition.interval);
-            break;
-        }
-        count++;
-      }
-
-      // Single signal update for all generated shifts
       this.shifts.update(s => [...s, ...generatedShifts]);
 
-      // Schedule notifications for upcoming shifts
       const settings = this.notificationService.getSettings();
       const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
       upcomingShifts.forEach(
@@ -375,24 +340,31 @@ export class ShiftService {
 
     const obj = item as Record<string, unknown>;
 
-    return (
-      'id' in obj &&
-      typeof obj.id === 'string' &&
-      'title' in obj &&
-      typeof obj.title === 'string' &&
-      'start' in obj &&
-      typeof obj.start === 'string' &&
-      this.isValidISODate(obj.start) &&
-      'end' in obj &&
-      typeof obj.end === 'string' &&
-      this.isValidISODate(obj.end) &&
-      'color' in obj &&
-      typeof obj.color === 'string' &&
-      'isRecurring' in obj &&
-      typeof obj.isRecurring === 'boolean' &&
-      'seriesId' in obj &&
-      typeof obj.seriesId === 'string'
-    );
+    if (
+      !(
+        'id' in obj &&
+        typeof obj.id === 'string' &&
+        'title' in obj &&
+        typeof obj.title === 'string' &&
+        'start' in obj &&
+        typeof obj.start === 'string' &&
+        this.isValidISODate(obj.start) &&
+        'end' in obj &&
+        typeof obj.end === 'string' &&
+        this.isValidISODate(obj.end) &&
+        'color' in obj &&
+        typeof obj.color === 'string' &&
+        'isRecurring' in obj &&
+        typeof obj.isRecurring === 'boolean' &&
+        'seriesId' in obj &&
+        typeof obj.seriesId === 'string'
+      )
+    ) {
+      return false;
+    }
+
+    // Validate end is not before start
+    return new Date(obj.end as string).getTime() >= new Date(obj.start as string).getTime();
   }
 
   private isValidISODate(dateString: unknown): boolean {

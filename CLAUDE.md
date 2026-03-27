@@ -38,11 +38,11 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 ## Architecture
 
 ### Core Technologies
-- **Angular 20+** with standalone components and signal-based state management
+- **Angular 21+** with standalone components and signal-based state management
 - **TypeScript 5.9+** with strict mode enabled for maximum type safety
-- **Tailwind CSS 3** for styling with dark mode support
+- **Tailwind CSS 4** for styling with dark mode support (CSS-first config)
 - **PWA** features with service worker and manifest
-- **Capacitor 7** for native mobile deployments (Android support included)
+- **Capacitor 8** for native mobile deployments (Android support included)
 
 ### Application Structure
 
@@ -54,8 +54,6 @@ The app follows a component-based architecture optimized for a single-page PWA:
   - `toast-container.component.ts` - Toast notification UI
   - `calendar.component.ts` - Mobile-optimized calendar view with touch gestures
 - `src/services/` - Core business logic services
-- `src/directives/` - Reusable directives
-  - `modal-focus.directive.ts` - Focus management and keyboard trap for modals
 - `src/pipes/` - Custom Angular pipes for data transformation
   - `translate.pipe.ts` - Internationalization pipe
   - `date-format.pipe.ts` - Locale-aware date formatting
@@ -100,7 +98,6 @@ The application uses Angular's signal-based reactive state management:
 - Automatic update detection with user notification (SwUpdateService)
 - Responsive design supporting mobile and desktop
 - Content Security Policy (CSP) for XSS protection
-- Subresource Integrity (SRI) for CDN scripts
 - AES-GCM 256-bit encryption for sensitive data at rest
 
 #### Native Mobile (Capacitor)
@@ -158,9 +155,9 @@ The app generates individual shift instances for recurring patterns rather than 
 ### Security Features
 
 - **Content Security Policy (CSP)**: Restricts resource origins to prevent XSS attacks
-- **Subresource Integrity (SRI)**: Validates CDN scripts to prevent tampering
 - **Data Encryption**: AES-GCM 256-bit encryption for localStorage data
-- **Device-Based Key**: Encryption key derived from device fingerprint (no password required)
+- **Device Key**: Random AES key persisted in IndexedDB (non-extractable CryptoKey); fallback to localStorage only when IndexedDB is unavailable
+- **Password-Protected Backups**: Export/import encrypted with user password (PBKDF2 + AES-GCM)
 - **Backward Compatibility**: Automatic detection and migration of legacy unencrypted data
 - **Secure Error Handling**: Graceful degradation when encryption fails
 
@@ -183,14 +180,13 @@ The app generates individual shift instances for recurring patterns rather than 
 - All dates stored as ISO strings for consistency with optional timezone field
 - Theme persistence with automatic system preference detection
 - TypeScript strict mode enabled for type safety
-- Pure pipes for optimal performance (only re-execute when inputs change)
+- TranslatePipe and LangDatePipe are impure (`pure: false`) to react to language changes
 - Computed signals for reactive statistics calculations with memoization
 - Single-pass algorithm for statistics (O(n) complexity)
 - Automatic date/time synchronization: when start date/time is changed, end date/time automatically aligns
 - Color-coded shift cards with customizable left border (3px width)
 - Tailwind safelist configuration for dynamic color classes
 - CryptoService uses Web Crypto API (mocked in Jest tests for compatibility)
-- Focus trap in modals with automatic restoration on close (ModalFocusDirective)
 - WCAG 2.1 AA compliant for keyboard navigation and screen readers
 
 ### Important Patterns & Conventions
@@ -202,10 +198,10 @@ The app generates individual shift instances for recurring patterns rather than 
 - Effects handle side effects (theme persistence, keyboard shortcuts, etc.)
 
 #### Modal Management
-- Single `activeModal` signal tracks which modal is open (`'none' | 'form' | 'settings' | 'deleteConfirm' | 'statistics' | ...`)
-- ModalFocusDirective automatically handles focus management and keyboard traps
+- Single `activeModal` signal tracks which modal is open (`'none' | 'form' | 'settings' | 'deleteConfirm' | 'statistics' | 'passwordPrompt' | ...`)
 - All modals use `role="dialog"` and `aria-modal="true"` for accessibility
 - Confirmation modals use `role="alertdialog"` semantic role
+- Password input uses dedicated modal instead of `window.prompt()` for security and mobile compatibility
 
 #### View Mode Management
 - Single `viewMode` signal toggles between 'list' and 'calendar' views
@@ -228,21 +224,21 @@ The app generates individual shift instances for recurring patterns rather than 
 6. Component signals react automatically via computed dependencies
 
 #### Type Guards & Validation
-- Type guard functions in `shift.model.ts` validate runtime data
-- Used during import/export operations to ensure data integrity
+- Type guard functions in `shift.service.ts` (`isValidShift`, `isValidISODate`) validate runtime data
+- Used during import/export operations to ensure data integrity (includes end >= start check)
 - Pattern: `isValidX(value: unknown): value is X` for TypeScript narrowing
 
 #### Performance Optimizations
 - Sorted shifts cached in `sortedShifts` computed signal
 - Statistics use single-pass algorithm instead of multiple reduce operations
-- Pure pipes prevent unnecessary re-execution
+- Recurrence generation extracted into shared `generateRecurringInstances()` helper
 - List pagination with configurable load increment (50 items)
 
 ### Code Quality & Roadmap
 
-See `ROADMAP.md` for:
+See `P.md` for:
 - Comprehensive code quality analysis (all phases completed)
 - Performance optimization history
 - Type safety improvements implemented
-- Security enhancements (encryption, CSP, SRI)
+- Security enhancements (encryption, CSP, password-protected backups)
 - Accessibility compliance (WCAG 2.1 AA)

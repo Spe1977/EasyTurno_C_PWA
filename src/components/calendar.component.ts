@@ -1,5 +1,14 @@
-import { Component, input, output, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  input,
+  output,
+  signal,
+  computed,
+  inject,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CalendarService } from '../services/calendar.service';
+import { TranslationService } from '../services/translation.service';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { Shift, ShiftColor } from '../shift.model';
 
@@ -64,7 +73,7 @@ import { Shift, ShiftColor } from '../shift.model';
       <div
         class="weekday-headers grid grid-cols-7 bg-gray-100 text-center text-sm font-semibold dark:bg-gray-700"
       >
-        @for (day of weekdayNames; track day) {
+        @for (day of weekdayNames(); track day) {
           <div class="py-2 text-gray-700 dark:text-gray-300">
             {{ day }}
           </div>
@@ -273,13 +282,18 @@ export class CalendarComponent {
   // Selected day state
   readonly selectedDate = signal<Date | null>(null);
 
-  constructor(public calendarService: CalendarService) {}
+  calendarService = inject(CalendarService);
+  private translationService = inject(TranslationService);
+
+  private readonly locale = computed(() =>
+    this.translationService.language() === 'it' ? 'it-IT' : 'en-US'
+  );
 
   // Computed values
-  readonly weekdayNames = this.calendarService.getWeekdayNames('it-IT');
+  readonly weekdayNames = computed(() => this.calendarService.getWeekdayNames(this.locale()));
 
   readonly monthName = computed(() =>
-    this.calendarService.getMonthName(this.calendarService.currentMonth(), 'it-IT')
+    this.calendarService.getMonthName(this.calendarService.currentMonth(), this.locale())
   );
 
   // Pre-computed shift map indexed by local ISO date string.
@@ -349,7 +363,7 @@ export class CalendarComponent {
   formatSelectedDate(): string {
     const date = this.selectedDate();
     if (!date) return '';
-    return date.toLocaleDateString('it-IT', {
+    return date.toLocaleDateString(this.locale(), {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -366,12 +380,13 @@ export class CalendarComponent {
     const startDate = new Date(shift.start);
     const endDate = new Date(shift.end);
 
-    const startTime = startDate.toLocaleTimeString('it-IT', {
+    const loc = this.locale();
+    const startTime = startDate.toLocaleTimeString(loc, {
       hour: '2-digit',
       minute: '2-digit',
     });
 
-    const endTime = endDate.toLocaleTimeString('it-IT', {
+    const endTime = endDate.toLocaleTimeString(loc, {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -381,7 +396,7 @@ export class CalendarComponent {
     if (isSameDay) {
       return `${startTime} - ${endTime}`;
     } else {
-      const endDateStr = endDate.toLocaleDateString('it-IT', {
+      const endDateStr = endDate.toLocaleDateString(loc, {
         day: 'numeric',
         month: 'short',
       });

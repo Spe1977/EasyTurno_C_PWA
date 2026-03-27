@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, ScheduleOptions, PendingResult } from '@capacitor/local-notifications';
 import { Shift } from '../shift.model';
+import { TranslationService } from './translation.service';
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -11,6 +12,7 @@ export interface NotificationSettings {
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
+  private translationService = inject(TranslationService);
   private readonly STORAGE_KEY = 'easyturno_notification_settings';
   private readonly DEFAULT_SETTINGS: NotificationSettings = {
     enabled: true,
@@ -110,9 +112,12 @@ export class NotificationService {
         shiftStart.getTime() - safeSettings.reminderMinutesBefore * 60 * 1000
       );
       if (reminderTime > now) {
+        const startsInText = this.translationService
+          .translate('notification.startsIn')
+          .replace('{minutes}', String(safeSettings.reminderMinutesBefore));
         notifications.push({
           title: `📅 ${shift.title}`,
-          body: `Inizia tra ${safeSettings.reminderMinutesBefore} minuti`,
+          body: startsInText,
           id: this.getNotificationId(shift.id, '-reminder'),
           schedule: { at: reminderTime },
           sound: 'default',
@@ -130,7 +135,7 @@ export class NotificationService {
 
         if (dayBefore > now) {
           notifications.push({
-            title: `🔔 Promemoria turno domani`,
+            title: `🔔 ${this.translationService.translate('notification.tomorrowReminder')}`,
             body: `${shift.title} - ${shiftStart.toLocaleDateString('it-IT')}`,
             id: this.getNotificationId(shift.id, '-daybefore'),
             schedule: { at: dayBefore },

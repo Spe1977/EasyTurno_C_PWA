@@ -33,7 +33,10 @@ type Modal =
   | 'editSeriesConfirm'
   | 'searchDate'
   | 'statistics'
-  | 'decryptionError';
+  | 'decryptionError'
+  | 'passwordPrompt';
+
+type PasswordPromptMode = 'export' | 'import';
 
 type ViewMode = 'list' | 'calendar';
 
@@ -111,6 +114,12 @@ export class AppComponent {
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
 
+  // Password prompt state
+  passwordPromptMode = signal<PasswordPromptMode>('export');
+  passwordInput = signal('');
+  passwordConfirmInput = signal('');
+  pendingImportData = signal<string | null>(null);
+
   // Statistics state
   statsStartDate = signal('');
   statsEndDate = signal('');
@@ -127,12 +136,12 @@ export class AppComponent {
   private readonly ONE_HOUR_MS = 60 * 60 * 1000;
 
   colors: ShiftColor[] = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
-  repFrequencies = ['days', 'weeks', 'months', 'year'];
+  repFrequencies = ['days', 'weeks', 'months', 'years'];
   repIntervals: Record<Repetition['frequency'], number[]> = {
     days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
     weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    year: [1, 2, 3, 4, 5],
+    years: [1, 2, 3, 4, 5],
   };
 
   // Derived State (Computed Signals)
@@ -157,6 +166,11 @@ export class AppComponent {
       } else {
         this.document.documentElement.classList.remove('dark');
       }
+    });
+
+    // Sync html lang attribute with current language
+    effect(() => {
+      this.document.documentElement.lang = this.translationService.language();
     });
 
     // Keyboard shortcuts
@@ -539,29 +553,61 @@ export class AppComponent {
   }
 
   // --- Settings Logic ---
-  async exportBackup() {
-    this.isExporting.set(true);
-    try {
-      const password = this.promptForBackupPassword();
-      if (!password) {
+  exportBackup() {
+    this.passwordPromptMode.set('export');
+    this.passwordInput.set('');
+    this.passwordConfirmInput.set('');
+    this.openModal('passwordPrompt');
+  }
+
+  async confirmPasswordPrompt() {
+    const password = this.passwordInput();
+    const mode = this.passwordPromptMode();
+
+    if (!password) {
+      return;
+    }
+
+    if (mode === 'export') {
+      const confirmation = this.passwordConfirmInput();
+      if (password !== confirmation) {
+        this.toastService.error(this.translationService.translate('backupPasswordMismatch'), 5000);
         return;
       }
 
-      const data = JSON.stringify(this.shiftService.shifts(), null, 2);
-      const encryptedBackup = await this.cryptoService.encryptBackupWithPassword(data, password);
-      const blob = new Blob([encryptedBackup], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'easyturno_backup.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      this.toastService.success(this.translationService.translate('exportSuccess'));
-    } catch (error) {
-      console.error('Export failed:', error);
-      this.toastService.error(this.translationService.translate('exportError'));
-    } finally {
-      this.isExporting.set(false);
+      this.closeModal();
+      this.isExporting.set(true);
+      try {
+        const data = JSON.stringify(this.shiftService.shifts(), null, 2);
+        const encryptedBackup = await this.cryptoService.encryptBackupWithPassword(data, password);
+        const blob = new Blob([encryptedBackup], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'easyturno_backup.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        this.toastService.success(this.translationService.translate('exportSuccess'));
+      } catch (error) {
+        console.error('Export failed:', error);
+        this.toastService.error(this.translationService.translate('exportError'));
+      } finally {
+        this.isExporting.set(false);
+      }
+    } else {
+      // import mode
+      const importData = this.pendingImportData();
+      if (!importData) return;
+
+      this.closeModal();
+      try {
+        const decrypted = await this.cryptoService.decryptBackupWithPassword(importData, password);
+        this.finishImport(decrypted);
+      } catch {
+        this.toastService.error(this.translationService.translate('backupPasswordInvalid'), 5000);
+      }
+      this.pendingImportData.set(null);
+      this.isImporting.set(false);
     }
   }
 
@@ -581,42 +627,19 @@ export class AppComponent {
     this.isImporting.set(true);
     const reader = new FileReader();
 
-    reader.onload = async e => {
+    reader.onload = e => {
       const result = e.target?.result;
       if (typeof result === 'string') {
-        let parsedBackup = result;
-
         if (this.cryptoService.isPasswordProtectedBackupPayload(result)) {
-          const password = window.prompt(
-            this.translationService.translate('backupPasswordImportPrompt')
-          );
-
-          if (!password) {
-            this.toastService.error(this.translationService.translate('importError'));
-            this.isImporting.set(false);
-            return;
-          }
-
-          try {
-            parsedBackup = await this.cryptoService.decryptBackupWithPassword(result, password);
-          } catch {
-            this.toastService.error(
-              this.translationService.translate('backupPasswordInvalid'),
-              5000
-            );
-            this.isImporting.set(false);
-            return;
-          }
+          this.pendingImportData.set(result);
+          this.passwordPromptMode.set('import');
+          this.passwordInput.set('');
+          this.passwordConfirmInput.set('');
+          this.openModal('passwordPrompt');
+          return;
         }
 
-        const importResult = this.shiftService.importShifts(parsedBackup);
-        if (importResult.success) {
-          const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
-          this.toastService.success(message);
-        } else {
-          const message = `${this.translationService.translate('importError')}${importResult.error ? ': ' + importResult.error : ''}`;
-          this.toastService.error(message, 5000);
-        }
+        this.finishImport(result);
       }
       this.isImporting.set(false);
       this.closeModal();
@@ -628,6 +651,17 @@ export class AppComponent {
     };
 
     reader.readAsText(file);
+  }
+
+  private finishImport(data: string) {
+    const importResult = this.shiftService.importShifts(data);
+    if (importResult.success) {
+      const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
+      this.toastService.success(message);
+    } else {
+      const message = `${this.translationService.translate('importError')}${importResult.error ? ': ' + importResult.error : ''}`;
+      this.toastService.error(message, 5000);
+    }
   }
 
   confirmReset() {
@@ -814,23 +848,5 @@ export class AppComponent {
         'bg-slate-100 text-slate-700 border-slate-500 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-400',
     };
     return colorMap[color];
-  }
-
-  private promptForBackupPassword(): string | null {
-    const password = window.prompt(this.translationService.translate('backupPasswordPrompt'));
-    if (!password) {
-      return null;
-    }
-
-    const confirmation = window.prompt(
-      this.translationService.translate('backupPasswordConfirmPrompt')
-    );
-
-    if (password !== confirmation) {
-      this.toastService.error(this.translationService.translate('backupPasswordMismatch'), 5000);
-      return null;
-    }
-
-    return password;
   }
 }

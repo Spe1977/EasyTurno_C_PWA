@@ -1,17 +1,18 @@
 import { Component, inject } from '@angular/core';
 
 import { ToastService } from '../services/toast.service';
+import { TranslatePipe } from '../pipes/translate.pipe';
 
 @Component({
   selector: 'app-toast-container',
   standalone: true,
-  imports: [],
+  imports: [TranslatePipe],
   template: `
     <div
       class="fixed top-4 right-4 z-50 max-w-md space-y-2"
       role="region"
       aria-live="polite"
-      aria-label="Notifications"
+      [attr.aria-label]="'notifications_aria' | translate"
     >
       @for (toast of toastService.toasts(); track toast.id) {
         <div
@@ -105,7 +106,7 @@ import { ToastService } from '../services/toast.service';
           <button
             (click)="toastService.dismiss(toast.id)"
             class="flex-shrink-0 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
-            [attr.aria-label]="'Close notification'"
+            [attr.aria-label]="'closeNotification' | translate"
             type="button"
           >
             <svg
