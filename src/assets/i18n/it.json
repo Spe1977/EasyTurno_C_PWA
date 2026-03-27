@@ -106,8 +106,13 @@
   },
   "closeNotification": "Chiudi notifica",
   "notifications_aria": "Notifiche",
+  "exporting": "Esportazione...",
+  "importing": "Importazione...",
   "exportSuccess": "Backup esportato con successo!",
   "exportError": "Esportazione fallita.",
+  "invalidDateFormat": "Formato data non valido. Usa il formato YYYY-MM-DD.",
+  "dateOutOfRange": "Inserisci una data tra il 1900 e il 2100.",
+  "failedToParseDate": "Errore nella lettura della data. Controlla il formato.",
   "shifts": {
     "overtime": "straordinario"
   }
