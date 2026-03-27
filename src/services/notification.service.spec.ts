@@ -75,6 +75,34 @@ describe('NotificationService', () => {
       const settings = service.getSettings();
       expect(settings).toEqual(customSettings);
     });
+
+    it('should fall back to defaults when stored settings are invalid JSON', () => {
+      localStorageMock['easyturno_notification_settings'] = '{invalid';
+
+      const settings = service.getSettings();
+
+      expect(settings).toEqual({
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: true,
+      });
+    });
+
+    it('should sanitize unsupported reminder values from storage', () => {
+      localStorageMock['easyturno_notification_settings'] = JSON.stringify({
+        enabled: true,
+        reminderMinutesBefore: -999,
+        dayBeforeEnabled: false,
+      });
+
+      const settings = service.getSettings();
+
+      expect(settings).toEqual({
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: false,
+      });
+    });
   });
 
   describe('saveSettings', () => {
@@ -88,6 +116,22 @@ describe('NotificationService', () => {
       service.saveSettings(settings);
 
       expect(localStorageMock['easyturno_notification_settings']).toBe(JSON.stringify(settings));
+    });
+
+    it('should sanitize invalid settings before saving', () => {
+      service.saveSettings({
+        enabled: true,
+        reminderMinutesBefore: -5,
+        dayBeforeEnabled: true,
+      });
+
+      expect(localStorageMock['easyturno_notification_settings']).toBe(
+        JSON.stringify({
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: true,
+        })
+      );
     });
   });
 

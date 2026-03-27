@@ -30,3 +30,8 @@ dist-ssr
 cypress/screenshots
 cypress/videos
 cypress/downloads
+
+# Playwright
+playwright-report
+test-results
+.playwright

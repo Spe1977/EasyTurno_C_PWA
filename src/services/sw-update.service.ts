@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, isDevMode, signal } from '@angular/core';
 
 @Injectable({
   providedIn: 'root',
@@ -6,9 +6,16 @@ import { Injectable, signal } from '@angular/core';
 export class SwUpdateService {
   updateAvailable = signal(false);
   private registration: ServiceWorkerRegistration | null = null;
+  private readonly isTestEnvironment =
+    typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
+  private readonly isLocalHost =
+    typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
   async checkForUpdates(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
+    if (
+      !('serviceWorker' in navigator) ||
+      (!this.isTestEnvironment && (isDevMode() || this.isLocalHost))
+    ) {
       return;
     }
 

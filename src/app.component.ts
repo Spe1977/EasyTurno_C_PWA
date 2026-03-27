@@ -7,7 +7,7 @@ import {
   WritableSignal,
   effect,
 } from '@angular/core';
-import { CommonModule, DatePipe, DOCUMENT } from '@angular/common';
+import { DatePipe, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Capacitor } from '@capacitor/core';
 import { Shift, Repetition, AllowanceWithId, ShiftColor } from './shift.model';
@@ -16,10 +16,12 @@ import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
 import { NotificationService, NotificationSettings } from './services/notification.service';
 import { SwUpdateService } from './services/sw-update.service';
+import { CryptoService } from './services/crypto.service';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 import { ToastContainerComponent } from './components/toast-container.component';
 import { ShiftListItemComponent } from './components/shift-list-item.component';
+import { CalendarComponent } from './components/calendar.component';
 
 type Modal =
   | 'none'
@@ -33,16 +35,18 @@ type Modal =
   | 'statistics'
   | 'decryptionError';
 
+type ViewMode = 'list' | 'calendar';
+
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     TranslatePipe,
     LangDatePipe,
     ToastContainerComponent,
     ShiftListItemComponent,
+    CalendarComponent,
   ],
   providers: [DatePipe],
   templateUrl: './app.component.html',
@@ -71,8 +75,10 @@ export class AppComponent {
   toastService = inject(ToastService);
   notificationService = inject(NotificationService);
   swUpdateService = inject(SwUpdateService);
+  cryptoService = inject(CryptoService);
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
+  private readonly MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
   // Native platform detection
   isNativePlatform = Capacitor.isNativePlatform;
@@ -83,6 +89,7 @@ export class AppComponent {
   // UI State
   theme: WritableSignal<'light' | 'dark'>;
   activeModal = signal<Modal>('none');
+  viewMode = signal<ViewMode>('list');
   isImporting = signal(false);
   isExporting = signal(false);
 
@@ -153,33 +160,30 @@ export class AppComponent {
     });
 
     // Keyboard shortcuts
-    effect(
-      () => {
-        const handleKeyboard = (e: KeyboardEvent) => {
-          // Ctrl/Cmd + N = New shift
-          if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-            e.preventDefault();
-            this.openNewShiftForm();
-          }
-          // Escape = Close modal
-          if (e.key === 'Escape' && this.activeModal() !== 'none') {
-            e.preventDefault();
-            this.closeModal();
-          }
-          // Ctrl/Cmd + S = Open statistics (when in settings)
-          if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
-            e.preventDefault();
-            this.openStatistics();
-          }
-        };
+    effect(() => {
+      const handleKeyboard = (e: KeyboardEvent) => {
+        // Ctrl/Cmd + N = New shift
+        if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+          e.preventDefault();
+          this.openNewShiftForm();
+        }
+        // Escape = Close modal
+        if (e.key === 'Escape' && this.activeModal() !== 'none') {
+          e.preventDefault();
+          this.closeModal();
+        }
+        // Ctrl/Cmd + S = Open statistics (when in settings)
+        if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
+          e.preventDefault();
+          this.openStatistics();
+        }
+      };
 
-        window.addEventListener('keydown', handleKeyboard);
+      window.addEventListener('keydown', handleKeyboard);
 
-        // Cleanup on destroy
-        return () => window.removeEventListener('keydown', handleKeyboard);
-      },
-      { allowSignalWrites: true }
-    );
+      // Cleanup on destroy
+      return () => window.removeEventListener('keydown', handleKeyboard);
+    });
 
     // Open decryption-error modal when ShiftService reports a decrypt failure
     effect(
@@ -535,11 +539,17 @@ export class AppComponent {
   }
 
   // --- Settings Logic ---
-  exportBackup() {
+  async exportBackup() {
     this.isExporting.set(true);
     try {
+      const password = this.promptForBackupPassword();
+      if (!password) {
+        return;
+      }
+
       const data = JSON.stringify(this.shiftService.shifts(), null, 2);
-      const blob = new Blob([data], { type: 'application/json' });
+      const encryptedBackup = await this.cryptoService.encryptBackupWithPassword(data, password);
+      const blob = new Blob([encryptedBackup], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -563,13 +573,43 @@ export class AppComponent {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
+    if (file.size > this.MAX_IMPORT_FILE_SIZE_BYTES) {
+      this.toastService.error(this.translationService.translate('backupFileTooLarge'), 5000);
+      return;
+    }
+
     this.isImporting.set(true);
     const reader = new FileReader();
 
-    reader.onload = e => {
+    reader.onload = async e => {
       const result = e.target?.result;
       if (typeof result === 'string') {
-        const importResult = this.shiftService.importShifts(result);
+        let parsedBackup = result;
+
+        if (this.cryptoService.isPasswordProtectedBackupPayload(result)) {
+          const password = window.prompt(
+            this.translationService.translate('backupPasswordImportPrompt')
+          );
+
+          if (!password) {
+            this.toastService.error(this.translationService.translate('importError'));
+            this.isImporting.set(false);
+            return;
+          }
+
+          try {
+            parsedBackup = await this.cryptoService.decryptBackupWithPassword(result, password);
+          } catch {
+            this.toastService.error(
+              this.translationService.translate('backupPasswordInvalid'),
+              5000
+            );
+            this.isImporting.set(false);
+            return;
+          }
+        }
+
+        const importResult = this.shiftService.importShifts(parsedBackup);
         if (importResult.success) {
           const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
           this.toastService.success(message);
@@ -717,6 +757,43 @@ export class AppComponent {
   // --- Notification Settings ---
   onNotificationSettingsChange() {
     this.notificationService.saveSettings(this.notificationSettings());
+    this.notificationSettings.set(this.notificationService.getSettings());
+  }
+
+  // Calendar view methods
+  toggleViewMode() {
+    const currentMode = this.viewMode();
+    // Reset search filter when switching from calendar to list view
+    if (currentMode === 'calendar') {
+      this.searchDate.set(null);
+      this.listVisibleCount.set(this.INITIAL_LIST_SIZE);
+    }
+    this.viewMode.update(mode => (mode === 'list' ? 'calendar' : 'list'));
+  }
+
+  setViewMode(mode: ViewMode) {
+    const currentMode = this.viewMode();
+    // Reset search filter when switching from calendar to list view
+    if (currentMode === 'calendar' && mode === 'list') {
+      this.searchDate.set(null);
+      this.listVisibleCount.set(this.INITIAL_LIST_SIZE);
+    }
+    this.viewMode.set(mode);
+  }
+
+  onCalendarDaySelected(date: Date | null) {
+    if (date) {
+      this.searchDate.set(date);
+      // Optionally switch to list view to show filtered results
+      // this.viewMode.set('list');
+    } else {
+      this.searchDate.set(null);
+    }
+  }
+
+  onCalendarShiftClick(shift: Shift) {
+    // Open shift for editing
+    this.openEditShiftForm(shift);
   }
 
   // Helper for Tailwind classes
@@ -737,5 +814,23 @@ export class AppComponent {
         'bg-slate-100 text-slate-700 border-slate-500 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-400',
     };
     return colorMap[color];
+  }
+
+  private promptForBackupPassword(): string | null {
+    const password = window.prompt(this.translationService.translate('backupPasswordPrompt'));
+    if (!password) {
+      return null;
+    }
+
+    const confirmation = window.prompt(
+      this.translationService.translate('backupPasswordConfirmPrompt')
+    );
+
+    if (password !== confirmation) {
+      this.toastService.error(this.translationService.translate('backupPasswordMismatch'), 5000);
+      return null;
+    }
+
+    return password;
   }
 }

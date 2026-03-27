@@ -1,101 +1,146 @@
-const CACHE_NAME = 'easyturno-cache-v4'; // Bump version to force update
-const CACHE_ASSETS = [
-    '/',
-    '/index.html',
-    '/manifest.webmanifest',
-    '/icon.svg',
-    // Main script
-    '/index.tsx',
-    // App files
-    '/src/app.component.ts',
-    '/src/app.component.html',
-    '/src/shift.model.ts',
-    '/src/services/shift.service.ts',
-    '/src/services/translation.service.ts',
-    '/src/pipes/date-format.pipe.ts',
-    '/src/pipes/translate.pipe.ts',
-    // Styles & Fonts
-    'https://rsms.me/inter/inter.css',
-    // Core JS libs
-    'https://cdn.tailwindcss.com',
-    'https://cdn.jsdelivr.net/npm/ts-browser',
-    // Angular & RxJS from importmap
-    "https://aistudiocdn.com/rxjs@^7.8.2?conditions=es2015",
-    "https://aistudiocdn.com/rxjs@^7.8.2/operators?conditions=es2015",
-    "https://next.esm.sh/@angular/common@^20.3.2?external=rxjs",
-    "https://next.esm.sh/@angular/core@^20.3.2?external=rxjs",
-    "https://next.esm.sh/@angular/platform-browser@^20.3.2?external=rxjs",
-    "https://next.esm.sh/@angular/compiler@^20.3.2?external=rxjs",
-    "https://next.esm.sh/@angular/forms@^20.3.2?external=rxjs",
-    "https://next.esm.sh/@angular/common@^20.3.2/locales/it?external=rxjs"
+const STATIC_CACHE = 'easyturno-static-v5';
+const RUNTIME_CACHE = 'easyturno-runtime-v1';
+const APP_SHELL_URL = '/index.html';
+
+const PRECACHE_URLS = [
+  '/',
+  APP_SHELL_URL,
+  '/manifest.webmanifest',
+  '/favicon.ico',
+  '/favicon.png',
+  '/icon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
+  '/src/assets/i18n/it.json',
+  '/src/assets/i18n/en.json',
 ];
+const RUNTIME_CACHEABLE_JSON_PATHS = new Set(PRECACHE_URLS.filter(url => url.endsWith('.json')));
 
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('Opened cache and caching assets');
-                // Use addAll for atomic operation, but it can fail if one asset fails.
-                // For robustness, especially with external URLs, loop and cache individually.
-                const promises = CACHE_ASSETS.map(url => {
-                    return cache.add(url).catch(err => {
-                        console.warn(`Failed to cache ${url}:`, err);
-                    });
-                });
-                return Promise.all(promises);
-            })
-    );
-});
+function isSameOrigin(requestUrl) {
+  return requestUrl.origin === self.location.origin;
+}
 
-// Listen for SKIP_WAITING message
-self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-        self.skipWaiting();
+function isAppShellNavigation(request) {
+  return request.mode === 'navigate';
+}
+
+function isRuntimeCacheable(request, requestUrl) {
+  if (!isSameOrigin(requestUrl)) {
+    return false;
+  }
+
+  if (PRECACHE_URLS.includes(requestUrl.pathname)) {
+    return true;
+  }
+
+  return (
+    ['script', 'style', 'worker', 'image', 'font'].includes(request.destination) ||
+    requestUrl.pathname.endsWith('.js') ||
+    requestUrl.pathname.endsWith('.css') ||
+    RUNTIME_CACHEABLE_JSON_PATHS.has(requestUrl.pathname)
+  );
+}
+
+async function precacheAppShell() {
+  const cache = await caches.open(STATIC_CACHE);
+  const results = await Promise.allSettled(
+    PRECACHE_URLS.map(url => cache.add(new Request(url, { cache: 'reload' })))
+  );
+
+  results.forEach((result, index) => {
+    if (result.status === 'rejected') {
+      console.warn('Failed to precache asset:', PRECACHE_URLS[index], result.reason);
     }
-});
+  });
+}
 
-self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('Clearing old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
-    );
-    return self.clients.claim();
-});
+async function networkFirstNavigation(request) {
+  const cache = await caches.open(STATIC_CACHE);
 
-self.addEventListener('fetch', (event) => {
-    // We only want to cache GET requests.
-    if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension://')) {
-        return;
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(APP_SHELL_URL, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cachedShell = await cache.match(APP_SHELL_URL);
+    if (cachedShell) {
+      return cachedShell;
     }
 
-    // Cache-first strategy
-    event.respondWith(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.match(event.request).then((response) => {
-                const fetchPromise = fetch(event.request).then((networkResponse) => {
-                    // If we get a valid response, we cache it for next time.
-                    if (networkResponse && networkResponse.status === 200) {
-                         // Make sure to clone the response, as it can be consumed only once.
-                        cache.put(event.request, networkResponse.clone());
-                    }
-                    return networkResponse;
-                }).catch(error => {
-                    console.error('Fetch failed; user is likely offline.', error);
-                    // If fetch fails (e.g., offline), and we didn't have a cache match,
-                    // there's nothing more we can do. The browser will show its offline page.
-                });
+    console.error('Navigation request failed and no cached app shell is available.', error);
+    throw error;
+  }
+}
 
-                // Return the cached response if it exists, otherwise wait for the network.
-                return response || fetchPromise;
-            });
+async function staleWhileRevalidate(request) {
+  const cacheName = PRECACHE_URLS.includes(new URL(request.url).pathname)
+    ? STATIC_CACHE
+    : RUNTIME_CACHE;
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+
+  const networkPromise = fetch(request)
+    .then(response => {
+      if (response.ok) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => cached);
+
+  return cached || networkPromise;
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    precacheAppShell().then(() => {
+      return self.skipWaiting();
+    })
+  );
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (![STATIC_CACHE, RUNTIME_CACHE].includes(cacheName)) {
+            return caches.delete(cacheName);
+          }
+          return Promise.resolve(false);
         })
-    );
+      );
+    })
+  );
+
+  return self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension://')) {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+
+  if (isAppShellNavigation(event.request)) {
+    event.respondWith(networkFirstNavigation(event.request));
+    return;
+  }
+
+  if (!isRuntimeCacheable(event.request, requestUrl)) {
+    return;
+  }
+
+  event.respondWith(staleWhileRevalidate(event.request));
 });

@@ -22,7 +22,10 @@
             "assets": [
               "manifest.webmanifest",
               "sw.js",
+              "favicon.ico",
+              "favicon.png",
               "icon.svg",
+              "icons",
               "src/assets"
             ]
           },

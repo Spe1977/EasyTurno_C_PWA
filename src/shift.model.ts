@@ -34,4 +34,5 @@ export interface Shift {
   notes?: string; // Optional notes field
   overtimeHours?: number; // Overtime hours
   allowances?: Allowance[]; // Array of allowances
+  timezone?: string; // IANA timezone identifier (e.g., 'Europe/Rome')
 }

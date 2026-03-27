@@ -1,0 +1,254 @@
+
+> easyturno@0.0.0 cypress:run
+> cypress run
+
+
+DevTools listening on ws://127.0.0.1:41233/devtools/browser/da2a34c8-3420-4943-9d30-43f9bbde60b6
+
+================================================================================
+
+  (Run Starting)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Cypress:        15.3.0                                                                         │
+  │ Browser:        Electron 136 (headless)                                                        │
+  │ Node Version:   v22.20.0 (/usr/bin/node)                                                       │
+  │ Specs:          4 found (advanced-features.cy.ts, offline-functionality.cy.ts, recurring-shift │
+  │                 s.cy.ts, shift-management.cy.ts)                                               │
+  │ Searched:       cypress/e2e/**/*.cy.ts                                                         │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  advanced-features.cy.ts                                                         (1 of 4)
+
+
+  Advanced Features - Overtime, Allowances, Statistics
+    Overtime Management
+      1) "before each" hook for "should add shift with overtime hours"
+
+
+  0 passing (871ms)
+  1 failing
+
+  1) Advanced Features - Overtime, Allowances, Statistics
+       Overtime Management
+         "before each" hook for "should add shift with overtime hours":
+     ReferenceError: The following error originated from your application code, not from Cypress.
+
+  > tailwind is not defined
+
+When Cypress detects uncaught errors originating from your application it will automatically fail the current test.
+
+This behavior is configurable, and you can choose to turn this off by listening to the `uncaught:exception` event.
+
+https://on.cypress.io/uncaught-exception-from-application
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `Advanced Features - Overtim...`
+      at <unknown> (http://localhost:3000/:43:5)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        14                                                                               │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      13                                                                               │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     advanced-features.cy.ts                                                          │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA/cypress/screenshots/advanced-feat     (1280x720)
+     ures.cy.ts/Advanced Features - Overtime, Allowances, Statistics -- should add sh               
+     ift with overtime hours -- before each hook (failed).png                                       
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  offline-functionality.cy.ts                                                     (2 of 4)
+
+
+  Offline Functionality & PWA
+    Data persistence
+      1) "before each" hook for "should persist shifts to localStorage"
+
+
+  0 passing (365ms)
+  1 failing
+
+  1) Offline Functionality & PWA
+       Data persistence
+         "before each" hook for "should persist shifts to localStorage":
+     ReferenceError: The following error originated from your application code, not from Cypress.
+
+  > tailwind is not defined
+
+When Cypress detects uncaught errors originating from your application it will automatically fail the current test.
+
+This behavior is configurable, and you can choose to turn this off by listening to the `uncaught:exception` event.
+
+https://on.cypress.io/uncaught-exception-from-application
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `Offline Functionality & PWA`
+      at <unknown> (http://localhost:3000/:43:5)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        6                                                                                │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      5                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     offline-functionality.cy.ts                                                      │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA/cypress/screenshots/offline-funct     (1280x720)
+     ionality.cy.ts/Offline Functionality & PWA -- should persist shifts to localStor               
+     age -- before each hook (failed).png                                                           
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  recurring-shifts.cy.ts                                                          (3 of 4)
+
+
+  Recurring Shifts
+    Create recurring shift (daily)
+      1) "before each" hook for "should create daily recurring shifts"
+
+
+  0 passing (530ms)
+  1 failing
+
+  1) Recurring Shifts
+       Create recurring shift (daily)
+         "before each" hook for "should create daily recurring shifts":
+     ReferenceError: The following error originated from your application code, not from Cypress.
+
+  > tailwind is not defined
+
+When Cypress detects uncaught errors originating from your application it will automatically fail the current test.
+
+This behavior is configurable, and you can choose to turn this off by listening to the `uncaught:exception` event.
+
+https://on.cypress.io/uncaught-exception-from-application
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `Recurring Shifts`
+      at <unknown> (http://localhost:3000/:43:5)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        4                                                                                │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      3                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     recurring-shifts.cy.ts                                                           │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA/cypress/screenshots/recurring-shi     (1280x720)
+     fts.cy.ts/Recurring Shifts -- should create daily recurring shifts -- before eac               
+     h hook (failed).png                                                                            
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  Running:  shift-management.cy.ts                                                          (4 of 4)
+
+
+  Shift Management - Core Flows
+    Create single shift
+      1) "before each" hook for "should create a new shift successfully"
+
+
+  0 passing (509ms)
+  1 failing
+
+  1) Shift Management - Core Flows
+       Create single shift
+         "before each" hook for "should create a new shift successfully":
+     ReferenceError: The following error originated from your application code, not from Cypress.
+
+  > tailwind is not defined
+
+When Cypress detects uncaught errors originating from your application it will automatically fail the current test.
+
+This behavior is configurable, and you can choose to turn this off by listening to the `uncaught:exception` event.
+
+https://on.cypress.io/uncaught-exception-from-application
+
+Because this error occurred during a `before each` hook we are skipping the remaining tests in the current suite: `Shift Management - Core Flows`
+      at <unknown> (http://localhost:3000/:43:5)
+
+
+
+
+  (Results)
+
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ Tests:        4                                                                                │
+  │ Passing:      0                                                                                │
+  │ Failing:      1                                                                                │
+  │ Pending:      0                                                                                │
+  │ Skipped:      3                                                                                │
+  │ Screenshots:  1                                                                                │
+  │ Video:        false                                                                            │
+  │ Duration:     0 seconds                                                                        │
+  │ Spec Ran:     shift-management.cy.ts                                                           │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+  (Screenshots)
+
+  -  /home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA/cypress/screenshots/shift-managem     (1280x720)
+     ent.cy.ts/Shift Management - Core Flows -- should create a new shift successfull               
+     y -- before each hook (failed).png                                                             
+
+
+================================================================================
+
+  (Run Finished)
+
+
+       Spec                                              Tests  Passing  Failing  Pending  Skipped  
+  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │ ✖  advanced-features.cy.ts                  877ms       14        -        1        -       13 │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✖  offline-functionality.cy.ts              369ms        6        -        1        -        5 │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✖  recurring-shifts.cy.ts                   534ms        4        -        1        -        3 │
+  ├────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ✖  shift-management.cy.ts                   514ms        4        -        1        -        3 │
+  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ✖  4 of 4 failed (100%)                     00:02       28        -        4        -       24  
+

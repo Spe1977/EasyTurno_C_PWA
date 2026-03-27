@@ -31,6 +31,12 @@
   "backupRestore": "Backup e Ripristino",
   "exportBackup": "Esporta Backup",
   "importBackup": "Importa Backup",
+  "backupPasswordPrompt": "Inserisci una password per cifrare il backup",
+  "backupPasswordConfirmPrompt": "Conferma la password del backup",
+  "backupPasswordMismatch": "Le password del backup non coincidono.",
+  "backupPasswordImportPrompt": "Inserisci la password del backup",
+  "backupPasswordInvalid": "Password backup non valida o file danneggiato.",
+  "backupFileTooLarge": "Il file di backup è troppo grande.",
   "importSuccess": "Backup importato con successo!",
   "importError": "File di backup non valido.",
   "resetAllData": "Resetta Tutti i Dati",
@@ -80,5 +86,21 @@
   "decryptionErrorTitle": "Impossibile leggere i dati",
   "decryptionErrorMessage": "I dati salvati non possono essere decifrati, probabilmente perché la chiave di cifratura è cambiata. Puoi azzerare l'app oppure chiudere questo avviso per mantenere i dati inaccessibili fino al ripristino di un backup.",
   "decryptionResetData": "Azzera tutti i dati",
-  "decryptionKeepData": "Mantieni i dati (chiudi)"
+  "decryptionKeepData": "Mantieni i dati (chiudi)",
+  "viewMode": {
+    "list": "Lista",
+    "calendar": "Calendario"
+  },
+  "calendar": {
+    "previousMonth": "Mese precedente",
+    "nextMonth": "Mese successivo",
+    "today": "Oggi",
+    "shift": "turno",
+    "shifts": "turni",
+    "clearSelection": "Deseleziona",
+    "noShifts": "Nessun turno"
+  },
+  "shifts": {
+    "overtime": "straordinario"
+  }
 }

@@ -15,6 +15,7 @@ describe('AppComponent - Integration Tests', () => {
   let translationService: TranslationService;
   let toastService: ToastService;
   let notificationService: NotificationService;
+  let cryptoService: CryptoService;
   let localStorageMock: { [key: string]: string };
 
   beforeEach(async () => {
@@ -50,6 +51,15 @@ describe('AppComponent - Integration Tests', () => {
       encrypt: jest.fn().mockImplementation(async (data: string) => data),
       decrypt: jest.fn().mockImplementation(async (data: string) => data),
       isEncrypted: jest.fn().mockReturnValue(false),
+      encryptBackupWithPassword: jest
+        .fn()
+        .mockImplementation(async (data: string) => JSON.stringify({ encrypted: data })),
+      decryptBackupWithPassword: jest
+        .fn()
+        .mockImplementation(async (data: string) => JSON.parse(data).encrypted),
+      isPasswordProtectedBackupPayload: jest
+        .fn()
+        .mockImplementation((data: string) => data.includes('"encrypted"')),
     };
 
     await TestBed.configureTestingModule({
@@ -70,6 +80,8 @@ describe('AppComponent - Integration Tests', () => {
     translationService = TestBed.inject(TranslationService);
     toastService = TestBed.inject(ToastService);
     notificationService = TestBed.inject(NotificationService);
+    cryptoService = TestBed.inject(CryptoService);
+    jest.spyOn(window, 'prompt').mockReturnValue('test-password');
   });
 
   afterEach(() => {
@@ -261,7 +273,7 @@ describe('AppComponent - Integration Tests', () => {
       component.shiftColor.set('green');
       component.shiftNotes.set('Important shift');
       component.shiftOvertimeHours.set(1.5);
-      component.shiftAllowances.set([{ name: 'Transport', amount: 10 }]);
+      component.shiftAllowances.set([{ name: 'Transport', amount: 10, _id: 'test-id-1' }]);
 
       component.handleFormSubmit();
 
@@ -394,9 +406,12 @@ describe('AppComponent - Integration Tests', () => {
       // Clear any existing shifts
       shiftService.deleteAllShifts();
 
-      // Add test shifts
+      // Add test shifts starting from tomorrow to ensure all are in the future
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(9, 0, 0, 0);
       for (let i = 0; i < 100; i++) {
-        const date = new Date('2025-10-15');
+        const date = new Date(tomorrow);
         date.setDate(date.getDate() + i);
         shiftService.addShift({
           title: `Shift ${i}`,
@@ -420,23 +435,26 @@ describe('AppComponent - Integration Tests', () => {
     });
 
     it('should filter shifts by search date', () => {
-      const searchDate = new Date('2025-10-20');
-      component.searchDate.set(searchDate);
+      // Search for a date 5 days from tomorrow (which should match one shift)
+      const searchTarget = new Date();
+      searchTarget.setDate(searchTarget.getDate() + 6);
+      searchTarget.setHours(0, 0, 0, 0);
+      component.searchDate.set(searchTarget);
 
       const filteredShifts = component.listShifts();
 
-      // Should only show shifts on 2025-10-20
+      // Should only show shifts on the target date
       expect(filteredShifts.length).toBeGreaterThan(0);
       filteredShifts.forEach(shift => {
         const shiftDate = new Date(shift.start);
-        expect(shiftDate.getDate()).toBe(20);
-        expect(shiftDate.getMonth()).toBe(9); // October (0-indexed)
-        expect(shiftDate.getFullYear()).toBe(2025);
+        expect(shiftDate.getDate()).toBe(searchTarget.getDate());
+        expect(shiftDate.getMonth()).toBe(searchTarget.getMonth());
+        expect(shiftDate.getFullYear()).toBe(searchTarget.getFullYear());
       });
     });
 
     it('should clear search and show all upcoming shifts', () => {
-      component.searchDate.set(new Date('2025-10-20'));
+      component.searchDate.set(new Date('2020-01-01'));
       expect(component.searchDate()).not.toBeNull();
 
       component.clearSearch();
@@ -712,7 +730,7 @@ describe('AppComponent - Integration Tests', () => {
   });
 
   describe('Settings Management', () => {
-    it('should export shifts as JSON', () => {
+    it('should export shifts as encrypted JSON', async () => {
       // Mock URL.createObjectURL and related APIs
       global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
       global.URL.revokeObjectURL = jest.fn();
@@ -728,14 +746,18 @@ describe('AppComponent - Integration Tests', () => {
         isRecurring: false,
       });
 
-      component.exportBackup();
+      await component.exportBackup();
 
       expect(global.URL.createObjectURL).toHaveBeenCalled();
       expect(clickMock).toHaveBeenCalled();
+      expect(cryptoService.encryptBackupWithPassword).toHaveBeenCalledWith(
+        expect.any(String),
+        'test-password'
+      );
       expect(shiftService.shifts()).toHaveLength(1);
     });
 
-    it('should handle import of valid shifts', () => {
+    it('should handle import of valid shifts', done => {
       const validData = [
         {
           id: 'import-1',
@@ -759,6 +781,37 @@ describe('AppComponent - Integration Tests', () => {
       setTimeout(() => {
         expect(shiftService.shifts()).toHaveLength(1);
         expect(shiftService.shifts()[0].title).toBe('Imported Shift');
+        done();
+      }, 100);
+    });
+
+    it('should decrypt password-protected backups before importing', done => {
+      const validData = [
+        {
+          id: 'import-1',
+          seriesId: 'import-1',
+          title: 'Imported Shift',
+          start: '2025-10-15T08:00:00',
+          end: '2025-10-15T16:00:00',
+          color: 'green',
+          isRecurring: false,
+        },
+      ];
+
+      const file = new File([JSON.stringify({ encrypted: JSON.stringify(validData) })], 'shifts.json', {
+        type: 'application/json',
+      });
+      const event = { target: { files: [file] } } as any;
+
+      component.importBackup(event);
+
+      setTimeout(() => {
+        expect(cryptoService.decryptBackupWithPassword).toHaveBeenCalledWith(
+          JSON.stringify({ encrypted: JSON.stringify(validData) }),
+          'test-password'
+        );
+        expect(shiftService.shifts()).toHaveLength(1);
+        done();
       }, 100);
     });
 
@@ -882,7 +935,7 @@ describe('AppComponent - Integration Tests', () => {
       expect(shifts.find(s => s.title === 'Shift 2')).toBeTruthy();
     });
 
-    it('should persist theme and shifts through component recreation', () => {
+    it('should persist theme and shifts through component recreation', async () => {
       // Set theme and create shift
       component.theme.set('dark');
       component.openNewShiftForm();
@@ -894,6 +947,8 @@ describe('AppComponent - Integration Tests', () => {
       component.handleFormSubmit();
 
       fixture.detectChanges();
+      // Wait for async encryption/storage to complete
+      await fixture.whenStable();
 
       // Verify persistence in localStorage
       expect(localStorageMock['easyturno_theme']).toBe('dark');

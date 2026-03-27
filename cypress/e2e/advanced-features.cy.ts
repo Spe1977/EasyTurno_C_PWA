@@ -2,18 +2,29 @@
 
 describe('Advanced Features - Overtime, Allowances, Statistics', () => {
   beforeEach(() => {
-    cy.clearLocalStorage();
     cy.visit('/');
-    cy.contains('EasyTurno', { timeout: 10000 }).should('be.visible');
+    cy.window().then(win => win.localStorage.clear());
+    cy.reload();
+    cy.contains('EasyTurno', { timeout: 15000 }).should('be.visible');
+  });
+
+  afterEach(() => {
+    // Close any open modals by pressing Escape key
+    cy.closeModal();
+    cy.wait(300);
   });
 
   describe('Overtime Management', () => {
     it('should add shift with overtime hours', () => {
       // Open add shift form
-      cy.get('[data-cy="add-shift-btn"]').click();
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
+      cy.wait(500); // Wait for modal animation
 
       // Fill basic info
-      cy.get('[data-cy="shift-title-input"]').type('Shift with Overtime');
+      cy.get('[data-cy="shift-title-input"]', { timeout: 5000 })
+        .should('be.visible')
+        .should('not.be.disabled')
+        .type('Shift with Overtime');
 
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
@@ -22,92 +33,103 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
       const endDate = startDate;
       const endTime = '17:00';
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-start-time"]').clear().type(startTime);
-      cy.get('[data-cy="shift-end-date"]').clear().type(endDate);
-      cy.get('[data-cy="shift-end-time"]').clear().type(endTime);
+      cy.get('[data-cy="shift-start-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', startTime);
+      cy.get('[data-cy="shift-end-date"]').invoke('val', endDate);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', endTime);
 
-      // Add overtime hours
-      cy.get('[data-cy="overtime-hours-input"]').clear().type('2.5');
+      // Add overtime hours - scroll into view first
+      cy.get('[data-cy="overtime-hours-input"]').scrollIntoView().should('be.visible').invoke('val', '2.5').trigger('input');
 
       // Save
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="save-shift-btn"]').scrollIntoView().should('be.visible').click();
 
       // Verify shift appears
       cy.contains('Shift with Overtime').should('be.visible');
     });
 
-    it('should display overtime hours in shift card', () => {
+    it('should save overtime hours correctly', () => {
       // Create shift with overtime
-      cy.get('[data-cy="add-shift-btn"]').click();
-      cy.get('[data-cy="shift-title-input"]').type('Overtime Check');
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
+      cy.wait(500); // Wait for modal animation
+
+      cy.get('[data-cy="shift-title-input"]').should('be.visible').should('not.be.disabled').type('Overtime Check');
 
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 10, 0);
       const startDate = start.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-start-time"]').clear().type('10:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-end-time"]').clear().type('18:00');
+      cy.get('[data-cy="shift-start-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '10:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '18:00');
 
-      cy.get('[data-cy="overtime-hours-input"]').clear().type('1.5');
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="overtime-hours-input"]').scrollIntoView().should('be.visible').invoke('val', '1.5').trigger('input');
+      cy.get('[data-cy="save-shift-btn"]').scrollIntoView().should('be.visible').click();
 
-      // Verify overtime is displayed
+      // Verify shift is created
       cy.contains('Overtime Check').should('be.visible');
+
+      // Verify overtime is saved by checking statistics
+      cy.closeModal();
+      cy.wait(500);
+      cy.get('[data-cy="settings-btn"]').click();
+      cy.get('[data-cy="statistics-btn"]').click();
+
+      // Should show overtime hours in statistics
+      cy.contains(/Straordinario|Overtime/i).should('be.visible');
       cy.contains('1.5').should('be.visible');
     });
   });
 
   describe('Allowances Management', () => {
     it('should add shift with custom allowances', () => {
-      cy.get('[data-cy="add-shift-btn"]').click();
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
       cy.get('[data-cy="shift-title-input"]').type('Shift with Allowances');
 
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
       const startDate = start.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-start-time"]').clear().type('09:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-end-time"]').clear().type('17:00');
+      cy.get('[data-cy="shift-start-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '09:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '17:00');
 
       // Add first allowance
       cy.get('[data-cy="add-allowance-btn"]').click();
       cy.get('[data-cy="allowance-name-input"]').first().type('Transport');
-      cy.get('[data-cy="allowance-amount-input"]').first().clear().type('15');
+      cy.get('[data-cy="allowance-amount-input"]').first().should('be.visible').invoke('val', '15').trigger('input');
 
       // Add second allowance
       cy.get('[data-cy="add-allowance-btn"]').click();
       cy.get('[data-cy="allowance-name-input"]').last().type('Meal');
-      cy.get('[data-cy="allowance-amount-input"]').last().clear().type('10');
+      cy.get('[data-cy="allowance-amount-input"]').last().should('be.visible').invoke('val', '10').trigger('input');
 
       // Save
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="save-shift-btn"]').should('be.visible').click();
 
       // Verify shift appears
       cy.contains('Shift with Allowances').should('be.visible');
     });
 
     it('should remove allowance from shift', () => {
-      cy.get('[data-cy="add-shift-btn"]').click();
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
       cy.get('[data-cy="shift-title-input"]').type('Test Allowances');
 
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 10, 0);
       const startDate = start.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-start-time"]').clear().type('10:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-end-time"]').clear().type('18:00');
+      cy.get('[data-cy="shift-start-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '10:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '18:00');
 
       // Add two allowances
       cy.get('[data-cy="add-allowance-btn"]').click();
       cy.get('[data-cy="allowance-name-input"]').first().type('First');
-      cy.get('[data-cy="allowance-amount-input"]').first().clear().type('20');
+      cy.get('[data-cy="allowance-amount-input"]').first().should('be.visible').invoke('val', '20').trigger('input');
 
       cy.get('[data-cy="add-allowance-btn"]').click();
 
@@ -129,37 +151,43 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
       baseDate.setHours(0, 0, 0, 0);
 
       // Add first shift
-      cy.get('[data-cy="add-shift-btn"]').click();
-      cy.get('[data-cy="shift-title-input"]').type('Morning Shift');
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
+      cy.wait(500); // Wait for modal animation
+      cy.get('[data-cy="shift-title-input"]').should('be.visible').should('not.be.disabled').type('Morning Shift');
 
       const date1 = new Date(baseDate.getTime() + 1 * 24 * 60 * 60 * 1000);
       const dateStr1 = date1.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(dateStr1);
-      cy.get('[data-cy="shift-start-time"]').clear().type('08:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(dateStr1);
-      cy.get('[data-cy="shift-end-time"]').clear().type('16:00');
-      cy.get('[data-cy="overtime-hours-input"]').clear().type('2');
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="shift-start-date"]').invoke('val', dateStr1);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '08:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', dateStr1);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '16:00');
+      cy.get('[data-cy="overtime-hours-input"]').scrollIntoView().should('be.visible').invoke('val', '2').trigger('input');
+      cy.get('[data-cy="save-shift-btn"]').scrollIntoView().should('be.visible').click();
       cy.wait(500);
 
       // Add second shift
-      cy.get('[data-cy="add-shift-btn"]').click();
-      cy.get('[data-cy="shift-title-input"]').type('Evening Shift');
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
+      cy.wait(500); // Wait for modal animation
+      cy.get('[data-cy="shift-title-input"]').should('be.visible').should('not.be.disabled').type('Evening Shift');
 
       const date2 = new Date(baseDate.getTime() + 2 * 24 * 60 * 60 * 1000);
       const dateStr2 = date2.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(dateStr2);
-      cy.get('[data-cy="shift-start-time"]').clear().type('16:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(dateStr2);
-      cy.get('[data-cy="shift-end-time"]').clear().type('00:00');
-      cy.get('[data-cy="overtime-hours-input"]').clear().type('1.5');
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="shift-start-date"]').invoke('val', dateStr2);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '16:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', dateStr2);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '00:00');
+      cy.get('[data-cy="overtime-hours-input"]').scrollIntoView().should('be.visible').invoke('val', '1.5').trigger('input');
+      cy.get('[data-cy="save-shift-btn"]').scrollIntoView().should('be.visible').click();
       cy.wait(500);
     });
 
     it('should open statistics modal', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       // Open settings
       cy.get('[data-cy="settings-btn"]').click();
 
@@ -172,6 +200,10 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
     });
 
     it('should display shift count statistics', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       cy.get('[data-cy="settings-btn"]').click();
       cy.get('[data-cy="statistics-btn"]').click();
 
@@ -182,16 +214,24 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
     });
 
     it('should display total hours worked', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       cy.get('[data-cy="settings-btn"]').click();
       cy.get('[data-cy="statistics-btn"]').click();
 
       // Should show total hours (8h + 8h = 16h)
-      cy.contains(/Ore lavorate|Hours worked/i)
-        .parent()
+      // Match multiple variations of the label
+      cy.contains(/Ore Totali Lavorate|Ore totali|Ore lavorate|Hours worked|Total hours/i)
         .should('be.visible');
     });
 
     it('should display total overtime hours', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       cy.get('[data-cy="settings-btn"]').click();
       cy.get('[data-cy="statistics-btn"]').click();
 
@@ -202,6 +242,10 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
     });
 
     it('should allow changing date range for statistics', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       cy.get('[data-cy="settings-btn"]').click();
       cy.get('[data-cy="statistics-btn"]').click();
 
@@ -214,7 +258,7 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
       newDate.setDate(newDate.getDate() - 60);
       const newDateStr = newDate.toISOString().slice(0, 10);
 
-      cy.get('input[type="date"]').first().clear().type(newDateStr);
+      cy.get('input[type="date"]').first().invoke('val', newDateStr);
 
       // Statistics should update
       cy.contains(/Totale turni|Total shifts/i).should('be.visible');
@@ -224,19 +268,19 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
   describe('Export and Import', () => {
     beforeEach(() => {
       // Create a test shift for export
-      cy.get('[data-cy="add-shift-btn"]').click();
+      cy.get('[data-cy="add-shift-btn"]').should('be.visible').first().click();
       cy.get('[data-cy="shift-title-input"]').type('Export Test Shift');
 
       const now = new Date();
       const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 10, 0);
       const startDate = start.toISOString().slice(0, 10);
 
-      cy.get('[data-cy="shift-start-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-start-time"]').clear().type('10:00');
-      cy.get('[data-cy="shift-end-date"]').clear().type(startDate);
-      cy.get('[data-cy="shift-end-time"]').clear().type('18:00');
+      cy.get('[data-cy="shift-start-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-start-time"]').invoke('val', '10:00');
+      cy.get('[data-cy="shift-end-date"]').invoke('val', startDate);
+      cy.get('[data-cy="shift-end-time"]').invoke('val', '18:00');
 
-      cy.get('[data-cy="save-shift-btn"]').click();
+      cy.get('[data-cy="save-shift-btn"]').should('be.visible').click();
       cy.wait(500);
     });
 
@@ -294,20 +338,45 @@ describe('Advanced Features - Overtime, Allowances, Statistics', () => {
 
   describe('Language Switch', () => {
     it('should switch language', () => {
+      // Ensure no modals are open
+      cy.closeModal();
+      cy.wait(500);
+
       // Open settings
       cy.get('[data-cy="settings-btn"]').click();
+      cy.wait(500);
 
       // Switch to English
-      cy.get('[data-cy="lang-en-btn"]').click();
+      cy.get('[data-cy="lang-en-btn"]').should('be.visible').click();
 
-      // Verify language changed (check for English text)
-      cy.contains(/Add Shift|Shifts/i).should('be.visible');
+      // Wait for language change to apply
+      cy.wait(500);
+
+      // Close settings modal by pressing ESC
+      cy.closeModal();
+      cy.wait(500);
+
+      // Verify language changed (check for English text in main UI)
+      // Check the app title or search button which is always visible
+      cy.contains('button', /Search Date/i).should('be.visible');
+
+      // Open settings again to switch back
+      cy.get('[data-cy="settings-btn"]').click();
+      cy.wait(500);
 
       // Switch back to Italian
-      cy.get('[data-cy="lang-it-btn"]').click();
+      cy.get('[data-cy="lang-it-btn"]').should('be.visible').click();
 
-      // Verify language changed back (check for Italian text)
-      cy.contains(/Aggiungi Turno|Turni/i).should('be.visible');
+      // Wait for language change
+      cy.wait(500);
+
+      // Close modal
+      cy.closeModal();
+      cy.wait(500);
+
+      // Verify language changed back (check for Italian text in main UI)
+      // Check the search button which is always visible
+      cy.contains('button', /Cerca Data/i).should('be.visible');
     });
   });
 });

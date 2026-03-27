@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Check if we switched branches (not just checked out a file)
+# $3 is 1 if checking out a branch, 0 if checking out paths
+if [ "$3" = "1" ]; then
+    # Check if package.json or package-lock.json changed
+    changed_files="$(git diff --name-only HEAD@{1} HEAD)"
+
+    if echo "$changed_files" | grep -q "package-lock.json\|package.json"; then
+        echo "📦 Dependencies may have changed, running npm install..."
+        npm install
+    fi
+fi

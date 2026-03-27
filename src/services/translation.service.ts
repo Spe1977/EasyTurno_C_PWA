@@ -4,13 +4,16 @@ import { Injectable, signal } from '@angular/core';
 import translationsIt from '../assets/i18n/it.json';
 import translationsEn from '../assets/i18n/en.json';
 
+type TranslationValue = string | Record<string, string | Record<string, string>>;
+type Translations = Record<string, TranslationValue>;
+
 @Injectable({ providedIn: 'root' })
 export class TranslationService {
   language = signal<'it' | 'en'>(this.getInitialLanguage());
 
-  private translations: Record<'it' | 'en', Record<string, string>> = {
-    it: translationsIt,
-    en: translationsEn,
+  private translations: Record<'it' | 'en', Translations> = {
+    it: translationsIt as Translations,
+    en: translationsEn as Translations,
   };
 
   private getInitialLanguage(): 'it' | 'en' {
@@ -28,6 +31,18 @@ export class TranslationService {
   }
 
   translate(key: string): string {
-    return this.translations[this.language()][key] || key;
+    const keys = key.split('.');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any = this.translations[this.language()];
+
+    for (const k of keys) {
+      if (typeof result === 'object' && result !== null && k in result) {
+        result = result[k];
+      } else {
+        return key; // Return original key if path not found
+      }
+    }
+
+    return typeof result === 'string' ? result : key;
   }
 }

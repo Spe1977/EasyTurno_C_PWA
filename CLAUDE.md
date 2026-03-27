@@ -8,42 +8,77 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 
 ## Development Commands
 
+### Core Development
 - `npm run dev` - Start development server on port 3000
 - `npm run build` - Build for production
-- `npm run preview` - Preview production build
+- `npm run preview` - Preview production build (serves production build)
 - `npm install` - Install dependencies
+
+### Code Quality
+- `npm run lint` - Run ESLint on TypeScript files
+- `npm run lint:fix` - Fix auto-fixable ESLint errors
+- `npm run format` - Format code with Prettier
+- `npm run format:check` - Check code formatting without modifying files
+
+### Testing
+- `npm test` - Run Jest unit tests (single run)
+- `npm run test:watch` - Run Jest in watch mode for development
+- `npm run test:coverage` - Generate test coverage report (output to `coverage/`)
+- `npm run cypress:open` - Open Cypress test runner (interactive)
+- `npm run cypress:run` - Run Cypress E2E tests headlessly
+- `npm run e2e` - Start dev server and run all E2E tests
+
+### Mobile Development (Capacitor)
+- `npm run build:mobile` - Build app and sync with Capacitor
+- `npm run android:dev` - Open Android Studio for development
+- `npm run android:build` - Build production APK (requires Android SDK)
+- `npm run cap:sync` - Sync web assets to native platforms
+- `npm run cap:update` - Build and sync to native platforms
 
 ## Architecture
 
 ### Core Technologies
 - **Angular 20+** with standalone components and signal-based state management
-- **TypeScript** (strict mode planned - see CODE_ANALYSIS_ROADMAP.md)
-- **Tailwind CSS** for styling with dark mode support
+- **TypeScript 5.9+** with strict mode enabled for maximum type safety
+- **Tailwind CSS 3** for styling with dark mode support
 - **PWA** features with service worker and manifest
+- **Capacitor 7** for native mobile deployments (Android support included)
 
 ### Application Structure
 
-The app follows a simple, flat structure optimized for a single-page application:
+The app follows a component-based architecture optimized for a single-page PWA:
 
-- `src/app.component.ts` - Main component containing all application logic and state
-- `src/services/` - Core services for business logic
-- `src/models/` - TypeScript interfaces and types
+- `src/app.component.ts` - Main container component with application state and modal management
+- `src/components/` - Reusable standalone components
+  - `shift-list-item.component.ts` - Individual shift card display
+  - `toast-container.component.ts` - Toast notification UI
+  - `calendar.component.ts` - Mobile-optimized calendar view with touch gestures
+- `src/services/` - Core business logic services
+- `src/directives/` - Reusable directives
+  - `modal-focus.directive.ts` - Focus management and keyboard trap for modals
 - `src/pipes/` - Custom Angular pipes for data transformation
+  - `translate.pipe.ts` - Internationalization pipe
+  - `date-format.pipe.ts` - Locale-aware date formatting
+- `src/shift.model.ts` - TypeScript interfaces and type definitions
+- `src/assets/i18n/` - Translation JSON files (it.json, en.json)
 
 ### State Management
 
 The application uses Angular's signal-based reactive state management:
 - All state is managed in the main `AppComponent` using Angular signals
 - `ShiftService` handles data persistence to localStorage with automatic sync
-- UI state includes modal management, form state, and list pagination
+- UI state includes modal management, form state, view mode toggle (list/calendar), and list pagination
+- Calendar state managed by `CalendarService` with signal-based month/year navigation
 
 ### Key Services
 
 - **ShiftService** (`src/services/shift.service.ts`) - Manages shift CRUD operations, recurring shift generation, and encrypted localStorage persistence
 - **CryptoService** (`src/services/crypto.service.ts`) - Handles AES-GCM 256-bit encryption/decryption for secure data storage
-- **TranslationService** (`src/services/translation.service.ts`) - Handles internationalization
-- **NotificationService** (`src/services/notification.service.ts`) - Manages local notifications for shift reminders (Capacitor native platforms)
+- **CalendarService** (`src/services/calendar.service.ts`) - Manages calendar state, month/year navigation, and day grid generation (42-day grid for consistent 6-week display)
+- **TranslationService** (`src/services/translation.service.ts`) - Handles internationalization with JSON-based translations
+- **NotificationService** (`src/services/notification.service.ts`) - Manages local notifications for shift reminders (Capacitor native platforms only)
 - **ToastService** (`src/services/toast.service.ts`) - Displays temporary toast notifications to users
+- **SwUpdateService** (`src/services/sw-update.service.ts`) - Detects and notifies users of available PWA updates automatically
 
 ### Data Models
 
@@ -56,15 +91,27 @@ The application uses Angular's signal-based reactive state management:
 - **Allowance** interface defines custom allowances with name and amount
 - Shifts are generated up to 2 years in advance for recurring patterns
 
-### PWA Features
+### PWA & Mobile Features
 
+#### Progressive Web App (PWA)
 - Offline-first design with encrypted localStorage persistence
 - Web app manifest with shortcuts for quick shift creation
 - Service worker for caching (sw.js)
+- Automatic update detection with user notification (SwUpdateService)
 - Responsive design supporting mobile and desktop
 - Content Security Policy (CSP) for XSS protection
 - Subresource Integrity (SRI) for CDN scripts
 - AES-GCM 256-bit encryption for sensitive data at rest
+
+#### Native Mobile (Capacitor)
+- **Platform Detection**: `Capacitor.isNativePlatform()` used to conditionally enable native features
+- **Local Notifications**: Shift reminders via @capacitor/local-notifications (native platforms only)
+- **Haptics**: Tactile feedback for user interactions
+- **Share API**: Native share sheet integration
+- **Splash Screen**: Branded loading screen with configurable duration
+- **Status Bar**: Theme-aware status bar styling
+- **Android Build**: Gradle-based APK generation with release signing support
+- **Configuration**: `capacitor.config.ts` defines app ID, name, and plugin settings
 
 ### Recurring Shifts Logic
 
@@ -98,6 +145,16 @@ The app generates individual shift instances for recurring patterns rather than 
 - Responsive design with color-coded summary cards
 - Empty state handling with appropriate messaging
 
+#### Calendar View
+- Toggle between list view and calendar view with signal-based `viewMode` state
+- Mobile-optimized monthly calendar grid (6-week layout for consistency)
+- Touch gesture support: swipe left/right to navigate months
+- Visual shift indicators on calendar days (colored dots)
+- Click day to filter shifts, click again to clear selection
+- Selected day shows shift count and formatted date
+- Shift count badge for days with more than 5 shifts
+- Signal-based reactivity for month/year navigation via CalendarService
+
 ### Security Features
 
 - **Content Security Policy (CSP)**: Restricts resource origins to prevent XSS attacks
@@ -107,23 +164,85 @@ The app generates individual shift instances for recurring patterns rather than 
 - **Backward Compatibility**: Automatic detection and migration of legacy unencrypted data
 - **Secure Error Handling**: Graceful degradation when encryption fails
 
+### Testing Infrastructure
+
+- **Unit Tests**: Jest with jest-preset-angular
+  - Test files use `.spec.ts` extension
+  - Mock setup in `setup-jest.js` includes Web Crypto API polyfill
+  - Coverage reports generated in `coverage/` directory
+  - Services have comprehensive test coverage
+- **E2E Tests**: Cypress 15+
+  - Test specs in `cypress/e2e/` directory
+  - Custom commands defined in `cypress/support/commands.ts`
+  - Tests cover: shift management, recurring shifts, offline functionality, advanced features, calendar view
+  - Configured for 1280x720 viewport, baseUrl http://localhost:3000
+
 ### Development Notes
 
 - Uses Angular's OnPush change detection strategy for performance
-- All dates stored as ISO strings for consistency
+- All dates stored as ISO strings for consistency with optional timezone field
 - Theme persistence with automatic system preference detection
-- ESLint configured for TypeScript with recommended rules
-- Computed signals for reactive statistics calculations
-- Object.keys() made available in templates for iterating over statistical data
+- TypeScript strict mode enabled for type safety
+- Pure pipes for optimal performance (only re-execute when inputs change)
+- Computed signals for reactive statistics calculations with memoization
+- Single-pass algorithm for statistics (O(n) complexity)
 - Automatic date/time synchronization: when start date/time is changed, end date/time automatically aligns
 - Color-coded shift cards with customizable left border (3px width)
+- Tailwind safelist configuration for dynamic color classes
 - CryptoService uses Web Crypto API (mocked in Jest tests for compatibility)
+- Focus trap in modals with automatic restoration on close (ModalFocusDirective)
+- WCAG 2.1 AA compliant for keyboard navigation and screen readers
+
+### Important Patterns & Conventions
+
+#### Signal-Based State Management
+- All component state managed via Angular signals (`signal`, `computed`, `effect`)
+- State updates use `.set()` for replacement or `.update()` for transformations
+- Computed signals automatically memoize and only recalculate when dependencies change
+- Effects handle side effects (theme persistence, keyboard shortcuts, etc.)
+
+#### Modal Management
+- Single `activeModal` signal tracks which modal is open (`'none' | 'form' | 'settings' | 'deleteConfirm' | 'statistics' | ...`)
+- ModalFocusDirective automatically handles focus management and keyboard traps
+- All modals use `role="dialog"` and `aria-modal="true"` for accessibility
+- Confirmation modals use `role="alertdialog"` semantic role
+
+#### View Mode Management
+- Single `viewMode` signal toggles between 'list' and 'calendar' views
+- Calendar view integrates CalendarComponent with touch gesture navigation
+- Calendar day selection emits events to filter shifts in list view
+- View mode persists across sessions via localStorage (planned)
+
+#### Form Handling
+- Form state managed through individual signals (e.g., `shiftTitle`, `shiftStartDate`)
+- Edit vs. Create determined by `editingShift` signal (null = create, Shift = edit)
+- Recurring shift edits show confirmation modal for "edit series" vs. "edit single"
+- Form validation occurs in `handleFormSubmit()` with toast error notifications
+
+#### Data Persistence Flow
+1. User action triggers component method
+2. Component calls ShiftService method
+3. ShiftService updates signal state
+4. ShiftService encrypts data via CryptoService
+5. Encrypted data saved to localStorage
+6. Component signals react automatically via computed dependencies
+
+#### Type Guards & Validation
+- Type guard functions in `shift.model.ts` validate runtime data
+- Used during import/export operations to ensure data integrity
+- Pattern: `isValidX(value: unknown): value is X` for TypeScript narrowing
+
+#### Performance Optimizations
+- Sorted shifts cached in `sortedShifts` computed signal
+- Statistics use single-pass algorithm instead of multiple reduce operations
+- Pure pipes prevent unnecessary re-execution
+- List pagination with configurable load increment (50 items)
 
 ### Code Quality & Roadmap
 
 See `ROADMAP.md` for:
-- Comprehensive code quality analysis
-- Performance optimization opportunities
-- Type safety improvements
-- Planned enhancements and technical debt
-- Implementation roadmap with priorities
+- Comprehensive code quality analysis (all phases completed)
+- Performance optimization history
+- Type safety improvements implemented
+- Security enhancements (encryption, CSP, SRI)
+- Accessibility compliance (WCAG 2.1 AA)

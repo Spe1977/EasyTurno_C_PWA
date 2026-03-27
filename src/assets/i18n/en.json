@@ -31,6 +31,12 @@
   "backupRestore": "Backup & Restore",
   "exportBackup": "Export Backup",
   "importBackup": "Import Backup",
+  "backupPasswordPrompt": "Enter a password to encrypt the backup",
+  "backupPasswordConfirmPrompt": "Confirm the backup password",
+  "backupPasswordMismatch": "Backup passwords do not match.",
+  "backupPasswordImportPrompt": "Enter the backup password",
+  "backupPasswordInvalid": "Invalid backup password or corrupted file.",
+  "backupFileTooLarge": "The backup file is too large.",
   "importSuccess": "Backup imported successfully!",
   "importError": "Invalid backup file.",
   "resetAllData": "Reset All Data",
@@ -80,5 +86,21 @@
   "decryptionErrorTitle": "Unable to read data",
   "decryptionErrorMessage": "The saved data cannot be decrypted, likely because the encryption key has changed. You can reset the app or close this dialog to keep the unreadable data until you restore a backup.",
   "decryptionResetData": "Reset all data",
-  "decryptionKeepData": "Keep data (close)"
+  "decryptionKeepData": "Keep data (close)",
+  "viewMode": {
+    "list": "List",
+    "calendar": "Calendar"
+  },
+  "calendar": {
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "shift": "shift",
+    "shifts": "shifts",
+    "clearSelection": "Clear selection",
+    "noShifts": "No shifts"
+  },
+  "shifts": {
+    "overtime": "overtime"
+  }
 }

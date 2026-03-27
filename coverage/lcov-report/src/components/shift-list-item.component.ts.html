@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">55.55% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>8/8</span>
+                <span class='fraction'>5/9</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/1</span>
+                <span class='fraction'>0/1</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">100% </span>
+                <span class="strong">50% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>7/7</span>
+                <span class='fraction'>4/8</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line high'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -159,8 +159,14 @@
 <a name='L94'></a><a href='#L94'>94</a>
 <a name='L95'></a><a href='#L95'>95</a>
 <a name='L96'></a><a href='#L96'>96</a>
-<a name='L97'></a><a href='#L97'>97</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -250,13 +256,20 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
-<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { Shift } from '../shift.model';
 import { TranslatePipe } from '../pipes/translate.pipe';
 import { LangDatePipe } from '../pipes/date-format.pipe';
@@ -264,44 +277,54 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
 @Component({
   selector: 'app-shift-list-item',
   standalone: true,
-  imports: [CommonModule, TranslatePipe, LangDatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe, LangDatePipe],
   template: `
     &lt;div
-      class="relative flex items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
+      (click)="view.emit(shift())"
+      class="relative flex cursor-pointer items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
     &gt;
-      &lt;div class="absolute bottom-0 left-0 top-0 w-3" [class]="'bg-' + shift.color + '-500'"&gt;&lt;/div&gt;
+      &lt;div
+        class="absolute bottom-0 left-0 top-0 w-1.5"
+        [class.bg-sky-500]="shift().color === 'sky'"
+        [class.bg-green-500]="shift().color === 'green'"
+        [class.bg-amber-500]="shift().color === 'amber'"
+        [class.bg-rose-500]="shift().color === 'rose'"
+        [class.bg-indigo-500]="shift().color === 'indigo'"
+        [class.bg-teal-500]="shift().color === 'teal'"
+        [class.bg-fuchsia-500]="shift().color === 'fuchsia'"
+        [class.bg-slate-500]="shift().color === 'slate'"
+      &gt;&lt;/div&gt;
       &lt;div class="flex w-16 shrink-0 flex-col items-center justify-center"&gt;
         &lt;p
           class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400"
         &gt;
-          {{ shift.start | langDate: 'shortDayName' }}
+          {{ shift().start | langDate: 'shortDayName' }}
         &lt;/p&gt;
         &lt;p class="-my-0.5 text-2xl font-bold text-slate-800 dark:text-slate-100"&gt;
-          {{ shift.start | langDate: 'dayNumber' }}
+          {{ shift().start | langDate: 'dayNumber' }}
         &lt;/p&gt;
         &lt;p class="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400"&gt;
-          {{ shift.start | langDate: 'shortMonthAndYear' }}
+          {{ shift().start | langDate: 'shortMonthAndYear' }}
         &lt;/p&gt;
       &lt;/div&gt;
       &lt;div class="min-w-0 flex-grow border-l border-slate-200 pl-4 dark:border-slate-700"&gt;
-        &lt;p class="truncate text-lg font-bold"&gt;{{ shift.title }}&lt;/p&gt;
+        &lt;p class="truncate text-lg font-bold"&gt;{{ shift().title }}&lt;/p&gt;
         &lt;p class="truncate text-slate-500 dark:text-slate-400"&gt;
-          {{ shift.start | langDate: 'time' }} - {{ shift.end | langDate: 'time' }}
+          {{ shift().start | langDate: 'time' }} - {{ shift().end | langDate: 'time' }}
         &lt;/p&gt;
-        @if (shift.notes) {
+        @if (shift().notes) {
           &lt;p class="mt-1 truncate text-sm italic text-slate-400 dark:text-slate-500"&gt;
-            {{ shift.notes }}
+            {{ shift().notes }}
           &lt;/p&gt;
         }
       &lt;/div&gt;
       &lt;div class="flex shrink-0 items-center space-x-1"&gt;
         &lt;button
           data-cy="edit-shift-btn"
-          (click)="edit.emit(shift)"
+          (click)="edit.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
-          [attr.aria-label]="'editShift' | translate"
-          type="button"
+          [title]="'editShift' | translate"
         &gt;
           &lt;svg
             xmlns="http://www.w3.org/2000/svg"
@@ -310,7 +333,6 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
-            aria-hidden="true"
           &gt;
             &lt;path
               stroke-linecap="round"
@@ -321,10 +343,9 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
         &lt;/button&gt;
         &lt;button
           data-cy="delete-shift-btn"
-          (click)="delete.emit(shift)"
+          (click)="deleteShift.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-rose-100 dark:hover:bg-rose-800/50"
-          [attr.aria-label]="'delete' | translate"
-          type="button"
+          [title]="'delete' | translate"
         &gt;
           &lt;svg
             xmlns="http://www.w3.org/2000/svg"
@@ -333,7 +354,6 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
-            aria-hidden="true"
           &gt;
             &lt;path
               stroke-linecap="round"
@@ -346,10 +366,11 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
     &lt;/div&gt;
   `,
 })
-export class ShiftListItemComponent {
-  @Input({ required: true }) shift!: Shift;
-  @Output() edit = new EventEmitter&lt;Shift&gt;();
-  @Output() delete = new EventEmitter&lt;Shift&gt;();
+export <span class="fstat-no" title="function not covered" >class S</span>hiftListItemComponent {
+  shift = <span class="cstat-no" title="statement not covered" >input.required&lt;Shift&gt;();</span>
+<span class="cstat-no" title="statement not covered" >  view = output&lt;Shift&gt;();</span>
+<span class="cstat-no" title="statement not covered" >  edit = output&lt;Shift&gt;();</span>
+<span class="cstat-no" title="statement not covered" >  deleteShift = output&lt;Shift&gt;();</span>
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -358,7 +379,7 @@ export class ShiftListItemComponent {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2025-10-03T06:38:22.828Z
+                at 2025-10-18T11:27:28.535Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

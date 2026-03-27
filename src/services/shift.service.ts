@@ -10,7 +10,10 @@ export class ShiftService {
   private readonly MAX_RECURRING_INSTANCES = 200;
   private readonly MAX_YEARS_AHEAD = 2;
   private readonly MAX_NOTIFICATION_PREVIEW = 10;
+  private readonly MAX_IMPORT_SIZE_BYTES = 5 * 1024 * 1024;
   private readonly DAYS_PER_WEEK = 7;
+  private readonly storageReady = signal(false);
+  private latestSaveRequestId = 0;
 
   private toastService = inject(ToastService);
   private notificationService = inject(NotificationService);
@@ -34,6 +37,10 @@ export class ShiftService {
   constructor() {
     this.loadShiftsFromStorage();
     effect(() => {
+      if (!this.storageReady()) {
+        return;
+      }
+
       this.saveShiftsToStorage(this.shifts());
     });
   }
@@ -44,6 +51,7 @@ export class ShiftService {
       // Nothing stored yet — allow saves immediately
       this.isLoaded = true;
       this.shifts.set([]);
+      this.storageReady.set(true);
       return;
     }
 
@@ -57,6 +65,7 @@ export class ShiftService {
           // immediately after the signal change is not blocked.
           this.isLoaded = true;
           this.shifts.set(JSON.parse(decrypted));
+          this.storageReady.set(true);
         })
         .catch(error => {
           console.error('Failed to decrypt shifts:', error);
@@ -77,6 +86,7 @@ export class ShiftService {
         this.isLoaded = true;
         this.shifts.set([]);
       }
+      this.storageReady.set(true);
     }
   }
 
@@ -97,11 +107,16 @@ export class ShiftService {
 
     try {
       const data = JSON.stringify(shifts);
+      const saveRequestId = ++this.latestSaveRequestId;
 
       // Encrypt data before storing
       this.cryptoService
         .encrypt(data)
         .then(encrypted => {
+          if (saveRequestId !== this.latestSaveRequestId) {
+            return;
+          }
+
           try {
             localStorage.setItem(this.STORAGE_KEY, encrypted);
           } catch (error) {
@@ -160,13 +175,12 @@ export class ShiftService {
       let currentStartDate = new Date(shiftData.start);
       const shiftDuration = new Date(shiftData.end).getTime() - currentStartDate.getTime();
 
-      // Generate for configurable years ahead
-      const maxDateAhead = this.addYears(new Date(), this.MAX_YEARS_AHEAD);
+      // Generate for configurable years ahead from the shift start date
+      const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
 
       const generatedShifts: Shift[] = [];
       let count = 0;
       while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
-        // Safety break
         const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
         const newShift: Shift = {
           ...shiftData,
@@ -214,8 +228,106 @@ export class ShiftService {
 
   updateShiftSeries(updatedShift: Shift) {
     const seriesId = updatedShift.seriesId;
-    this.deleteShiftSeries(seriesId);
-    this.addShift({ ...updatedShift });
+
+    // Find the original shift being edited to get its start date
+    const originalShift = this.shifts().find(s => s.id === updatedShift.id);
+    if (!originalShift) {
+      // If we can't find the original shift, fallback to deleting entire series
+      this.deleteShiftSeries(seriesId);
+      this.addShift({ ...updatedShift });
+      return;
+    }
+
+    const originalStartTime = new Date(originalShift.start).getTime();
+
+    // Split the series into three parts:
+    // 1. Keep: shifts BEFORE the edited shift (start < originalStartTime)
+    // 2. Delete: the edited shift and all AFTER (start >= originalStartTime)
+    // 3. Generate new: from updatedShift onwards
+
+    const allShifts = this.shifts();
+    const seriesShifts = allShifts.filter(s => s.seriesId === seriesId);
+
+    // Keep shifts that occur before the edited shift
+    const shiftsToKeep = seriesShifts.filter(s => new Date(s.start).getTime() < originalStartTime);
+
+    // Shifts to delete (edited shift and all after it)
+    const shiftsToDelete = seriesShifts.filter(
+      s => new Date(s.start).getTime() >= originalStartTime
+    );
+
+    // Cancel notifications for deleted shifts
+    shiftsToDelete.forEach(
+      shift => void this.notificationService.cancelShiftNotifications(shift.id)
+    );
+
+    // Update shifts: remove the series and add back the kept shifts
+    this.shifts.update(shifts => {
+      // Remove all shifts from this series
+      const withoutSeries = shifts.filter(s => s.seriesId !== seriesId);
+      // Add back the shifts we want to keep (before the edited shift)
+      return [...withoutSeries, ...shiftsToKeep];
+    });
+
+    // Generate new series from the updated shift onwards
+    // We need to manually generate shifts to preserve the seriesId
+    if (!updatedShift.isRecurring || !updatedShift.repetition) {
+      const newShift: Shift = { ...updatedShift, id: crypto.randomUUID(), seriesId };
+      this.shifts.update(s => [...s, newShift]);
+
+      const settings = this.notificationService.getSettings();
+      void this.notificationService.scheduleShiftNotification(newShift, settings);
+    } else {
+      const repetition = updatedShift.repetition;
+      let currentStartDate = new Date(updatedShift.start);
+      const shiftDuration = new Date(updatedShift.end).getTime() - currentStartDate.getTime();
+
+      // Generate for configurable years ahead from the shift start date
+      const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
+
+      const generatedShifts: Shift[] = [];
+      let count = 0;
+      while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
+        const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
+        const newShift: Shift = {
+          ...updatedShift,
+          id: crypto.randomUUID(),
+          seriesId: seriesId, // Preserve original seriesId
+          start: currentStartDate.toISOString(),
+          end: currentEndDate.toISOString(),
+        };
+        generatedShifts.push(newShift);
+
+        switch (repetition.frequency) {
+          case 'days':
+            currentStartDate = this.addDays(currentStartDate, repetition.interval);
+            break;
+          case 'weeks':
+            currentStartDate = this.addDays(
+              currentStartDate,
+              repetition.interval * this.DAYS_PER_WEEK
+            );
+            break;
+          case 'months':
+            currentStartDate = this.addMonths(currentStartDate, repetition.interval);
+            break;
+          case 'year':
+            currentStartDate = this.addYears(currentStartDate, repetition.interval);
+            break;
+        }
+        count++;
+      }
+
+      // Single signal update for all generated shifts
+      this.shifts.update(s => [...s, ...generatedShifts]);
+
+      // Schedule notifications for upcoming shifts
+      const settings = this.notificationService.getSettings();
+      const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
+      upcomingShifts.forEach(
+        shift => void this.notificationService.scheduleShiftNotification(shift, settings)
+      );
+    }
   }
 
   deleteShift(id: string) {
@@ -232,6 +344,10 @@ export class ShiftService {
 
   importShifts(json: string): { success: boolean; error?: string; imported?: number } {
     try {
+      if (new Blob([json]).size > this.MAX_IMPORT_SIZE_BYTES) {
+        return { success: false, error: 'Backup file too large' };
+      }
+
       const data = JSON.parse(json);
 
       if (!Array.isArray(data)) {

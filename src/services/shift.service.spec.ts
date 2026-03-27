@@ -2,13 +2,31 @@ import { TestBed } from '@angular/core/testing';
 import { ShiftService } from './shift.service';
 import { ToastService } from './toast.service';
 import { CryptoService } from './crypto.service';
-import { Shift, Repetition } from '../shift.model';
+import { NotificationService } from './notification.service';
 
 describe('ShiftService', () => {
   let service: ShiftService;
   let toastService: ToastService;
   let cryptoService: CryptoService;
   let localStorageMock: { [key: string]: string };
+  let notificationService: NotificationService;
+
+  const createDeferred = <T>() => {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+
+    return { promise, resolve, reject };
+  };
+
+  const flushAsyncWork = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
 
   beforeEach(() => {
     // Mock localStorage
@@ -41,6 +59,7 @@ describe('ShiftService', () => {
     service = TestBed.inject(ShiftService);
     toastService = TestBed.inject(ToastService);
     cryptoService = TestBed.inject(CryptoService);
+    notificationService = TestBed.inject(NotificationService);
   });
 
   afterEach(() => {
@@ -49,6 +68,9 @@ describe('ShiftService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+    expect(toastService).toBeTruthy();
+    expect(cryptoService).toBeTruthy();
+    expect(notificationService).toBeTruthy();
   });
 
   describe('addShift', () => {
@@ -57,7 +79,7 @@ describe('ShiftService', () => {
         title: 'Test Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -75,7 +97,7 @@ describe('ShiftService', () => {
         title: 'Daily Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'green',
+        color: 'green' as const,
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
@@ -99,7 +121,7 @@ describe('ShiftService', () => {
         title: 'Weekly Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'amber',
+        color: 'amber' as const,
         isRecurring: true,
         repetition: {
           frequency: 'weeks' as const,
@@ -119,7 +141,7 @@ describe('ShiftService', () => {
         title: 'Shift with Overtime',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'rose',
+        color: 'rose' as const,
         isRecurring: true,
         overtimeHours: 2,
         allowances: [{ name: 'Transport', amount: 10 }],
@@ -136,6 +158,103 @@ describe('ShiftService', () => {
       expect(shifts[0].overtimeHours).toBe(2);
       expect(shifts[0].allowances).toEqual([{ name: 'Transport', amount: 10 }]);
     });
+
+    it('should persist only the latest state when encrypt operations resolve out of order', async () => {
+      const firstSave = createDeferred<string>();
+      const secondSave = createDeferred<string>();
+      let encryptCallCount = 0;
+
+      jest.spyOn(cryptoService, 'encrypt').mockImplementation(async (data: string) => {
+        encryptCallCount++;
+
+        if (encryptCallCount === 1) {
+          return firstSave.promise;
+        }
+
+        return secondSave.promise;
+      });
+
+      (service as any).saveShiftsToStorage([
+        {
+          id: 'shift-1',
+          seriesId: 'shift-1',
+          title: 'First Shift',
+          start: '2025-09-30T09:00:00',
+          end: '2025-09-30T17:00:00',
+          color: 'sky',
+          isRecurring: false,
+        },
+      ]);
+
+      (service as any).saveShiftsToStorage([
+        {
+          id: 'shift-1',
+          seriesId: 'shift-1',
+          title: 'First Shift',
+          start: '2025-09-30T09:00:00',
+          end: '2025-09-30T17:00:00',
+          color: 'sky',
+          isRecurring: false,
+        },
+        {
+          id: 'shift-2',
+          seriesId: 'shift-2',
+          title: 'Second Shift',
+          start: '2025-10-01T09:00:00',
+          end: '2025-10-01T17:00:00',
+          color: 'green',
+          isRecurring: false,
+        },
+      ]);
+
+      expect(encryptCallCount).toBe(2);
+
+      firstSave.resolve('encrypted-first');
+      await flushAsyncWork();
+      expect(localStorageMock['easyturno_shifts']).toBeUndefined();
+
+      secondSave.resolve('encrypted-second');
+      await flushAsyncWork();
+
+      expect(localStorageMock['easyturno_shifts']).toBe('encrypted-second');
+    });
+  });
+
+  describe('initialization', () => {
+    it('should not overwrite encrypted storage before decrypt completes', async () => {
+      localStorageMock['easyturno_shifts'] = 'encrypted-payload';
+
+      const decryptReady = createDeferred<string>();
+      const encryptSpy = jest.fn().mockResolvedValue('encrypted-after-load');
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          {
+            provide: CryptoService,
+            useValue: {
+              encrypt: encryptSpy,
+              decrypt: jest.fn().mockReturnValue(decryptReady.promise),
+              isEncrypted: jest.fn().mockReturnValue(true),
+            },
+          },
+        ],
+      });
+
+      const delayedService = TestBed.inject(ShiftService);
+
+      expect(delayedService.shifts()).toEqual([]);
+      expect(encryptSpy).not.toHaveBeenCalled();
+      expect(localStorageMock['easyturno_shifts']).toBe('encrypted-payload');
+
+      decryptReady.resolve('[]');
+      await flushAsyncWork();
+
+      expect(encryptSpy).toHaveBeenCalledWith('[]');
+      expect(localStorageMock['easyturno_shifts']).toBe('encrypted-after-load');
+    });
   });
 
   describe('updateShift', () => {
@@ -144,7 +263,7 @@ describe('ShiftService', () => {
         title: 'Original Title',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -165,7 +284,7 @@ describe('ShiftService', () => {
         title: 'Original Series',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'weeks' as const,
@@ -179,7 +298,7 @@ describe('ShiftService', () => {
       const seriesId = shifts[0].seriesId;
 
       // Update the series with new title and color
-      const updatedShift = { ...shifts[0], title: 'Updated Series', color: 'green' };
+      const updatedShift = { ...shifts[0], title: 'Updated Series', color: 'green' as const };
       service.updateShiftSeries(updatedShift);
 
       const updatedShifts = service.shifts();
@@ -190,6 +309,68 @@ describe('ShiftService', () => {
       expect(newSeriesShifts.every(s => s.title === 'Updated Series')).toBe(true);
       expect(newSeriesShifts.every(s => s.color === 'green')).toBe(true);
     });
+
+    it('should preserve shifts before the edited shift when updating a middle shift in series', () => {
+      // Create a daily recurring series
+      const shiftData = {
+        title: 'Daily Shift',
+        start: '2025-01-01T09:00:00',
+        end: '2025-01-01T17:00:00',
+        color: 'sky' as const,
+        isRecurring: true,
+        repetition: {
+          frequency: 'days' as const,
+          interval: 1,
+        },
+      };
+
+      service.addShift(shiftData);
+      const shifts = service
+        .shifts()
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+      const seriesId = shifts[0].seriesId;
+      const totalShifts = shifts.length;
+
+      // Edit the 4th shift in the series (index 3)
+      const fourthShift = shifts[3];
+      const fourthShiftOriginalStart = fourthShift.start;
+
+      // Count shifts before, at, and after the 4th shift
+      const shiftsBeforeFourth = shifts.filter(
+        s => new Date(s.start).getTime() < new Date(fourthShiftOriginalStart).getTime()
+      );
+      const shiftsAtOrAfterFourth = shifts.filter(
+        s => new Date(s.start).getTime() >= new Date(fourthShiftOriginalStart).getTime()
+      );
+
+      expect(shiftsBeforeFourth.length).toBe(3); // First 3 shifts
+      expect(shiftsAtOrAfterFourth.length).toBe(totalShifts - 3); // 4th shift and all after
+
+      // Update the 4th shift with new title
+      const updatedFourthShift = { ...fourthShift, title: 'Updated from 4th onwards' };
+      service.updateShiftSeries(updatedFourthShift);
+
+      const allShiftsAfterUpdate = service.shifts();
+      const seriesShiftsAfterUpdate = allShiftsAfterUpdate
+        .filter(s => s.seriesId === seriesId)
+        .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+      // The first 3 shifts should still exist with original title
+      const firstThreeAfterUpdate = seriesShiftsAfterUpdate.filter(
+        s => new Date(s.start).getTime() < new Date(fourthShiftOriginalStart).getTime()
+      );
+      expect(firstThreeAfterUpdate.length).toBe(3);
+      expect(firstThreeAfterUpdate.every(s => s.title === 'Daily Shift')).toBe(true);
+
+      // Shifts from the 4th onwards should have the new title
+      const fourthOnwardsAfterUpdate = seriesShiftsAfterUpdate.filter(
+        s => new Date(s.start).getTime() >= new Date(fourthShiftOriginalStart).getTime()
+      );
+      expect(fourthOnwardsAfterUpdate.length).toBeGreaterThan(0);
+      expect(fourthOnwardsAfterUpdate.every(s => s.title === 'Updated from 4th onwards')).toBe(
+        true
+      );
+    });
   });
 
   describe('deleteShift', () => {
@@ -198,7 +379,7 @@ describe('ShiftService', () => {
         title: 'Shift to Delete',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -218,7 +399,7 @@ describe('ShiftService', () => {
         title: 'Series to Delete',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'green',
+        color: 'green' as const,
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
@@ -247,7 +428,7 @@ describe('ShiftService', () => {
         title: 'Imported Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -288,7 +469,7 @@ describe('ShiftService', () => {
         title: 'Valid Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -299,6 +480,15 @@ describe('ShiftService', () => {
       expect(result.imported).toBe(1);
       expect(service.shifts()).toHaveLength(1);
     });
+
+    it('should reject oversized backup payloads', () => {
+      const oversizedPayload = 'x'.repeat(5 * 1024 * 1024 + 1);
+
+      const result = service.importShifts(oversizedPayload);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Backup file too large');
+    });
   });
 
   describe('deleteAllShifts', () => {
@@ -307,7 +497,7 @@ describe('ShiftService', () => {
         title: 'Test Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -328,7 +518,7 @@ describe('ShiftService', () => {
         title: 'Persistent Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -353,7 +543,7 @@ describe('ShiftService', () => {
           title: 'Pre-existing Shift',
           start: '2025-09-30T09:00:00',
           end: '2025-09-30T17:00:00',
-          color: 'sky',
+          color: 'sky' as const,
           isRecurring: false,
         },
       ];
@@ -388,7 +578,7 @@ describe('ShiftService', () => {
         title: 'Large Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -419,7 +609,7 @@ describe('ShiftService', () => {
         title: 'Shift with Error',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -486,7 +676,7 @@ describe('ShiftService', () => {
         title: 'Invalid Date Range',
         start: '2025-09-30T17:00:00',
         end: '2025-09-30T09:00:00', // End before start
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -505,7 +695,7 @@ describe('ShiftService', () => {
         title: 'Zero Duration Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T09:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -521,7 +711,7 @@ describe('ShiftService', () => {
         title: 'Historical Shift',
         start: '1900-01-01T09:00:00',
         end: '1900-01-01T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -537,7 +727,7 @@ describe('ShiftService', () => {
         title: 'Future Shift',
         start: '2999-12-31T09:00:00',
         end: '2999-12-31T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -555,7 +745,7 @@ describe('ShiftService', () => {
         title: 'Daily Max Test',
         start: '2025-01-01T09:00:00',
         end: '2025-01-01T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
@@ -574,7 +764,7 @@ describe('ShiftService', () => {
         title: 'Yearly Shift',
         start: '2025-01-01T09:00:00',
         end: '2025-01-01T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'year' as const,
@@ -585,16 +775,17 @@ describe('ShiftService', () => {
       service.addShift(shiftData);
 
       const shifts = service.shifts();
-      // Should generate at most 3 shifts (2025, 2026, 2027) depending on current date
-      expect(shifts.length).toBeLessThanOrEqual(3);
-      expect(shifts.length).toBeGreaterThan(0);
+      // Should generate exactly 2 shifts (2025, 2026) — 2 years from start date (2025-01-01)
+      // maxDate = 2027-01-01, so 2027-01-01 is excluded by strict < comparison
+      expect(shifts.length).toBe(2);
 
-      // Verify no shift is more than 2 years ahead
-      const twoYearsFromNow = new Date();
-      twoYearsFromNow.setFullYear(twoYearsFromNow.getFullYear() + 2);
+      // Verify no shift is more than 2 years from the start date
+      const startDate = new Date('2025-01-01T09:00:00');
+      const twoYearsFromStart = new Date(startDate);
+      twoYearsFromStart.setFullYear(twoYearsFromStart.getFullYear() + 2);
 
       shifts.forEach(shift => {
-        expect(new Date(shift.start).getTime()).toBeLessThanOrEqual(twoYearsFromNow.getTime());
+        expect(new Date(shift.start).getTime()).toBeLessThan(twoYearsFromStart.getTime());
       });
     });
 
@@ -603,7 +794,7 @@ describe('ShiftService', () => {
         title: 'Large Interval Shift',
         start: '2025-01-01T09:00:00',
         end: '2025-01-01T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
@@ -623,7 +814,7 @@ describe('ShiftService', () => {
         title: 'Zero Interval Shift',
         start: '2025-01-01T09:00:00',
         end: '2025-01-01T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
@@ -644,7 +835,7 @@ describe('ShiftService', () => {
         title: 'Monthly End-of-Month Shift',
         start: '2025-01-31T09:00:00', // January 31st
         end: '2025-01-31T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: true,
         repetition: {
           frequency: 'months' as const,
@@ -672,7 +863,7 @@ describe('ShiftService', () => {
         title: 'Negative Overtime',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         overtimeHours: -5, // Invalid negative value
       };
@@ -689,7 +880,7 @@ describe('ShiftService', () => {
         title: 'Large Overtime',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         overtimeHours: 999999,
       };
@@ -706,7 +897,7 @@ describe('ShiftService', () => {
         title: 'Fractional Overtime',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         overtimeHours: 2.5,
       };
@@ -723,7 +914,7 @@ describe('ShiftService', () => {
         title: 'No Allowances',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         allowances: [],
       };
@@ -740,7 +931,7 @@ describe('ShiftService', () => {
         title: 'Negative Allowances',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         allowances: [{ name: 'Deduction', amount: -50 }],
       };
@@ -757,7 +948,7 @@ describe('ShiftService', () => {
         title: 'Empty Allowance Name',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         allowances: [{ name: '', amount: 10 }],
       };
@@ -774,7 +965,7 @@ describe('ShiftService', () => {
         title: 'Duplicate Allowance Names',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         allowances: [
           { name: 'Transport', amount: 10 },
@@ -798,7 +989,7 @@ describe('ShiftService', () => {
         title: 'Ghost Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -827,7 +1018,7 @@ describe('ShiftService', () => {
         title: 'Shift 1',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -852,7 +1043,7 @@ describe('ShiftService', () => {
         title: 'Shift 1',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       });
 
@@ -860,7 +1051,7 @@ describe('ShiftService', () => {
         title: 'Shift 2',
         start: '2025-10-01T09:00:00',
         end: '2025-10-01T17:00:00',
-        color: 'green',
+        color: 'green' as const,
         isRecurring: false,
       });
 
@@ -895,7 +1086,7 @@ describe('ShiftService', () => {
         title: 'Invalid Date Shift',
         start: 'not-a-date',
         end: 'also-not-a-date',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -919,7 +1110,7 @@ describe('ShiftService', () => {
         title: 'Invalid Date Type',
         start: 123456789, // number instead of string
         end: 987654321, // number instead of string
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -936,7 +1127,7 @@ describe('ShiftService', () => {
         title: 'Valid Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
         overtimeHours: 2,
         allowances: [{ name: 'Meal', amount: 15 }],
@@ -958,7 +1149,7 @@ describe('ShiftService', () => {
         title: `Shift ${i}`,
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       }));
 
@@ -983,7 +1174,7 @@ describe('ShiftService', () => {
         title: null, // Invalid: should be string
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -999,7 +1190,7 @@ describe('ShiftService', () => {
         title: 'Existing Shift',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       });
 
@@ -1013,7 +1204,7 @@ describe('ShiftService', () => {
           title: 'Imported Shift',
           start: '2025-10-01T09:00:00',
           end: '2025-10-01T17:00:00',
-          color: 'green',
+          color: 'green' as const,
           isRecurring: false,
         },
       ];
@@ -1032,7 +1223,7 @@ describe('ShiftService', () => {
         title: '!@#$%^&*()_+-={}[]|\\:";\'<>?,./~`',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -1048,7 +1239,7 @@ describe('ShiftService', () => {
         title: '🚀 Turno Straordinario 日本語 中文 한글 العربية',
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 
@@ -1065,7 +1256,7 @@ describe('ShiftService', () => {
         title: longTitle,
         start: '2025-09-30T09:00:00',
         end: '2025-09-30T17:00:00',
-        color: 'sky',
+        color: 'sky' as const,
         isRecurring: false,
       };
 

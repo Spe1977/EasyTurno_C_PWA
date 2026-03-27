@@ -14,7 +14,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
       class="relative flex cursor-pointer items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
     >
       <div
-        class="absolute bottom-0 left-0 top-0 w-1.5"
+        class="absolute top-0 bottom-0 left-0 w-1.5"
         [class.bg-sky-500]="shift().color === 'sky'"
         [class.bg-green-500]="shift().color === 'green'"
         [class.bg-amber-500]="shift().color === 'amber'"
@@ -26,24 +26,24 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
       ></div>
       <div class="flex w-16 shrink-0 flex-col items-center justify-center">
         <p
-          class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400"
+          class="text-xs font-semibold tracking-wider text-indigo-600 uppercase dark:text-indigo-400"
         >
           {{ shift().start | langDate: 'shortDayName' }}
         </p>
         <p class="-my-0.5 text-2xl font-bold text-slate-800 dark:text-slate-100">
           {{ shift().start | langDate: 'dayNumber' }}
         </p>
-        <p class="text-sm font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <p class="text-sm font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
           {{ shift().start | langDate: 'shortMonthAndYear' }}
         </p>
       </div>
       <div class="min-w-0 flex-grow border-l border-slate-200 pl-4 dark:border-slate-700">
-        <p class="truncate text-lg font-bold">{{ shift().title }}</p>
+        <p data-cy="shift-title" class="truncate text-lg font-bold">{{ shift().title }}</p>
         <p class="truncate text-slate-500 dark:text-slate-400">
           {{ shift().start | langDate: 'time' }} - {{ shift().end | langDate: 'time' }}
         </p>
         @if (shift().notes) {
-          <p class="mt-1 truncate text-sm italic text-slate-400 dark:text-slate-500">
+          <p class="mt-1 truncate text-sm text-slate-400 italic dark:text-slate-500">
             {{ shift().notes }}
           </p>
         }

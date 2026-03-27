@@ -12,6 +12,12 @@ export interface NotificationSettings {
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly STORAGE_KEY = 'easyturno_notification_settings';
+  private readonly DEFAULT_SETTINGS: NotificationSettings = {
+    enabled: true,
+    reminderMinutesBefore: 60,
+    dayBeforeEnabled: true,
+  };
+  private readonly ALLOWED_REMINDER_MINUTES = new Set([15, 30, 60, 120, 180]);
   private notificationIdCounter = 0;
   private notificationIdMap = new Map<string, number>();
 
@@ -83,7 +89,9 @@ export class NotificationService {
   }
 
   async scheduleShiftNotification(shift: Shift, settings: NotificationSettings): Promise<void> {
-    if (!Capacitor.isNativePlatform() || !settings.enabled) {
+    const safeSettings = this.sanitizeSettings(settings);
+
+    if (!Capacitor.isNativePlatform() || !safeSettings.enabled) {
       return;
     }
 
@@ -92,14 +100,19 @@ export class NotificationService {
       const shiftStart = new Date(shift.start);
       const now = new Date();
 
+      if (isNaN(shiftStart.getTime())) {
+        console.warn('NotificationService: invalid shift start date, skipping notifications');
+        return;
+      }
+
       // Notifica X minuti prima del turno
       const reminderTime = new Date(
-        shiftStart.getTime() - settings.reminderMinutesBefore * 60 * 1000
+        shiftStart.getTime() - safeSettings.reminderMinutesBefore * 60 * 1000
       );
       if (reminderTime > now) {
         notifications.push({
           title: `📅 ${shift.title}`,
-          body: `Inizia tra ${settings.reminderMinutesBefore} minuti`,
+          body: `Inizia tra ${safeSettings.reminderMinutesBefore} minuti`,
           id: this.getNotificationId(shift.id, '-reminder'),
           schedule: { at: reminderTime },
           sound: 'default',
@@ -110,7 +123,7 @@ export class NotificationService {
       }
 
       // Notifica giorno prima (opzionale)
-      if (settings.dayBeforeEnabled) {
+      if (safeSettings.dayBeforeEnabled) {
         const dayBefore = new Date(shiftStart);
         dayBefore.setDate(dayBefore.getDate() - 1);
         dayBefore.setHours(20, 0, 0, 0); // Ore 20:00 del giorno prima
@@ -178,16 +191,43 @@ export class NotificationService {
 
   getSettings(): NotificationSettings {
     const stored = localStorage.getItem(this.STORAGE_KEY);
-    return stored
-      ? JSON.parse(stored)
-      : {
-          enabled: true,
-          reminderMinutesBefore: 60, // Default: 1h prima
-          dayBeforeEnabled: true,
-        };
+
+    if (!stored) {
+      return { ...this.DEFAULT_SETTINGS };
+    }
+
+    try {
+      return this.sanitizeSettings(JSON.parse(stored));
+    } catch (error) {
+      console.error('Failed to parse notification settings, using defaults:', error);
+      return { ...this.DEFAULT_SETTINGS };
+    }
   }
 
   saveSettings(settings: NotificationSettings): void {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(settings));
+    const safeSettings = this.sanitizeSettings(settings);
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(safeSettings));
+  }
+
+  private sanitizeSettings(settings: unknown): NotificationSettings {
+    if (typeof settings !== 'object' || settings === null) {
+      return { ...this.DEFAULT_SETTINGS };
+    }
+
+    const parsed = settings as Partial<NotificationSettings>;
+    const reminderMinutesBefore = this.ALLOWED_REMINDER_MINUTES.has(
+      parsed.reminderMinutesBefore ?? -1
+    )
+      ? parsed.reminderMinutesBefore!
+      : this.DEFAULT_SETTINGS.reminderMinutesBefore;
+
+    return {
+      enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : this.DEFAULT_SETTINGS.enabled,
+      reminderMinutesBefore,
+      dayBeforeEnabled:
+        typeof parsed.dayBeforeEnabled === 'boolean'
+          ? parsed.dayBeforeEnabled
+          : this.DEFAULT_SETTINGS.dayBeforeEnabled,
+    };
   }
 }

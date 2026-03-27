@@ -1,14 +1,14 @@
 import { Component, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { ToastService } from '../services/toast.service';
 
 @Component({
   selector: 'app-toast-container',
   standalone: true,
-  imports: [CommonModule],
+  imports: [],
   template: `
     <div
-      class="fixed right-4 top-4 z-50 max-w-md space-y-2"
+      class="fixed top-4 right-4 z-50 max-w-md space-y-2"
       role="region"
       aria-live="polite"
       aria-label="Notifications"

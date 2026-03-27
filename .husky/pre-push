@@ -1,0 +1,21 @@
+echo "🔍 Running pre-push checks..."
+
+# Run all tests with coverage before pushing
+echo "🧪 Running tests with coverage..."
+npm test -- --coverage --watchAll=false
+
+if [ $? -ne 0 ]; then
+  echo "❌ Tests failed. Push aborted."
+  exit 1
+fi
+
+# Run full build to ensure production build works
+echo "📦 Building production bundle..."
+npm run build
+
+if [ $? -ne 0 ]; then
+  echo "❌ Build failed. Push aborted."
+  exit 1
+fi
+
+echo "✅ All checks passed! Proceeding with push..."

@@ -106,9 +106,60 @@
 
   <!-- Main Content -->
   <main class="flex-grow overflow-y-auto">
+    <!-- View Mode Toggle -->
+    <div class="sticky top-0 z-20 bg-slate-50 px-4 pt-4 dark:bg-slate-950">
+      <div class="flex justify-center pb-3">
+        <div
+          class="inline-flex rounded-lg bg-slate-200 p-1 dark:bg-slate-800"
+          data-cy="view-toggle"
+        >
+          <button
+            (click)="setViewMode('list')"
+            [class.bg-white]="viewMode() === 'list'"
+            [class.shadow]="viewMode() === 'list'"
+            [class.text-indigo-600]="viewMode() === 'list'"
+            [class.dark:bg-slate-700]="viewMode() === 'list'"
+            [class.dark:text-indigo-400]="viewMode() === 'list'"
+            class="flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-semibold transition-all"
+            data-cy="view-list"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+            <span>{{ 'viewMode.list' | translate }}</span>
+          </button>
+          <button
+            (click)="setViewMode('calendar')"
+            [class.bg-white]="viewMode() === 'calendar'"
+            [class.shadow]="viewMode() === 'calendar'"
+            [class.text-indigo-600]="viewMode() === 'calendar'"
+            [class.dark:bg-slate-700]="viewMode() === 'calendar'"
+            [class.dark:text-indigo-400]="viewMode() === 'calendar'"
+            class="flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-semibold transition-all"
+            data-cy="view-calendar"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <span>{{ 'viewMode.calendar' | translate }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Search result indicator -->
     @if (searchDate()) {
-      <div class="px-4 pt-4">
+      <div class="px-4 pt-2">
         <div
           class="flex items-center justify-between rounded-lg bg-indigo-100 p-3 dark:bg-indigo-900/30"
         >
@@ -126,60 +177,74 @@
       </div>
     }
 
+    <!-- Calendar View -->
+    @if (viewMode() === 'calendar') {
+      <div class="p-4">
+        <app-calendar
+          [shifts]="shiftService.shifts()"
+          (daySelected)="onCalendarDaySelected($event)"
+          (shiftClicked)="onCalendarShiftClick($event)"
+        />
+      </div>
+    }
+
     <!-- List View -->
-    <div class="p-4">
-      @if (listShifts().length > 0) {
-        @for (shift of listShifts(); track shift.id) {
-          <div class="mb-3">
-            <app-shift-list-item
-              [shift]="shift"
-              (view)="openEditShiftForm($event)"
-              (edit)="openEditShiftForm($event)"
-              (deleteShift)="confirmDelete($event)"
-            />
-          </div>
-        }
-        @if (listShifts().length < allListShifts().length) {
-          <div class="pt-2 text-center">
-            <button
-              (click)="loadMoreShifts()"
-              class="rounded-lg bg-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-300 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-700"
+    @if (viewMode() === 'list') {
+      <div class="p-4">
+        @if (listShifts().length > 0) {
+          @for (shift of listShifts(); track shift.id) {
+            <div class="mb-3">
+              <app-shift-list-item
+                [shift]="shift"
+                (view)="openEditShiftForm($event)"
+                (edit)="openEditShiftForm($event)"
+                (deleteShift)="confirmDelete($event)"
+              />
+            </div>
+          }
+          @if (listShifts().length < allListShifts().length) {
+            <div class="pt-2 text-center">
+              <button
+                (click)="loadMoreShifts()"
+                class="rounded-lg bg-slate-200 px-5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-300 dark:bg-slate-700/80 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {{ 'loadMore' | translate }}
+              </button>
+            </div>
+          }
+        } @else {
+          <div class="py-16 text-center text-slate-500 dark:text-slate-400">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="mx-auto h-12 w-12"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1"
             >
-              {{ 'loadMore' | translate }}
-            </button>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <p class="mt-4 font-semibold">
+              @if (searchDate()) {
+                {{ 'noShiftsForDate' | translate }}
+              } @else {
+                {{ 'noShifts' | translate }}
+              }
+            </p>
           </div>
         }
-      } @else {
-        <div class="py-16 text-center text-slate-500 dark:text-slate-400">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="mx-auto h-12 w-12"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="1"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <p class="mt-4 font-semibold">
-            @if (searchDate()) {
-              {{ 'noShiftsForDate' | translate }}
-            } @else {
-              {{ 'noShifts' | translate }}
-            }
-          </p>
-        </div>
-      }
-    </div>
+      </div>
+    }
   </main>
 
   <!-- Floating Action Button for mobile -->
-  <div class="fixed bottom-6 right-6 z-40 sm:hidden">
+  <div class="fixed right-6 bottom-6 z-40 sm:hidden">
     <button
+      data-cy="add-shift-btn"
       (click)="openNewShiftForm()"
       class="rounded-full bg-indigo-600 p-4 text-white shadow-lg transition-transform duration-200 hover:scale-110 hover:bg-indigo-700 active:scale-95"
     >
@@ -200,7 +265,7 @@
 <!-- Modals -->
 @if (activeModal() !== 'none') {
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm"
+    class="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black p-4 backdrop-blur-sm"
   >
     <!-- Shift Form Modal -->
     @if (activeModal() === 'form') {
@@ -220,10 +285,11 @@
               <input
                 data-cy="shift-title-input"
                 type="text"
-                [(ngModel)]="shiftTitle"
+                [ngModel]="shiftTitle()"
+                (ngModelChange)="shiftTitle.set($event)"
                 name="title"
                 required
-                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -234,11 +300,11 @@
                 <input
                   data-cy="shift-start-date"
                   type="date"
-                  [(ngModel)]="shiftStartDate"
-                  (ngModelChange)="onStartDateChange($event)"
+                  [ngModel]="shiftStartDate()"
+                  (ngModelChange)="shiftStartDate.set($event); onStartDateChange($event)"
                   name="startDate"
                   required
-                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
               <div>
@@ -248,11 +314,11 @@
                 <input
                   data-cy="shift-start-time"
                   type="time"
-                  [(ngModel)]="shiftStartTime"
-                  (ngModelChange)="onStartTimeChange($event)"
+                  [ngModel]="shiftStartTime()"
+                  (ngModelChange)="shiftStartTime.set($event); onStartTimeChange($event)"
                   name="startTime"
                   required
-                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -262,10 +328,11 @@
                 <input
                   data-cy="shift-end-date"
                   type="date"
-                  [(ngModel)]="shiftEndDate"
+                  [ngModel]="shiftEndDate()"
+                  (ngModelChange)="shiftEndDate.set($event)"
                   name="endDate"
                   required
-                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
               <div>
@@ -273,10 +340,11 @@
                 <input
                   data-cy="shift-end-time"
                   type="time"
-                  [(ngModel)]="shiftEndTime"
+                  [ngModel]="shiftEndTime()"
+                  (ngModelChange)="shiftEndTime.set($event)"
                   name="endTime"
                   required
-                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -307,10 +375,11 @@
             <div>
               <label class="mb-1 block text-sm font-semibold">{{ 'notes' | translate }}</label>
               <textarea
-                [(ngModel)]="shiftNotes"
+                [ngModel]="shiftNotes()"
+                (ngModelChange)="shiftNotes.set($event)"
                 name="notes"
                 rows="3"
-                class="w-full resize-none rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full resize-none rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               ></textarea>
             </div>
             <div>
@@ -320,11 +389,12 @@
               <input
                 data-cy="overtime-hours-input"
                 type="number"
-                [(ngModel)]="shiftOvertimeHours"
+                [ngModel]="shiftOvertimeHours()"
+                (ngModelChange)="shiftOvertimeHours.set($event)"
                 name="overtimeHours"
                 min="0"
                 step="0.5"
-                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
             <div>
@@ -396,7 +466,8 @@
                 <input
                   data-cy="recurring-checkbox"
                   type="checkbox"
-                  [(ngModel)]="shiftIsRecurring"
+                  [ngModel]="shiftIsRecurring()"
+                  (ngModelChange)="shiftIsRecurring.set($event)"
                   name="isRecurring"
                   class="h-4 w-4 rounded border-slate-300 bg-white text-indigo-600 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-700"
                 />
@@ -714,10 +785,11 @@
               <label class="mb-1 block text-sm font-semibold">{{ 'searchDate' | translate }}</label>
               <input
                 type="date"
-                [(ngModel)]="searchDateInput"
+                [ngModel]="searchDateInput()"
+                (ngModelChange)="searchDateInput.set($event)"
                 name="searchDate"
                 required
-                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
           </div>
@@ -933,18 +1005,20 @@
               <label class="mb-1 block text-sm font-semibold">{{ 'periodFrom' | translate }}</label>
               <input
                 type="date"
-                [(ngModel)]="statsStartDate"
+                [ngModel]="statsStartDate()"
+                (ngModelChange)="statsStartDate.set($event)"
                 name="statsStartDate"
-                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
             <div>
               <label class="mb-1 block text-sm font-semibold">{{ 'periodTo' | translate }}</label>
               <input
                 type="date"
-                [(ngModel)]="statsEndDate"
+                [ngModel]="statsEndDate()"
+                (ngModelChange)="statsEndDate.set($event)"
                 name="statsEndDate"
-                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 outline-none transition-shadow focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+                class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
           </div>

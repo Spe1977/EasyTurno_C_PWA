@@ -2,9 +2,10 @@
 
 describe('Recurring Shifts', () => {
   beforeEach(() => {
-    cy.clearLocalStorage();
     cy.visit('/');
-    cy.contains('EasyTurno', { timeout: 10000 }).should('be.visible');
+    cy.window().then(win => win.localStorage.clear());
+    cy.reload();
+    cy.contains('EasyTurno', { timeout: 15000 }).should('be.visible');
   });
 
   afterEach(() => {
@@ -163,10 +164,12 @@ describe('Recurring Shifts', () => {
       cy.get('[data-cy="save-shift-btn"]').should('be.visible').click();
 
       // NOW the confirmation dialog should appear
-      cy.contains(/Solo questo|Only this/i, { timeout: 5000 }).should('be.visible');
+      cy.contains(/Solo questo evento|Just this event/i, { timeout: 5000 }).should(
+        'be.visible'
+      );
 
       // Choose "only this occurrence"
-      cy.contains('button', /Solo questo|Only this/i).click();
+      cy.contains('button', /Solo questo evento|Just this event/i).click();
 
       // Verify one instance is modified
       cy.contains('Modified Instance').should('be.visible');
