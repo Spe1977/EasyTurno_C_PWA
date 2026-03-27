@@ -9,6 +9,7 @@ describe('CalendarComponent', () => {
   let component: CalendarComponent;
   let fixture: ComponentFixture<CalendarComponent>;
   let calendarService: CalendarService;
+  let translationService: TranslationService;
 
   const mockShifts: Shift[] = [
     {
@@ -43,6 +44,8 @@ describe('CalendarComponent', () => {
     fixture = TestBed.createComponent(CalendarComponent);
     component = fixture.componentInstance;
     calendarService = TestBed.inject(CalendarService);
+    translationService = TestBed.inject(TranslationService);
+    translationService.setLanguage('it');
     fixture.detectChanges();
   });
 
@@ -60,8 +63,8 @@ describe('CalendarComponent', () => {
     });
 
     it('should have weekday names', () => {
-      expect(component.weekdayNames).toBeDefined();
-      expect(component.weekdayNames.length).toBe(7);
+      expect(component.weekdayNames()).toBeDefined();
+      expect(component.weekdayNames().length).toBe(7);
     });
 
     it('should have month name computed signal', () => {

@@ -104,8 +104,6 @@ src/
   pipes/
     translate.pipe.ts           # Translation pipe
     date-format.pipe.ts         # Localized date pipe
-  directives/
-    modal-focus.directive.ts    # Modal focus trap (WCAG 2.1 AA)
   assets/i18n/                  # Translation JSON files (it.json, en.json)
 ```
 

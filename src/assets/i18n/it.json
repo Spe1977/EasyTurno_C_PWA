@@ -19,7 +19,7 @@
   "days": "Giorni",
   "weeks": "Settimane",
   "months": "Mesi",
-  "year": "Anno",
+  "years": "Anni",
   "every": "Ogni",
   "deleteShiftConfirm": "Sei sicuro di voler eliminare questo turno?",
   "deleteSeriesConfirm": "Questo è un turno ricorrente. Vuoi eliminare solo questo evento, o l'intera serie?",
@@ -100,6 +100,12 @@
     "clearSelection": "Deseleziona",
     "noShifts": "Nessun turno"
   },
+  "notification": {
+    "startsIn": "Inizia tra {minutes} minuti",
+    "tomorrowReminder": "Promemoria turno domani"
+  },
+  "closeNotification": "Chiudi notifica",
+  "notifications_aria": "Notifiche",
   "shifts": {
     "overtime": "straordinario"
   }

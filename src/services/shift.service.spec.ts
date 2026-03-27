@@ -767,7 +767,7 @@ describe('ShiftService', () => {
         color: 'sky' as const,
         isRecurring: true,
         repetition: {
-          frequency: 'year' as const,
+          frequency: 'years' as const,
           interval: 1, // Every year
         },
       };

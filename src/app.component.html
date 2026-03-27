@@ -942,6 +942,62 @@
       </div>
     }
 
+    <!-- Password Prompt Modal -->
+    @if (activeModal() === 'passwordPrompt') {
+      <div
+        class="modal-fade-in w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl dark:bg-slate-800 dark:text-slate-200"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+      >
+        <h2 class="mb-4 text-lg font-bold">
+          {{
+            passwordPromptMode() === 'export'
+              ? ('backupPasswordPrompt' | translate)
+              : ('backupPasswordImportPrompt' | translate)
+          }}
+        </h2>
+        <div class="space-y-3">
+          <input
+            type="password"
+            [value]="passwordInput()"
+            (input)="passwordInput.set($any($event.target).value)"
+            class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+            [attr.placeholder]="'backupPasswordPrompt' | translate"
+            data-cy="password-input"
+            autocomplete="off"
+          />
+          @if (passwordPromptMode() === 'export') {
+            <input
+              type="password"
+              [value]="passwordConfirmInput()"
+              (input)="passwordConfirmInput.set($any($event.target).value)"
+              class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
+              [attr.placeholder]="'backupPasswordConfirmPrompt' | translate"
+              data-cy="password-confirm-input"
+              autocomplete="off"
+            />
+          }
+        </div>
+        <div class="mt-4 flex space-x-2">
+          <button
+            (click)="confirmPasswordPrompt()"
+            [disabled]="!passwordInput()"
+            class="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            data-cy="password-confirm-btn"
+          >
+            {{ 'save' | translate }}
+          </button>
+          <button
+            (click)="closeModal(); isImporting.set(false); pendingImportData.set(null)"
+            class="flex-1 rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+          >
+            {{ 'cancel' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+
     <!-- Decryption Error Modal -->
     @if (activeModal() === 'decryptionError') {
       <div
