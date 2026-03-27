@@ -23,6 +23,10 @@ export class CryptoService {
   private readonly PBKDF2_ITERATIONS = 250000;
   private readonly PASSWORD_BACKUP_TYPE = 'easyturno-password-backup';
 
+  private isIndexedDBAvailable(): boolean {
+    return typeof indexedDB !== 'undefined';
+  }
+
   // ── IndexedDB helpers ────────────────────────────────────────────────────
 
   private openIDB(): Promise<IDBDatabase> {
@@ -53,8 +57,40 @@ export class CryptoService {
       const tx = db.transaction(this.IDB_STORE_NAME, 'readwrite');
       const req = tx.objectStore(this.IDB_STORE_NAME).put(key, this.IDB_KEY_ID);
       req.onerror = () => reject(req.error);
-      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
     });
+  }
+
+  private async getLegacyKeyFromLocalStorage(extractable: boolean): Promise<CryptoKey | null> {
+    const legacyRaw = localStorage.getItem(this.LEGACY_KEY_NAME);
+    if (!legacyRaw) {
+      return null;
+    }
+
+    const keyData = this.base64ToArrayBuffer(legacyRaw);
+    return crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: this.ALGORITHM, length: this.KEY_LENGTH },
+      extractable,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  private async saveLegacyKeyToLocalStorage(key: CryptoKey): Promise<void> {
+    const exportedKey = await crypto.subtle.exportKey('raw', key);
+    localStorage.setItem(this.LEGACY_KEY_NAME, this.arrayBufferToBase64(exportedKey));
+  }
+
+  private generateDeviceKey(extractable: boolean): Promise<CryptoKey> {
+    return crypto.subtle.generateKey(
+      { name: this.ALGORITHM, length: this.KEY_LENGTH },
+      extractable,
+      ['encrypt', 'decrypt']
+    );
   }
 
   // ── Key management ───────────────────────────────────────────────────────
@@ -67,41 +103,39 @@ export class CryptoService {
    * localStorage is migrated and then removed.
    */
   private async getDeviceKey(): Promise<CryptoKey> {
-    // 1. Try IndexedDB (secure, non-extractable storage)
-    try {
-      const idbKey = await this.getKeyFromIDB();
-      if (idbKey) return idbKey;
-    } catch (error) {
-      console.warn('Failed to load key from IndexedDB, will try migration', error);
-    }
+    const canUseIndexedDB = this.isIndexedDBAvailable();
 
-    // 2. Migrate legacy key from localStorage (one-time)
-    const legacyRaw = localStorage.getItem(this.LEGACY_KEY_NAME);
-    if (legacyRaw) {
+    // 1. Try IndexedDB when available (secure, non-extractable storage)
+    if (canUseIndexedDB) {
       try {
-        const keyData = this.base64ToArrayBuffer(legacyRaw);
-        const migratedKey = await crypto.subtle.importKey(
-          'raw',
-          keyData,
-          { name: this.ALGORITHM, length: this.KEY_LENGTH },
-          false, // non-extractable after migration
-          ['encrypt', 'decrypt']
-        );
-        await this.saveKeyToIDB(migratedKey);
-        localStorage.removeItem(this.LEGACY_KEY_NAME);
-        return migratedKey;
+        const idbKey = await this.getKeyFromIDB();
+        if (idbKey) return idbKey;
       } catch (error) {
-        console.warn('Failed to migrate legacy key, generating new one', error);
+        console.warn('Failed to load key from IndexedDB, will try migration', error);
       }
     }
 
-    // 3. Generate a new non-extractable key and persist it in IndexedDB
-    const newKey = await crypto.subtle.generateKey(
-      { name: this.ALGORITHM, length: this.KEY_LENGTH },
-      false, // non-extractable: raw bytes never leave the crypto engine
-      ['encrypt', 'decrypt']
-    );
-    await this.saveKeyToIDB(newKey);
+    // 2. Migrate or reuse legacy key from localStorage
+    try {
+      const legacyKey = await this.getLegacyKeyFromLocalStorage(!canUseIndexedDB);
+      if (legacyKey) {
+        if (canUseIndexedDB) {
+          await this.saveKeyToIDB(legacyKey);
+          localStorage.removeItem(this.LEGACY_KEY_NAME);
+        }
+        return legacyKey;
+      }
+    } catch (error) {
+      console.warn('Failed to migrate legacy key, generating new one', error);
+    }
+
+    // 3. Generate a new key and persist it in the best available storage.
+    const newKey = await this.generateDeviceKey(!canUseIndexedDB);
+    if (canUseIndexedDB) {
+      await this.saveKeyToIDB(newKey);
+    } else {
+      await this.saveLegacyKeyToLocalStorage(newKey);
+    }
     return newKey;
   }
 

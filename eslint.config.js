@@ -14,12 +14,13 @@ export default [
       parserOptions: {
         ecmaVersion: 'latest',
         sourceType: 'module',
-        project: './tsconfig.json',
+        project: ['./tsconfig.json', './tsconfig.spec.json', './playwright/tsconfig.json'],
       },
       globals: {
         window: 'readonly',
         document: 'readonly',
         localStorage: 'readonly',
+        indexedDB: 'readonly',
         navigator: 'readonly',
         crypto: 'readonly',
         URLSearchParams: 'readonly',
