@@ -1,6 +1,6 @@
 # EasyTurno - Documento Unico di Stato e Piano Operativo
 
-Ultimo aggiornamento: 2026-03-27 (Fase 4 — validazione finale e documentazione riallineate dopo commit/push)
+Ultimo aggiornamento: 2026-03-27 (Fase 4 — validazione finale, Playwright esteso e documentazione bilingue riallineata)
 Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 
 ## 1. Funzionalita completate
@@ -82,13 +82,14 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 - `npm run build`: OK (bundle `main` 753.36 KB, `styles` 43.03 KB, totale iniziale 804.89 KB)
 - `npm test`: 11 suite, 319 test, tutti verdi
 - Test Cypress E2E: 55/55 superati (100%) con retry attivo nel rerun completo del 2026-03-26.
-- Test Playwright browser: 7/7 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario).
+- Test Playwright browser: 9/9 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario, reset dati, backup/import cifrato).
 
 ## 2. Gap reali ancora aperti
 
 ### ~~Allineamento codice-documentazione~~ — RISOLTO (2026-03-25)
 
-- `README.md` riscritto con descrizione completa del progetto (screenshot, stack, comandi, architettura, sicurezza).
+- `README.md` tradotto integralmente in inglese e riallineato allo stato reale del repository.
+- `README_IT.md` creato come versione italiana separata con contenuti equivalenti.
 - File storici rimossi. Pulizia documentale completata.
 
 ### ~~Allineamento architetturale~~ — RISOLTO (2026-03-25)
@@ -247,7 +248,7 @@ I seguenti problemi erano documentati nella versione precedente di questo file e
     3. Aggiornato `lint-staged` in `package.json` con `eslint --fix --no-warn-ignored` per non rompere il commit sui file `*.spec.ts` esclusi.
   - File modificati: `package.json`, `eslint.config.js`, `playwright/tests/smoke.spec.ts`
   - File creati: `playwright/tests/app-flows.spec.ts`, `playwright/tests/helpers.ts`, `playwright/tsconfig.json`
-  - Verifica: `npm run test:pw` verde il 2026-03-27 (7/7 test superati) e pre-commit completato con commit reale su `main`.
+  - Verifica: `npm run test:pw` verde il 2026-03-27 (9/9 test superati dopo le estensioni successive) e pre-commit completato con commit reale su `main`.
 
 - **X. `CryptoService` rompeva i test Jest in ambiente senza IndexedDB — risolto**
   - Causa: dopo l'hardening della persistenza chiavi su IndexedDB, in ambiente Jest/JSDOM `indexedDB` non esisteva. Il pre-commit arrivava ai related tests e fallivano numerosi test di `CryptoService`.
@@ -355,7 +356,7 @@ Ipotesi correttive residue per il rischio architetturale principale:
 
 ### Fase 1 - Riallineare documentazione ✅ COMPLETATA (2026-03-25)
 
-1. ~~Correggere `README.md` con descrizione reale di EasyTurno.~~ — Fatto: README riscritto con screenshot, stack, comandi, architettura, sicurezza e stato progetto.
+1. ~~Correggere `README.md` con descrizione reale di EasyTurno.~~ — Fatto: documentazione principale riallineata e separata in `README.md` inglese + `README_IT.md` italiano, con screenshot, stack, comandi, architettura, sicurezza e stato progetto.
 2. ~~Rimuovere o archiviare eventuali file storici residui.~~ — Fatto: file storici (AGGIORNAMENTI.md, CHANGELOG_ADVANCED_FEATURES.md, CHAT_CLAUDE.md, INTEGRATION.md, INTERVENTI.md, ROADMAP.md, SECURITY.md, SUMMARY.md, docs/PWA_UPDATE_GUIDE.md) gia rimossi dal working tree. Directory `docs/` vuota, ignorata da git.
 
 Esito:
@@ -401,10 +402,9 @@ Nota Playwright:
 - Il progetto ha gia Cypress come suite E2E ampia; Playwright va mantenuto come secondo livello smoke/browser rapido, non come duplicazione completa degli stessi scenari.
 - Se si decide di ampliare Playwright, e consigliato farlo solo sui flussi piu critici e ad alta confidenza di manutenzione.
 - Test Playwright consigliati da implementare in futuro:
-  - import/export backup con verifica del ciclo base di persistenza
   - modifica e cancellazione di una ricorrenza
   - apertura statistiche con verifica del rendering minimo
-  - reset dati con conferma modale
+  - percorso di errore import backup con password errata o file malformato
 
 Interventi applicati in questa sessione:
 
@@ -421,9 +421,11 @@ Interventi applicati in questa sessione:
 - Corretta la regressione di `SwUpdateService` che impediva ai test Jest/JSDOM di esercitare la registrazione del service worker.
 - Consolidato il nuovo snapshot metrico locale del 2026-03-27 con esito verde per lint, format, type check, test e build.
 - Integrato Playwright nel repository con config dedicata, smoke suite Chromium, script npm e job CI separato.
-- Estesa la suite Playwright con helper condivisi e flussi browser aggiuntivi su persistenza, CRUD base, tema/lingua e calendario.
+- Estesa la suite Playwright con helper condivisi e flussi browser aggiuntivi su persistenza, CRUD base, tema/lingua, calendario e reset dati con conferma modale.
+- Estesa ulteriormente la suite Playwright con il flusso end-to-end di export backup cifrato, reset dati e import con password.
+- Tradotto integralmente `README.md` in inglese e creato `README_IT.md` come variante italiana mantenuta in parallelo.
 - Allineato il pre-commit ai file Playwright con `playwright/tsconfig.json` e `eslint --fix --no-warn-ignored` in `lint-staged`.
-- Verificato fuori sandbox `npm run test:pw` con esito positivo (7/7).
+- Verificato fuori sandbox `npm run test:pw` con esito positivo (9/9).
 - Aggiornati `@angular/build` e `@angular/cli` alla patch correttiva `21.2.5`, con lockfile rigenerato via `npm install --legacy-peer-deps`.
 - Verificato con `npm audit` il passaggio da 30 vulnerabilita totali (27 moderate, 3 high) a 22 vulnerabilita tutte moderate, residue sul solo stack Jest/Istanbul.
 - Verificato fuori sandbox `npm run build` dopo il bump Angular (`main` 753.36 KB, `styles` 43.03 KB, totale 804.89 KB).
@@ -458,7 +460,7 @@ Valutazione pratica attuale:
 - Funzionalita: completo
 - Buildability: buona (Angular 21.2, TS 5.9, Tailwind 4.2, Capacitor 8.3 — build verificata anche localmente il 2026-03-27)
 - Manutenibilita: buona (signal API, control flow nativo, OnPush, pure pipes)
-- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 7/7 Playwright browser verdi, lint OK, type check OK, format OK)
+- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 9/9 Playwright browser verdi, lint OK, type check OK, format OK)
 - Documentazione: completa (README riscritto, P.md allineato)
 - Stack: aggiornato alle ultime major version
 
