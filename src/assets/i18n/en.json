@@ -106,6 +106,8 @@
   },
   "closeNotification": "Close notification",
   "notifications_aria": "Notifications",
+  "exportSuccess": "Backup exported successfully!",
+  "exportError": "Export failed.",
   "shifts": {
     "overtime": "overtime"
   }

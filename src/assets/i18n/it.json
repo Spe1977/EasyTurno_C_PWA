@@ -106,6 +106,8 @@
   },
   "closeNotification": "Chiudi notifica",
   "notifications_aria": "Notifiche",
+  "exportSuccess": "Backup esportato con successo!",
+  "exportError": "Esportazione fallita.",
   "shifts": {
     "overtime": "straordinario"
   }
