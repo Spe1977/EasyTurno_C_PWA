@@ -82,7 +82,7 @@ Workspace analizzato: `/home/leospe/PROGETTI/PWA/CLAUDE/easyturno_CLA`
 - `npm run build`: OK (bundle `main` 753.36 KB, `styles` 43.03 KB, totale iniziale 804.89 KB)
 - `npm test`: 11 suite, 319 test, tutti verdi
 - Test Cypress E2E: 55/55 superati (100%) con retry attivo nel rerun completo del 2026-03-26.
-- Test Playwright browser: 9/9 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario, reset dati, backup/import cifrato).
+- Test Playwright browser: 13/13 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario, reset dati, backup/import cifrato, modifica/cancellazione ricorrenze, statistiche minime e errore import con password errata).
 
 ## 2. Gap reali ancora aperti
 
@@ -248,7 +248,7 @@ I seguenti problemi erano documentati nella versione precedente di questo file e
     3. Aggiornato `lint-staged` in `package.json` con `eslint --fix --no-warn-ignored` per non rompere il commit sui file `*.spec.ts` esclusi.
   - File modificati: `package.json`, `eslint.config.js`, `playwright/tests/smoke.spec.ts`
   - File creati: `playwright/tests/app-flows.spec.ts`, `playwright/tests/helpers.ts`, `playwright/tsconfig.json`
-  - Verifica: `npm run test:pw` verde il 2026-03-27 (9/9 test superati dopo le estensioni successive) e pre-commit completato con commit reale su `main`.
+  - Verifica: `npm run test:pw` verde il 2026-03-27 (13/13 test superati dopo le estensioni successive) e pre-commit completato con commit reale su `main`.
 
 - **X. `CryptoService` rompeva i test Jest in ambiente senza IndexedDB — risolto**
   - Causa: dopo l'hardening della persistenza chiavi su IndexedDB, in ambiente Jest/JSDOM `indexedDB` non esisteva. Il pre-commit arrivava ai related tests e fallivano numerosi test di `CryptoService`.
@@ -391,7 +391,7 @@ Esito:
 5. Verificare offline reale su smartphone dopo pulizia cache/installazione fresca.
 6. Validare import/export, ricorrenze, statistiche, ricerca data, calendario e notifiche native su device.
 7. ~~Consolidare snapshot finale delle metriche.~~ — Fatto: quality gate locali rieseguiti il 2026-03-27 (`lint`, `format:check`, `tsc`, `test`, `build`) e documento riallineato allo stato reale del repository.
-8. ~~Integrare Playwright nel repository per smoke browser e CI.~~ — Fatto: setup completo, estensione a 7 test browser Chromium verdi e job CI dedicato il 2026-03-27.
+8. ~~Integrare Playwright nel repository per smoke browser e CI.~~ — Fatto: setup completo, estensione a 13 test browser Chromium verdi e job CI dedicato il 2026-03-27.
 9. ~~Ridurre le vulnerabilita `high` in audit sulle dipendenze dev Angular/build.~~ — Fatto: upgrade patch di `@angular/build`/`@angular/cli`, `high` eliminate e audit ridotto a sole `moderate` residue nel toolchain Jest il 2026-03-27.
 10. ~~Ridurre ulteriormente il residuo `moderate` a basso rischio e riallineare Jest dopo l'integrazione Playwright.~~ — Fatto: override `handlebars@4.7.9`, esclusione `playwright/` da Jest, audit ridotto a 21 `moderate` e `npm test` nuovamente verde il 2026-03-27.
 11. ~~Riallineare il repository a una matrice di peer dependency ufficialmente supportata.~~ — Fatto: TypeScript riportato a `5.9.3`; spariti i peer `invalid` di `@angular/build`, `ts-jest` e `@typescript-eslint`, con quality gate principali confermati verdi il 2026-03-27.
@@ -401,10 +401,8 @@ Nota Playwright:
 - Estendere ulteriormente la suite Playwright e possibile e potenzialmente utile, ma non e necessario allo stato attuale.
 - Il progetto ha gia Cypress come suite E2E ampia; Playwright va mantenuto come secondo livello smoke/browser rapido, non come duplicazione completa degli stessi scenari.
 - Se si decide di ampliare Playwright, e consigliato farlo solo sui flussi piu critici e ad alta confidenza di manutenzione.
-- Test Playwright consigliati da implementare in futuro:
-  - modifica e cancellazione di una ricorrenza
-  - apertura statistiche con verifica del rendering minimo
-  - percorso di errore import backup con password errata o file malformato
+- Gli scenari Playwright prioritari inizialmente consigliati (ricorrenze, statistiche minime, errore import con password errata) sono ora coperti.
+- Un eventuale ampliamento futuro dovrebbe restare selettivo e concentrarsi solo su flussi browser ad alto valore e bassa fragilita.
 
 Interventi applicati in questa sessione:
 
@@ -423,9 +421,10 @@ Interventi applicati in questa sessione:
 - Integrato Playwright nel repository con config dedicata, smoke suite Chromium, script npm e job CI separato.
 - Estesa la suite Playwright con helper condivisi e flussi browser aggiuntivi su persistenza, CRUD base, tema/lingua, calendario e reset dati con conferma modale.
 - Estesa ulteriormente la suite Playwright con il flusso end-to-end di export backup cifrato, reset dati e import con password.
+- Estesa ulteriormente la suite Playwright con modifica singola ricorrenza, cancellazione intera serie, apertura statistiche con rendering minimo e percorso di errore import con password errata.
 - Tradotto integralmente `README.md` in inglese e creato `README_IT.md` come variante italiana mantenuta in parallelo.
 - Allineato il pre-commit ai file Playwright con `playwright/tsconfig.json` e `eslint --fix --no-warn-ignored` in `lint-staged`.
-- Verificato fuori sandbox `npm run test:pw` con esito positivo (9/9).
+- Verificato fuori sandbox `npm run test:pw` con esito positivo (13/13).
 - Aggiornati `@angular/build` e `@angular/cli` alla patch correttiva `21.2.5`, con lockfile rigenerato via `npm install --legacy-peer-deps`.
 - Verificato con `npm audit` il passaggio da 30 vulnerabilita totali (27 moderate, 3 high) a 22 vulnerabilita tutte moderate, residue sul solo stack Jest/Istanbul.
 - Verificato fuori sandbox `npm run build` dopo il bump Angular (`main` 753.36 KB, `styles` 43.03 KB, totale 804.89 KB).
@@ -460,7 +459,7 @@ Valutazione pratica attuale:
 - Funzionalita: completo
 - Buildability: buona (Angular 21.2, TS 5.9, Tailwind 4.2, Capacitor 8.3 — build verificata anche localmente il 2026-03-27)
 - Manutenibilita: buona (signal API, control flow nativo, OnPush, pure pipes)
-- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 9/9 Playwright browser verdi, lint OK, type check OK, format OK)
+- Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 13/13 Playwright browser verdi, lint OK, type check OK, format OK)
 - Documentazione: completa (README riscritto, P.md allineato)
 - Stack: aggiornato alle ultime major version
 
@@ -475,7 +474,7 @@ Valutazione pratica attuale:
 - `npm test -- --runInBand` -> superato localmente il 2026-03-27 dopo hardening sicurezza (11 suite, 319 test, 0 falliti)
 - `npm test -- --runInBand src/services/crypto.service.spec.ts` -> superato localmente il 2026-03-27 dopo introduzione fallback IndexedDB/localStorage (32/32 test)
 - `npm run e2e` -> superato fuori sandbox (55/55, 100%, tutte le 5 spec verdi)
-- `npm run test:pw` -> superato fuori sandbox il 2026-03-27 (7 test Playwright browser verdi su Chromium)
+- `npm run test:pw` -> superato fuori sandbox il 2026-03-27 (13 test Playwright browser verdi su Chromium)
 - `npm install -D @playwright/test --legacy-peer-deps` -> completato il 2026-03-27; audit storico del momento: 28 vulnerabilita totali (25 moderate, 3 high), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo update Angular tooling: 22 vulnerabilita totali (22 moderate, 0 high, 0 critical), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo override `handlebars`: 21 vulnerabilita totali (21 moderate, 0 high, 0 critical), tutte dev-only

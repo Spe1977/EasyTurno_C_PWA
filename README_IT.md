@@ -131,7 +131,7 @@ Nota importante:
 - Build verificata con Angular 21.2.5, TypeScript 5.9.3 e Tailwind CSS 4.2.2
 - Unit test: 319/319 verdi
 - Cypress E2E: 55/55 verdi
-- Playwright browser flows: 9/9 verdi
+- Playwright browser flows: 13/13 verdi
 - Lint, type check e build locali verificati
 - Residui aperti principali: validazione notifiche native su device fisico e revisione futura della strategia chiavi per lo storage locale
 
@@ -150,14 +150,8 @@ File principali:
 
 - `playwright.config.ts` - configurazione runner, browser e web server
 - `playwright/tests/smoke.spec.ts` - smoke test su bootstrap app, toggle calendario e creazione turno
-- `playwright/tests/app-flows.spec.ts` - flussi browser aggiuntivi: persistenza, CRUD base, tema/lingua, calendario, reset dati, backup/import cifrato con password
+- `playwright/tests/app-flows.spec.ts` - flussi browser aggiuntivi: persistenza, CRUD base, tema/lingua, calendario, reset dati, modifica/cancellazione ricorrenze, rendering statistiche, backup/import cifrato con password e gestione errore import con password errata
 - `playwright/tests/helpers.ts` - helper condivisi per bootstrap e creazione turno
-
-Ulteriori scenari Playwright utili:
-
-- modifica/cancellazione di una serie ricorrente
-- apertura statistiche con verifiche minime di rendering
-- percorso di errore import con password errata o backup malformato
 
 ## Licenza
 

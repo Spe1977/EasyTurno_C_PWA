@@ -131,7 +131,7 @@ Important note:
 - Build verified with Angular 21.2.5, TypeScript 5.9.3, and Tailwind CSS 4.2.2
 - Unit tests: 319/319 passing
 - Cypress E2E: 55/55 passing
-- Playwright browser flows: 9/9 passing
+- Playwright browser flows: 13/13 passing
 - Lint, type check, and local builds verified
 - Main remaining open items: native notification validation on a physical device and a future review of the local storage key strategy
 
@@ -150,14 +150,8 @@ Main files:
 
 - `playwright.config.ts` - runner, browser, and web server configuration
 - `playwright/tests/smoke.spec.ts` - smoke tests for app bootstrap, calendar toggle, and shift creation
-- `playwright/tests/app-flows.spec.ts` - additional browser flows: persistence, basic CRUD, theme/language, calendar, reset, encrypted backup/import with password
+- `playwright/tests/app-flows.spec.ts` - additional browser flows: persistence, basic CRUD, theme/language, calendar, reset, recurring edit/delete, statistics rendering, encrypted backup/import with password, and wrong-password import error handling
 - `playwright/tests/helpers.ts` - shared helpers for bootstrap and shift creation
-
-Useful Playwright scenarios still worth adding:
-
-- recurring series edit/delete flow
-- statistics modal open with minimal rendering assertions
-- import failure path with wrong password or malformed backup
 
 ## License
 
