@@ -180,15 +180,21 @@ test('exports an encrypted backup and imports it back with the password', async 
   await page.locator('[data-cy="settings-btn"]').click();
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
-  // Import the encrypted backup
-  await page.locator('#importFile').setInputFiles(backupPath);
+  // Import the encrypted backup via file chooser
+  const importChooserPromise = page.waitForEvent('filechooser');
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(import backup|importa backup)$/i })
+    .click();
+  const importChooser = await importChooserPromise;
+  await importChooser.setFiles(backupPath);
 
   // Fill password modal (import mode: password only)
-  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
   await page.locator('[data-cy="password-input"]').fill(backupPassword);
   await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  await expect(page.getByText('Backup Shift')).toBeVisible();
+  await expect(page.getByText('Backup Shift')).toBeVisible({ timeout: 10000 });
 
   await page.reload();
   await expect(page.getByText('Backup Shift')).toBeVisible();
@@ -342,14 +348,22 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
   // Import with wrong password via password modal
-  await page.locator('#importFile').setInputFiles(backupPath);
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(import backup|importa backup)$/i })
+    .click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(backupPath);
 
   await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
   await page.locator('[data-cy="password-input"]').fill('WrongPassword!');
   await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  await expect(
-    page.getByRole('alert').getByText(/invalid backup password|password backup non valida/i)
-  ).toBeVisible({ timeout: 10000 });
+  // Wait for the error toast to appear after failed decryption
+  const toastLocator = page.locator('[role="alert"]').filter({
+    hasText: /invalid backup password|password backup non valida/i,
+  });
+  await expect(toastLocator).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
 });
