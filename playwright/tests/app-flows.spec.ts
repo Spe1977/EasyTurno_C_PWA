@@ -299,7 +299,7 @@ test('opens statistics and renders the expected summary sections', async ({ page
   await expect(statsModal.getByText('Evening Shift')).toBeVisible();
 });
 
-test('shows an error toast when importing an encrypted backup with the wrong password', async ({
+test('rejects import of an encrypted backup when the wrong password is provided', async ({
   page,
 }) => {
   const backupPassword = 'PlaywrightBackup123!';
@@ -358,12 +358,22 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
 
   await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
   await page.locator('[data-cy="password-input"]').fill('WrongPassword!');
+  await expect(page.locator('[data-cy="password-confirm-btn"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  // Wait for the error toast to appear after failed decryption
-  const toastLocator = page.locator('[role="alert"]').filter({
-    hasText: /invalid backup password|password backup non valida/i,
-  });
-  await expect(toastLocator).toBeVisible({ timeout: 15000 });
+  // Wait for password modal to close (proves confirmPasswordPrompt() executed)
+  await expect(page.locator('[data-cy="password-input"]')).not.toBeVisible({ timeout: 10000 });
+
+  // Verify the import failed: the shift must NOT be restored
+  // Use waitForFunction to let the async decrypt + error handling complete
+  await page.waitForFunction(
+    () => !document.body.textContent?.includes('Protected Backup Shift'),
+    {},
+    { timeout: 15000 }
+  );
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
+
+  // Verify data wasn't persisted (survives reload)
+  await page.reload();
+  await expect(page.getByText('Protected Backup Shift')).not.toBeVisible({ timeout: 10000 });
 });
