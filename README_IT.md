@@ -32,8 +32,8 @@ English documentation is available in [README.md](README.md).
 | TypeScript   | 5.9.3    |
 | Tailwind CSS | 4.2.2    |
 | Capacitor    | 8.3.0    |
-| Jest         | 30.2.0   |
-| Cypress      | 15.3.0   |
+| Jest         | 30.3.0   |
+| Cypress      | 15.13.0  |
 | Playwright   | 1.58.2   |
 
 ## Avvio rapido
@@ -126,11 +126,13 @@ Nota importante:
 
 ## Stato attuale
 
-- Build verificata con Angular 21.2.5, TypeScript 5.9.3 e Tailwind CSS 4.2.2
-- Unit test: 319/319 verdi
+- Build verificata con Angular 21.2.5, TypeScript 5.9.3 e Tailwind CSS 4.2.2 (821.62 KB bundle iniziale)
+- Unit test: 319/319 verdi (82% copertura statement)
 - Cypress E2E: 55/55 verdi
 - Playwright browser flows: 13/13 verdi
-- Lint, type check e build locali verificati
+- Lint, type check, formattazione e build locali verificati
+- Internazionalizzazione completa: tutte le stringhe utente usano chiavi di traduzione (italiano/inglese)
+- Modale password per export/import backup cifrati (sostituisce `window.prompt()`)
 - Residui aperti principali: validazione notifiche native su device fisico e revisione futura della strategia chiavi per lo storage locale
 
 ## Stato del progetto

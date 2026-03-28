@@ -32,8 +32,8 @@ Italian documentation is available in [README_IT.md](README_IT.md).
 | TypeScript   | 5.9.3   |
 | Tailwind CSS | 4.2.2   |
 | Capacitor    | 8.3.0   |
-| Jest         | 30.2.0  |
-| Cypress      | 15.3.0  |
+| Jest         | 30.3.0  |
+| Cypress      | 15.13.0 |
 | Playwright   | 1.58.2  |
 
 ## Quick Start
@@ -126,11 +126,13 @@ Important note:
 
 ## Current Status
 
-- Build verified with Angular 21.2.5, TypeScript 5.9.3, and Tailwind CSS 4.2.2
-- Unit tests: 319/319 passing
+- Build verified with Angular 21.2.5, TypeScript 5.9.3, and Tailwind CSS 4.2.2 (821.62 KB initial bundle)
+- Unit tests: 319/319 passing (82% statement coverage)
 - Cypress E2E: 55/55 passing
 - Playwright browser flows: 13/13 passing
-- Lint, type check, and local builds verified
+- Lint, type check, formatting, and local builds verified
+- Full internationalization: all user-facing strings use translation keys (Italian/English)
+- Password modal for encrypted backup export/import (replaces `window.prompt()`)
 - Main remaining open items: native notification validation on a physical device and a future review of the local storage key strategy
 
 ## Project Status
