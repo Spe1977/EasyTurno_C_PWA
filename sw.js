@@ -13,8 +13,6 @@ const PRECACHE_URLS = [
   '/icons/icon-512.png',
   '/icons/icon-maskable-512.png',
   '/icons/apple-touch-icon.png',
-  '/src/assets/i18n/it.json',
-  '/src/assets/i18n/en.json',
 ];
 const RUNTIME_CACHEABLE_JSON_PATHS = new Set(PRECACHE_URLS.filter(url => url.endsWith('.json')));
 

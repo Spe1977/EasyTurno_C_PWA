@@ -246,6 +246,7 @@
     <button
       data-cy="add-shift-btn"
       (click)="openNewShiftForm()"
+      [attr.aria-label]="'addShift' | translate"
       class="rounded-full bg-indigo-600 p-4 text-white shadow-lg transition-transform duration-200 hover:scale-110 hover:bg-indigo-700 active:scale-95"
     >
       <svg
@@ -355,6 +356,7 @@
                   <button
                     type="button"
                     (click)="shiftColor.set(color)"
+                    [attr.aria-label]="color"
                     class="h-9 w-9 rounded-full transition-transform hover:scale-110"
                     [class.bg-sky-400]="color === 'sky'"
                     [class.bg-green-400]="color === 'green'"
