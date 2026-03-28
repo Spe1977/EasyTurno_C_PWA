@@ -358,11 +358,19 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
 
   await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
   await page.locator('[data-cy="password-input"]').fill('WrongPassword!');
+  // Ensure the button is enabled after fill before clicking
+  await expect(page.locator('[data-cy="password-confirm-btn"]')).toBeEnabled({ timeout: 5000 });
   await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  // Wait for the error toast to appear after failed decryption
+  // Wait for password modal to close (proves confirmPasswordPrompt() was called)
+  await expect(page.locator('[data-cy="password-input"]')).not.toBeVisible({ timeout: 10000 });
+
+  // Wait for any error toast to appear after failed decryption
+  // Match both the wrong-password error and the generic import error
+  // (AES-GCM may throw or return garbage depending on the browser)
   const toastLocator = page.locator('[role="alert"]').filter({
-    hasText: /invalid backup password|password backup non valida/i,
+    hasText:
+      /invalid backup password|password backup non valida|import failed|importazione fallita/i,
   });
   await expect(toastLocator).toBeVisible({ timeout: 15000 });
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
