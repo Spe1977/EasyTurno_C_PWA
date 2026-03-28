@@ -9,26 +9,33 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 ## Development Commands
 
 ### Core Development
+
 - `npm run dev` - Start development server on port 3000
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build (serves production build)
 - `npm install` - Install dependencies
 
 ### Code Quality
+
 - `npm run lint` - Run ESLint on TypeScript files
 - `npm run lint:fix` - Fix auto-fixable ESLint errors
 - `npm run format` - Format code with Prettier
 - `npm run format:check` - Check code formatting without modifying files
 
 ### Testing
+
 - `npm test` - Run Jest unit tests (single run)
 - `npm run test:watch` - Run Jest in watch mode for development
 - `npm run test:coverage` - Generate test coverage report (output to `coverage/`)
 - `npm run cypress:open` - Open Cypress test runner (interactive)
 - `npm run cypress:run` - Run Cypress E2E tests headlessly
 - `npm run e2e` - Start dev server and run all E2E tests
+- `npm run test:pw` - Run Playwright browser smoke tests on Chromium
+- `npm run test:pw:ui` - Playwright UI mode (interactive)
+- `npm run test:pw:headed` - Playwright headed mode
 
 ### Mobile Development (Capacitor)
+
 - `npm run build:mobile` - Build app and sync with Capacitor
 - `npm run android:dev` - Open Android Studio for development
 - `npm run android:build` - Build production APK (requires Android SDK)
@@ -38,6 +45,7 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 ## Architecture
 
 ### Core Technologies
+
 - **Angular 21+** with standalone components and signal-based state management
 - **TypeScript 5.9+** with strict mode enabled for maximum type safety
 - **Tailwind CSS 4** for styling with dark mode support (CSS-first config)
@@ -63,6 +71,7 @@ The app follows a component-based architecture optimized for a single-page PWA:
 ### State Management
 
 The application uses Angular's signal-based reactive state management:
+
 - All state is managed in the main `AppComponent` using Angular signals
 - `ShiftService` handles data persistence to localStorage with automatic sync
 - UI state includes modal management, form state, view mode toggle (list/calendar), and list pagination
@@ -92,6 +101,7 @@ The application uses Angular's signal-based reactive state management:
 ### PWA & Mobile Features
 
 #### Progressive Web App (PWA)
+
 - Offline-first design with encrypted localStorage persistence
 - Web app manifest with shortcuts for quick shift creation
 - Service worker for caching (sw.js)
@@ -101,6 +111,7 @@ The application uses Angular's signal-based reactive state management:
 - AES-GCM 256-bit encryption for sensitive data at rest
 
 #### Native Mobile (Capacitor)
+
 - **Platform Detection**: `Capacitor.isNativePlatform()` used to conditionally enable native features
 - **Local Notifications**: Shift reminders via @capacitor/local-notifications (native platforms only)
 - **Haptics**: Tactile feedback for user interactions
@@ -113,6 +124,7 @@ The application uses Angular's signal-based reactive state management:
 ### Recurring Shifts Logic
 
 The app generates individual shift instances for recurring patterns rather than storing rules:
+
 - Supports daily, weekly, monthly, and yearly repetitions
 - Generates up to 200 instances or 2 years ahead
 - Each instance has unique ID but shares seriesId for group operations
@@ -120,17 +132,20 @@ The app generates individual shift instances for recurring patterns rather than 
 ### Advanced Features
 
 #### Overtime Tracking
+
 - Track overtime hours for each shift (single or recurring)
 - Decimal support for precise hour tracking (step 0.5)
 - Aggregate overtime calculations in statistics
 
 #### Allowances Management
+
 - Add multiple custom allowances per shift
 - Each allowance has a customizable name and amount
 - Dynamic UI for adding/removing allowances
 - Statistics aggregate allowances by name across selected period
 
 #### Statistics Dashboard
+
 - Accessible from Settings menu
 - Customizable date range selection (default: last 30 days)
 - Real-time computed statistics:
@@ -143,6 +158,7 @@ The app generates individual shift instances for recurring patterns rather than 
 - Empty state handling with appropriate messaging
 
 #### Calendar View
+
 - Toggle between list view and calendar view with signal-based `viewMode` state
 - Mobile-optimized monthly calendar grid (6-week layout for consistency)
 - Touch gesture support: swipe left/right to navigate months
@@ -173,6 +189,11 @@ The app generates individual shift instances for recurring patterns rather than 
   - Custom commands defined in `cypress/support/commands.ts`
   - Tests cover: shift management, recurring shifts, offline functionality, advanced features, calendar view
   - Configured for 1280x720 viewport, baseUrl http://localhost:3000
+- **Browser Smoke Tests**: Playwright 1.58+
+  - Config in `playwright.config.ts` with integrated web server (port 3100)
+  - Tests in `playwright/tests/` with shared helpers
+  - Covers: app bootstrap, persistence, CRUD, theme/language, calendar, statistics, encrypted backup/import
+  - Runs on Chromium with tracing on failure
 
 ### Development Notes
 
@@ -192,30 +213,35 @@ The app generates individual shift instances for recurring patterns rather than 
 ### Important Patterns & Conventions
 
 #### Signal-Based State Management
+
 - All component state managed via Angular signals (`signal`, `computed`, `effect`)
 - State updates use `.set()` for replacement or `.update()` for transformations
 - Computed signals automatically memoize and only recalculate when dependencies change
 - Effects handle side effects (theme persistence, keyboard shortcuts, etc.)
 
 #### Modal Management
+
 - Single `activeModal` signal tracks which modal is open (`'none' | 'form' | 'settings' | 'deleteConfirm' | 'statistics' | 'passwordPrompt' | ...`)
 - All modals use `role="dialog"` and `aria-modal="true"` for accessibility
 - Confirmation modals use `role="alertdialog"` semantic role
 - Password input uses dedicated modal instead of `window.prompt()` for security and mobile compatibility
 
 #### View Mode Management
+
 - Single `viewMode` signal toggles between 'list' and 'calendar' views
 - Calendar view integrates CalendarComponent with touch gesture navigation
 - Calendar day selection emits events to filter shifts in list view
 - View mode persists across sessions via localStorage (planned)
 
 #### Form Handling
+
 - Form state managed through individual signals (e.g., `shiftTitle`, `shiftStartDate`)
 - Edit vs. Create determined by `editingShift` signal (null = create, Shift = edit)
 - Recurring shift edits show confirmation modal for "edit series" vs. "edit single"
 - Form validation occurs in `handleFormSubmit()` with toast error notifications
 
 #### Data Persistence Flow
+
 1. User action triggers component method
 2. Component calls ShiftService method
 3. ShiftService updates signal state
@@ -224,11 +250,13 @@ The app generates individual shift instances for recurring patterns rather than 
 6. Component signals react automatically via computed dependencies
 
 #### Type Guards & Validation
+
 - Type guard functions in `shift.service.ts` (`isValidShift`, `isValidISODate`) validate runtime data
 - Used during import/export operations to ensure data integrity (includes end >= start check)
 - Pattern: `isValidX(value: unknown): value is X` for TypeScript narrowing
 
 #### Performance Optimizations
+
 - Sorted shifts cached in `sortedShifts` computed signal
 - Statistics use single-pass algorithm instead of multiple reduce operations
 - Recurrence generation extracted into shared `generateRecurringInstances()` helper
@@ -237,6 +265,7 @@ The app generates individual shift instances for recurring patterns rather than 
 ### Code Quality & Roadmap
 
 See `P.md` for:
+
 - Comprehensive code quality analysis (all phases completed)
 - Performance optimization history
 - Type safety improvements implemented

@@ -1,6 +1,6 @@
 # EasyTurno - Documento Unico di Stato e Piano Operativo
 
-Ultimo aggiornamento: 2026-03-27 (Fase 4 — validazione finale, Playwright esteso e documentazione bilingue riallineata)
+Ultimo aggiornamento: 2026-03-28 (Code review finale — i18n completo, password modal, refactoring ricorrenze, documentazione riallineata)
 Workspace analizzato: `spe1977/easyturno_c_pwa`
 
 ## 1. Funzionalita completate
@@ -57,7 +57,7 @@ Workspace analizzato: `spe1977/easyturno_c_pwa`
 - Rilevamento aggiornamenti PWA con notifica utente (`SwUpdateService`).
 - Configurazione Capacitor 8 presente per deploy nativo Android.
 - Servizio notifiche locali native presente (solo piattaforme native).
-- Content Security Policy (CSP) e Subresource Integrity (SRI) configurati.
+- Content Security Policy (CSP) configurata.
 
 ### Sicurezza e persistenza
 
@@ -71,7 +71,7 @@ Workspace analizzato: `spe1977/easyturno_c_pwa`
 - Standalone components con `ChangeDetectionStrategy.OnPush`.
 - Signal-based state management (`signal`, `computed`, `effect`).
 - Signal input/output API (`input()`, `output()`) nei componenti recenti.
-- Focus trap modale con `ModalFocusDirective` (WCAG 2.1 AA).
+- Focus trap modale con attributi ARIA (`role="dialog"`, `aria-modal="true"`) per accessibilita WCAG 2.1 AA.
 - Type guard functions per validazione runtime su import/export.
 
 ### Testing e quality gate verificati
@@ -79,7 +79,7 @@ Workspace analizzato: `spe1977/easyturno_c_pwa`
 - `npm run lint`: OK (0 errori, 0 warning)
 - `npm run format:check`: OK
 - `npx tsc --noEmit`: OK (0 errori TypeScript 5.9.3)
-- `npm run build`: OK (bundle `main` 753.36 KB, `styles` 43.03 KB, totale iniziale 804.89 KB)
+- `npm run build`: OK (bundle `main` 768.12 KB, `styles` 45.01 KB, totale iniziale 821.62 KB)
 - `npm test`: 11 suite, 319 test, tutti verdi
 - Test Cypress E2E: 55/55 superati (100%) con retry attivo nel rerun completo del 2026-03-26.
 - Test Playwright browser: 13/13 superati su Chromium il 2026-03-27 (smoke + persistenza, CRUD base, tema/lingua, calendario, reset dati, backup/import cifrato, modifica/cancellazione ricorrenze, statistiche minime e errore import con password errata).
@@ -266,6 +266,26 @@ I seguenti problemi erano documentati nella versione precedente di questo file e
     2. Mantenuta la nota che il prossimo passo corretto, se si vuole stringere la sicurezza in produzione, e separare CSP `dev` e `prod`.
   - File modificato: `index.html`
   - Verifica: app nuovamente caricabile su `http://localhost:3000/` il 2026-03-27 senza blocco browser sul dev server.
+
+### Risolti nella sessione del 2026-03-28
+
+- **Z. Code review: allineamento codice-documentazione e completamento i18n**
+  - Causa: audit approfondito del codice e della documentazione ha rivelato diverse inconsistenze accumulate.
+  - Fix applicati:
+    1. Corretto il tipo `Repetition.frequency` da `'year'` a `'years'` in `shift.model.ts` per coerenza con i valori usati nel codice.
+    2. Sostituito `window.prompt()` con modale password dedicata per export/import backup cifrati (sicurezza e compatibilita mobile).
+    3. Estratta logica di generazione ricorrenze duplicata in `generateRecurringInstances()` e `advanceDate()` helper in `shift.service.ts`.
+    4. Rimosso locale `'it-IT'` hardcoded in `calendar.component.ts` e `notification.service.ts`, sostituito con locale dinamico basato su `TranslationService`.
+    5. Internazionalizzate le stringhe delle notifiche native (`notification.startsIn`, `notification.tomorrowReminder`).
+    6. Aggiunte chiavi di traduzione mancanti: `exportSuccess`, `exportError`, `exporting`, `importing`, `invalidDateFormat`, `dateOutOfRange`, `failedToParseDate` in entrambi i file i18n.
+    7. Internazionalizzati aria-label del toast container (`closeNotification`, `notifications_aria`).
+    8. Aggiunto effect per sincronizzare `<html lang>` con la lingua selezionata.
+    9. Aggiunto cleanup dell'interval in `SwUpdateService`.
+    10. Rafforzata validazione `isValidShift()` con controllo `end >= start`.
+    11. Aggiornati test unitari per riflettere tutte le modifiche (319/319 verdi).
+    12. Allineata documentazione CLAUDE.md, P.md, README.md e README_IT.md allo stato reale.
+  - File modificati: `src/shift.model.ts`, `src/app.component.ts`, `src/app.component.html`, `src/services/shift.service.ts`, `src/services/notification.service.ts`, `src/services/sw-update.service.ts`, `src/components/calendar.component.ts`, `src/components/toast-container.component.ts`, `src/assets/i18n/en.json`, `src/assets/i18n/it.json`, `src/components/calendar.component.spec.ts`, `src/app.component.spec.ts`, `src/services/shift.service.spec.ts`
+  - Verifica: `npm test` 319/319 verde, `npm run lint` OK, `npm run build` OK (821.62 KB totale iniziale) il 2026-03-28.
 
 ### Ancora aperti
 
@@ -457,10 +477,11 @@ EasyTurno e una applicazione avanzata e funzionalmente completa. Aree residue:
 Valutazione pratica attuale:
 
 - Funzionalita: completo
-- Buildability: buona (Angular 21.2, TS 5.9, Tailwind 4.2, Capacitor 8.3 — build verificata anche localmente il 2026-03-27)
-- Manutenibilita: buona (signal API, control flow nativo, OnPush, pure pipes)
+- Buildability: buona (Angular 21.2, TS 5.9, Tailwind 4.2, Capacitor 8.3 — build verificata il 2026-03-28: 821.62 KB totale iniziale)
+- Manutenibilita: buona (signal API, control flow nativo, OnPush, pipe impure per reattivita lingua)
 - Affidabilita automatizzata: molto buona (319/319 unit test verdi, 55/55 E2E Cypress verdi con retry, 13/13 Playwright browser verdi, lint OK, type check OK, format OK)
-- Documentazione: completa (README riscritto, P.md allineato)
+- Documentazione: completa (README bilingue riscritto, P.md e CLAUDE.md allineati)
+- Internazionalizzazione: completa (tutte le stringhe utente usano chiavi di traduzione)
 - Stack: aggiornato alle ultime major version
 
 ## Verifiche locali eseguite per questo documento
@@ -470,6 +491,7 @@ Valutazione pratica attuale:
 - `npx tsc --noEmit` -> superato (0 errori, TypeScript 5.9.3)
 - `npm run build` -> superato localmente il 2026-03-27 dopo l'hardening sicurezza (759.10 KB `main`, 44.71 KB `styles`, 812.30 KB totale iniziale)
 - `npm run build` -> superato fuori sandbox dopo update `@angular/build`/`@angular/cli` il 2026-03-27 (753.36 KB `main`, 43.03 KB `styles`, 804.89 KB totale iniziale)
+- `npm run build` -> superato il 2026-03-28 dopo code review finale (768.12 KB `main`, 45.01 KB `styles`, 821.62 KB totale iniziale)
 - `npm ls typescript @angular/build ts-jest @typescript-eslint/parser @typescript-eslint/eslint-plugin --depth=0` -> verificato il 2026-03-27: toolchain riallineato su TypeScript 5.9.3, nessun peer `invalid` nel sottoalbero controllato
 - `npm test -- --runInBand` -> superato localmente il 2026-03-27 dopo hardening sicurezza (11 suite, 319 test, 0 falliti)
 - `npm test -- --runInBand src/services/crypto.service.spec.ts` -> superato localmente il 2026-03-27 dopo introduzione fallback IndexedDB/localStorage (32/32 test)

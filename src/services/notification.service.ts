@@ -136,7 +136,7 @@ export class NotificationService {
         if (dayBefore > now) {
           notifications.push({
             title: `🔔 ${this.translationService.translate('notification.tomorrowReminder')}`,
-            body: `${shift.title} - ${shiftStart.toLocaleDateString('it-IT')}`,
+            body: `${shift.title} - ${shiftStart.toLocaleDateString(this.translationService.language() === 'it' ? 'it-IT' : 'en-US')}`,
             id: this.getNotificationId(shift.id, '-daybefore'),
             schedule: { at: dayBefore },
             sound: 'default',

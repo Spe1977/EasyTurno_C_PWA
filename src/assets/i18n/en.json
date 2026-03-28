@@ -106,6 +106,13 @@
   },
   "closeNotification": "Close notification",
   "notifications_aria": "Notifications",
+  "exporting": "Exporting...",
+  "importing": "Importing...",
+  "exportSuccess": "Backup exported successfully!",
+  "exportError": "Export failed.",
+  "invalidDateFormat": "Invalid date format. Please use YYYY-MM-DD.",
+  "dateOutOfRange": "Please enter a date between 1900 and 2100.",
+  "failedToParseDate": "Failed to parse date. Please check the format.",
   "shifts": {
     "overtime": "overtime"
   }

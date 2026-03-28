@@ -1,4 +1,4 @@
-import { Dialog, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
   bootEmptyApp,
   createRecurringShift,
@@ -145,19 +145,17 @@ test('exports an encrypted backup and imports it back with the password', async 
   await page.locator('[data-cy="settings-btn"]').click();
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
-  const exportPromptQueue = [backupPassword, backupPassword];
-  const exportDialogHandler = async (dialog: Dialog) => {
-    await dialog.accept(exportPromptQueue.shift() ?? '');
-  };
+  // Click export to open password modal
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('[data-cy="export-btn"]').click();
 
-  page.on('dialog', exportDialogHandler);
+  // Fill password modal (export mode: password + confirmation)
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await page.locator('[data-cy="password-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator('[data-cy="export-btn"]').click(),
-  ]);
-
-  page.off('dialog', exportDialogHandler);
+  const download = await downloadPromise;
 
   const backupPath = '/tmp/easyturno_playwright_backup.json';
   await download.saveAs(backupPath);
@@ -182,11 +180,13 @@ test('exports an encrypted backup and imports it back with the password', async 
   await page.locator('[data-cy="settings-btn"]').click();
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
-  page.once('dialog', async (dialog: Dialog) => {
-    await dialog.accept(backupPassword);
-  });
-
+  // Import the encrypted backup
   await page.locator('#importFile').setInputFiles(backupPath);
+
+  // Fill password modal (import mode: password only)
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await page.locator('[data-cy="password-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-btn"]').click();
 
   await expect(page.getByText('Backup Shift')).toBeVisible();
 
@@ -308,19 +308,16 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
   await page.locator('[data-cy="settings-btn"]').click();
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
-  const exportPromptQueue = [backupPassword, backupPassword];
-  const exportDialogHandler = async (dialog: Dialog) => {
-    await dialog.accept(exportPromptQueue.shift() ?? '');
-  };
+  // Export with password modal
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('[data-cy="export-btn"]').click();
 
-  page.on('dialog', exportDialogHandler);
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await page.locator('[data-cy="password-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-btn"]').click();
 
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.locator('[data-cy="export-btn"]').click(),
-  ]);
-
-  page.off('dialog', exportDialogHandler);
+  const download = await downloadPromise;
 
   const backupPath = '/tmp/easyturno_playwright_wrong_password_backup.json';
   await download.saveAs(backupPath);
@@ -344,11 +341,12 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
   await page.locator('[data-cy="settings-btn"]').click();
   await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
 
-  page.once('dialog', async (dialog: Dialog) => {
-    await dialog.accept('WrongPassword!');
-  });
-
+  // Import with wrong password via password modal
   await page.locator('#importFile').setInputFiles(backupPath);
+
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await page.locator('[data-cy="password-input"]').fill('WrongPassword!');
+  await page.locator('[data-cy="password-confirm-btn"]').click();
 
   await expect(
     page.getByRole('alert').getByText(/invalid backup password|password backup non valida/i)
