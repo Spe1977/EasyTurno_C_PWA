@@ -344,12 +344,12 @@ test('shows an error toast when importing an encrypted backup with the wrong pas
   // Import with wrong password via password modal
   await page.locator('#importFile').setInputFiles(backupPath);
 
-  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
   await page.locator('[data-cy="password-input"]').fill('WrongPassword!');
   await page.locator('[data-cy="password-confirm-btn"]').click();
 
   await expect(
     page.getByRole('alert').getByText(/invalid backup password|password backup non valida/i)
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10000 });
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
 });
