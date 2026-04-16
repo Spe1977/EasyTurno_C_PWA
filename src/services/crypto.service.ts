@@ -297,9 +297,12 @@ export class CryptoService {
    */
   private arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
+    // Process in chunks to avoid stack overflow on large buffers while
+    // still being faster than single-character string concatenation.
+    const CHUNK = 8192;
     let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
     }
     // eslint-disable-next-line no-undef
     return btoa(binary);

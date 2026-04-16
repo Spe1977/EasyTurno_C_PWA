@@ -260,9 +260,9 @@ export class AppComponent {
 
   // Cache sorted shifts to avoid re-sorting on every computation
   private sortedShifts = computed(() => {
-    return this.shiftService
-      .shifts()
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    return [...this.shiftService.shifts()].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
   });
 
   // Cache today boundary timestamp to avoid recreating Date object

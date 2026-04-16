@@ -95,8 +95,13 @@ export class ShiftService {
    * after a decryption failure.
    */
   resetAfterDecryptionError() {
+    // Remove corrupted ciphertext so a page reload won't re-trigger the error.
+    localStorage.removeItem(this.STORAGE_KEY);
     this.decryptionError.set(false);
     this.isLoaded = true;
+    // Re-enable the save effect before updating shifts so the empty array
+    // is immediately persisted (encrypted) to localStorage.
+    this.storageReady.set(true);
     this.shifts.set([]);
   }
 
@@ -263,20 +268,13 @@ export class ShiftService {
       shift => void this.notificationService.cancelShiftNotifications(shift.id)
     );
 
-    // Update shifts: remove the series and add back the kept shifts
-    this.shifts.update(shifts => {
-      // Remove all shifts from this series
-      const withoutSeries = shifts.filter(s => s.seriesId !== seriesId);
-      // Add back the shifts we want to keep (before the edited shift)
-      return [...withoutSeries, ...shiftsToKeep];
-    });
+    // Generate new shifts from the updated shift onwards before touching the signal.
+    const settings = this.notificationService.getSettings();
+    let newShifts: Shift[];
 
-    // Generate new series from the updated shift onwards
     if (!updatedShift.isRecurring || !updatedShift.repetition) {
       const newShift: Shift = { ...updatedShift, id: crypto.randomUUID(), seriesId };
-      this.shifts.update(s => [...s, newShift]);
-
-      const settings = this.notificationService.getSettings();
+      newShifts = [newShift];
       void this.notificationService.scheduleShiftNotification(newShift, settings);
     } else {
       const generatedShifts = this.generateRecurringInstances(
@@ -284,15 +282,19 @@ export class ShiftService {
         seriesId,
         updatedShift.repetition
       );
-
-      this.shifts.update(s => [...s, ...generatedShifts]);
-
-      const settings = this.notificationService.getSettings();
+      newShifts = generatedShifts;
       const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
       upcomingShifts.forEach(
         shift => void this.notificationService.scheduleShiftNotification(shift, settings)
       );
     }
+
+    // Single update: remove old series, add kept shifts and new shifts in one operation
+    // to avoid triggering two separate encrypt+save cycles.
+    this.shifts.update(shifts => {
+      const withoutSeries = shifts.filter(s => s.seriesId !== seriesId);
+      return [...withoutSeries, ...shiftsToKeep, ...newShifts];
+    });
   }
 
   deleteShift(id: string) {
