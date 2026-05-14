@@ -173,18 +173,26 @@ describe('SwUpdateService', () => {
     });
 
     it('should trigger reload on controllerchange event', async () => {
+      // `window.location.reload` is non-configurable in JSDOM and cannot be
+      // spied on directly. The service exposes a protected `reloadPage` wrapper
+      // around `window.location.reload()` precisely so it can be intercepted
+      // in tests.
+      const reloadSpy = jest
+        .spyOn(service as unknown as { reloadPage: () => void }, 'reloadPage')
+        .mockImplementation(() => {});
+
       await service.checkForUpdates();
 
-      // Get the controllerchange callback
       const controllerchangeCallback = (
         navigator.serviceWorker.addEventListener as jest.Mock
       ).mock.calls.find((call: any) => call[0] === 'controllerchange')?.[1];
 
       expect(controllerchangeCallback).toBeDefined();
 
-      // Note: We cannot easily test window.location.reload in JSDOM environment
-      // This test verifies the event listener is properly registered
-      // The actual reload behavior is covered by integration tests
+      controllerchangeCallback();
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+
+      reloadSpy.mockRestore();
     });
 
     it('should handle registration errors gracefully', async () => {
@@ -325,6 +333,53 @@ describe('SwUpdateService', () => {
 
       // Should have more calls now from both intervals
       expect(mockRegistration.update).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('cleanup (T12)', () => {
+    it('should clear the update check interval set by checkForUpdates', async () => {
+      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+
+      await service.checkForUpdates();
+
+      // Sanity: interval fires once after 60s
+      jest.advanceTimersByTime(60000);
+      expect(mockRegistration.update).toHaveBeenCalledTimes(1);
+
+      service.cleanup();
+
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+
+      // After cleanup, advancing time must NOT trigger any further update() calls
+      jest.advanceTimersByTime(300000);
+      expect(mockRegistration.update).toHaveBeenCalledTimes(1);
+
+      clearIntervalSpy.mockRestore();
+    });
+
+    it('should be a no-op when called before checkForUpdates', () => {
+      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+
+      expect(() => service.cleanup()).not.toThrow();
+      expect(clearIntervalSpy).not.toHaveBeenCalled();
+
+      clearIntervalSpy.mockRestore();
+    });
+
+    it('should be idempotent when called multiple times', async () => {
+      const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+
+      await service.checkForUpdates();
+
+      service.cleanup();
+      service.cleanup();
+      service.cleanup();
+
+      // Only the first call has an interval to clear; subsequent calls hit
+      // the `updateCheckInterval === null` guard and skip clearInterval.
+      expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+
+      clearIntervalSpy.mockRestore();
     });
   });
 });

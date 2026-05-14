@@ -290,6 +290,7 @@
                 (ngModelChange)="shiftTitle.set($event)"
                 name="title"
                 required
+                maxlength="200"
                 class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               />
             </div>
@@ -381,6 +382,7 @@
                 (ngModelChange)="shiftNotes.set($event)"
                 name="notes"
                 rows="3"
+                maxlength="2000"
                 class="w-full resize-none rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               ></textarea>
             </div>
@@ -392,7 +394,7 @@
                 data-cy="overtime-hours-input"
                 type="number"
                 [ngModel]="shiftOvertimeHours()"
-                (ngModelChange)="shiftOvertimeHours.set($event)"
+                (ngModelChange)="updateOvertimeHours($event)"
                 name="overtimeHours"
                 min="0"
                 step="0.5"
@@ -966,8 +968,10 @@
             (input)="passwordInput.set($any($event.target).value)"
             class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
             [attr.placeholder]="'backupPasswordPrompt' | translate"
+            [attr.minlength]="passwordPromptMode() === 'export' ? 12 : null"
+            maxlength="128"
             data-cy="password-input"
-            autocomplete="off"
+            autocomplete="new-password"
           />
           @if (passwordPromptMode() === 'export') {
             <input
@@ -976,9 +980,14 @@
               (input)="passwordConfirmInput.set($any($event.target).value)"
               class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700 dark:text-slate-100"
               [attr.placeholder]="'backupPasswordConfirmPrompt' | translate"
+              minlength="12"
+              maxlength="128"
               data-cy="password-confirm-input"
-              autocomplete="off"
+              autocomplete="new-password"
             />
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              {{ 'backupPasswordHint' | translate }}
+            </p>
           }
         </div>
         <div class="mt-4 flex space-x-2">
@@ -991,7 +1000,7 @@
             {{ 'save' | translate }}
           </button>
           <button
-            (click)="closeModal(); isImporting.set(false); pendingImportData.set(null)"
+            (click)="closeModal()"
             class="flex-1 rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
           >
             {{ 'cancel' | translate }}

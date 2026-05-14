@@ -22,6 +22,7 @@
             "assets": [
               "manifest.webmanifest",
               "sw.js",
+              "_headers",
               "favicon.ico",
               "favicon.png",
               "icon.svg",
@@ -31,7 +32,11 @@
           },
           "configurations": {
             "production": {
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "index": {
+                "input": "index.production.html",
+                "output": "index.html"
+              }
             },
             "development": {
               "optimization": false,

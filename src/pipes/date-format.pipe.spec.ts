@@ -62,6 +62,13 @@ describe('LangDatePipe', () => {
       expect(result).toBeTruthy();
       expect(typeof result).toBe('string');
     });
+
+    it('should format date as shortMonthAndYear (T13)', () => {
+      const date = new Date('2025-09-30T10:30:00');
+      const result = pipe.transform(date, 'shortMonthAndYear');
+      expect(result).toMatch(/^[\p{L}.]+\s\d{2}$/u);
+      expect(result).toContain('25');
+    });
   });
 
   describe('transform with English locale', () => {
@@ -85,6 +92,12 @@ describe('LangDatePipe', () => {
       const date = new Date('2025-09-30T14:45:00');
       const result = pipe.transform(date, 'time');
       expect(result).toBe('14:45');
+    });
+
+    it('should format date as shortMonthAndYear in English (T13)', () => {
+      const date = new Date('2025-09-30T10:30:00');
+      const result = pipe.transform(date, 'shortMonthAndYear');
+      expect(result).toBe('Sep 25');
     });
   });
 

@@ -34,6 +34,8 @@
   "backupPasswordPrompt": "Inserisci una password per cifrare il backup",
   "backupPasswordConfirmPrompt": "Conferma la password del backup",
   "backupPasswordMismatch": "Le password del backup non coincidono.",
+  "backupPasswordTooShort": "La password del backup deve contenere almeno {min} caratteri.",
+  "backupPasswordHint": "Usa almeno 12 caratteri. Una password lunga e unica protegge il tuo backup.",
   "backupPasswordImportPrompt": "Inserisci la password del backup",
   "backupPasswordInvalid": "Password backup non valida o file danneggiato.",
   "backupFileTooLarge": "Il file di backup è troppo grande.",
@@ -113,6 +115,8 @@
   "invalidDateFormat": "Formato data non valido. Usa il formato YYYY-MM-DD.",
   "dateOutOfRange": "Inserisci una data tra il 1900 e il 2100.",
   "failedToParseDate": "Errore nella lettura della data. Controlla il formato.",
+  "reducedSecurityStorage": "Modalità a sicurezza ridotta: IndexedDB non disponibile, la chiave di cifratura è conservata in localStorage.",
+  "backupReminderSuggestion": "Suggerimento: esporta un backup cifrato dalle Impostazioni. Se cancelli i dati del browser o cambi dispositivo i turni non sono recuperabili.",
   "shifts": {
     "overtime": "straordinario"
   }

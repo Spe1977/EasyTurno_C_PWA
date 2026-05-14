@@ -115,6 +115,15 @@ src/
 - Content Security Policy (CSP) irrigidita, con eccezione `unsafe-inline` mantenuta in sviluppo locale per compatibilita con `ng serve`
 - Migrazione automatica dati legacy non cifrati
 
+### Modello di sicurezza
+
+- **Dati a riposo** cifrati con una chiave AES-GCM 256-bit specifica del dispositivo. Quando IndexedDB e disponibile la chiave e salvata come **`CryptoKey` non estraibile** (`extractable: false`): i byte grezzi della chiave non escono mai dal contesto crittografico del browser. Un piccolo header sul ciphertext (`ETBLOB1:`) marca ogni record cifrato per consentire la migrazione trasparente dei formati legacy.
+- **La chiave dispositivo e unica per questo profilo browser su questo dispositivo.** Non e derivata da una password e non e sincronizzata su alcun backend. Cancellare i dati del browser, cambiare device o perdere lo storage distrugge la chiave — e con essa la possibilita di leggere i turni cifrati. **Non esiste percorso di recovery** al di fuori del ripristino di un backup esportato in precedenza.
+- **I backup cifrati** sono prodotti con `PBKDF2-SHA256` (600 000 iterazioni) + AES-GCM derivati dalla password utente. I backup creati prima dell'aumento a 600 000 iter (es. 250 000 iter) restano decifrabili grazie al campo `iterations` per-payload, ma i nuovi export usano sempre i parametri correnti. L'app **richiede sempre una password >= 12 caratteri** in export: **non esiste un percorso di export in chiaro**.
+- **Gli import** accettano sia il formato protetto da password (caso normale) sia, solo per retrocompatibilita, file JSON legacy in chiaro. Subito dopo l'import i turni vengono ri-salvati nel formato cifrato locale.
+- **Hardening server-side**: la build pubblica spedisce `_headers` (Cloudflare Pages / Netlify) con CSP strict, HSTS (`preload` + `includeSubDomains`), `X-Content-Type-Options`, COOP / CORP `same-origin`, `Permissions-Policy` restrittivo e `frame-ancestors 'none'`. La PWA non puo essere embeddata in iframe.
+- **Raccomandazione**: esporta un backup cifrato non appena hai accumulato dati non banali. La prima volta che raggiungi **5 turni** l'app mostra un promemoria una tantum; puoi rilanciare l'export da Impostazioni in qualsiasi momento. Senza backup, un device perso o un profilo cancellato equivalgono a dati persi.
+
 Nota importante:
 
 - La cifratura dello storage locale protegge bene da letture casuali dei dati, ma non equivale a una protezione forte contro attaccanti che ottengono accesso al contesto browser dell'utente.

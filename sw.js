@@ -1,9 +1,8 @@
-const STATIC_CACHE = 'easyturno-static-v5';
+const STATIC_CACHE = 'easyturno-static-v6';
 const RUNTIME_CACHE = 'easyturno-runtime-v1';
 const APP_SHELL_URL = '/index.html';
 
 const PRECACHE_URLS = [
-  '/',
   APP_SHELL_URL,
   '/manifest.webmanifest',
   '/favicon.ico',
@@ -101,10 +100,28 @@ self.addEventListener('install', event => {
   );
 });
 
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
+function isSameOriginClient(source) {
+  if (!source || typeof source.url !== 'string') {
+    return false;
   }
+  try {
+    return new URL(source.url).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+self.addEventListener('message', event => {
+  if (!event.data || event.data.type !== 'SKIP_WAITING') {
+    return;
+  }
+  // Only honour SKIP_WAITING from a same-origin window/worker client; ignore
+  // messages whose source is missing or cross-origin to avoid third parties
+  // (cross-origin iframes, dev tools, etc.) forcing an unexpected activation.
+  if (!isSameOriginClient(event.source)) {
+    return;
+  }
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {

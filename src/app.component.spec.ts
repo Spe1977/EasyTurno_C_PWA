@@ -7,6 +7,7 @@ import { NotificationService } from './services/notification.service';
 import { CryptoService } from './services/crypto.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
+import { Shift, ShiftColor } from './shift.model';
 
 describe('AppComponent - Integration Tests', () => {
   let component: AppComponent;
@@ -60,6 +61,7 @@ describe('AppComponent - Integration Tests', () => {
       isPasswordProtectedBackupPayload: jest
         .fn()
         .mockImplementation((data: string) => data.includes('"encrypted"')),
+      secureStorageAvailable: signal(true),
     };
 
     await TestBed.configureTestingModule({
@@ -615,6 +617,73 @@ describe('AppComponent - Integration Tests', () => {
     });
   });
 
+  describe('Live form numeric validation (#7)', () => {
+    it('should ignore NaN amount from updateAllowanceAmount', () => {
+      component.addAllowance();
+      component.updateAllowanceAmount(0, { target: { value: '10' } } as any);
+      expect(component.shiftAllowances()[0].amount).toBe(10);
+
+      component.updateAllowanceAmount(0, { target: { value: 'abc' } } as any);
+      expect(component.shiftAllowances()[0].amount).toBe(10);
+    });
+
+    it('should ignore negative amount from updateAllowanceAmount', () => {
+      component.addAllowance();
+      component.updateAllowanceAmount(0, { target: { value: '5' } } as any);
+      component.updateAllowanceAmount(0, { target: { value: '-3' } } as any);
+      expect(component.shiftAllowances()[0].amount).toBe(5);
+    });
+
+    it('should coerce null/NaN/negative overtime to 0 via updateOvertimeHours', () => {
+      component.updateOvertimeHours(2.5);
+      expect(component.shiftOvertimeHours()).toBe(2.5);
+
+      component.updateOvertimeHours(null);
+      expect(component.shiftOvertimeHours()).toBe(0);
+
+      component.updateOvertimeHours(NaN);
+      expect(component.shiftOvertimeHours()).toBe(0);
+
+      component.updateOvertimeHours(-1);
+      expect(component.shiftOvertimeHours()).toBe(0);
+    });
+  });
+
+  describe('closeModal centralized cleanup (#8)', () => {
+    it('should clear pending import state when closing passwordPrompt', () => {
+      component.pendingImportData.set('{"encrypted":"[]"}');
+      component.isImporting.set(true);
+      component.passwordInput.set('secret');
+      component.passwordConfirmInput.set('secret');
+      component.passwordPromptMode.set('import');
+      component.openModal('passwordPrompt');
+
+      component.closeModal();
+
+      expect(component.activeModal()).toBe('none');
+      expect(component.pendingImportData()).toBeNull();
+      expect(component.isImporting()).toBe(false);
+      expect(component.passwordInput()).toBe('');
+      expect(component.passwordConfirmInput()).toBe('');
+    });
+
+    it('should not touch import state when closing a non-passwordPrompt modal', () => {
+      component.pendingImportData.set('{"encrypted":"[]"}');
+      component.isImporting.set(true);
+      component.openModal('settings');
+
+      component.closeModal();
+
+      expect(component.activeModal()).toBe('none');
+      expect(component.pendingImportData()).toBe('{"encrypted":"[]"}');
+      expect(component.isImporting()).toBe(true);
+
+      // cleanup so subsequent tests are not polluted
+      component.pendingImportData.set(null);
+      component.isImporting.set(false);
+    });
+  });
+
   describe('Statistics Calculation', () => {
     beforeEach(() => {
       shiftService.deleteAllShifts();
@@ -764,6 +833,103 @@ describe('AppComponent - Integration Tests', () => {
       expect(shiftService.shifts()).toHaveLength(1);
     });
 
+    describe('Backup password validation (export mode)', () => {
+      beforeEach(() => {
+        shiftService.addShift({
+          title: 'Backup Source',
+          start: '2025-10-15T08:00:00',
+          end: '2025-10-15T16:00:00',
+          color: 'sky',
+          isRecurring: false,
+        });
+        component.exportBackup();
+      });
+
+      it('should reject password shorter than 12 characters, keep modal open and not encrypt', async () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+
+        component.passwordInput.set('shortpass'); // 9 chars
+        component.passwordConfirmInput.set('shortpass');
+        await component.confirmPasswordPrompt();
+
+        expect(errorSpy).toHaveBeenCalled();
+        const message = errorSpy.mock.calls[0][0] as string;
+        expect(message).toContain('12');
+        expect(component.activeModal()).toBe('passwordPrompt');
+        expect(cryptoService.encryptBackupWithPassword).not.toHaveBeenCalled();
+      });
+
+      it('should reject an 11-character password (boundary case)', async () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+
+        component.passwordInput.set('elevenchars'); // 11 chars
+        component.passwordConfirmInput.set('elevenchars');
+        await component.confirmPasswordPrompt();
+
+        expect(errorSpy).toHaveBeenCalled();
+        expect(component.activeModal()).toBe('passwordPrompt');
+        expect(cryptoService.encryptBackupWithPassword).not.toHaveBeenCalled();
+      });
+
+      it('should accept a password of exactly 12 characters and proceed with export', async () => {
+        global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+        global.URL.revokeObjectURL = jest.fn();
+        jest.spyOn(document, 'createElement').mockReturnValue({ click: jest.fn() } as any);
+        const errorSpy = jest.spyOn(toastService, 'error');
+
+        component.passwordInput.set('twelvechars1'); // 12 chars
+        component.passwordConfirmInput.set('twelvechars1');
+        await component.confirmPasswordPrompt();
+
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(cryptoService.encryptBackupWithPassword).toHaveBeenCalledWith(
+          expect.any(String),
+          'twelvechars1'
+        );
+        expect(component.activeModal()).toBe('none');
+      });
+
+      it('should reject when password and confirmation differ (length OK)', async () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+
+        component.passwordInput.set('longenoughpassword'); // ≥12
+        component.passwordConfirmInput.set('differentpassword!');
+        await component.confirmPasswordPrompt();
+
+        expect(errorSpy).toHaveBeenCalled();
+        expect(component.activeModal()).toBe('passwordPrompt');
+        expect(cryptoService.encryptBackupWithPassword).not.toHaveBeenCalled();
+      });
+
+      it('should enforce length check before mismatch check (short + mismatched → length error)', async () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+
+        component.passwordInput.set('shortA'); // short
+        component.passwordConfirmInput.set('shortB'); // also short, different
+        await component.confirmPasswordPrompt();
+
+        expect(errorSpy).toHaveBeenCalledTimes(1);
+        const message = errorSpy.mock.calls[0][0] as string;
+        expect(message).toContain('12');
+        expect(cryptoService.encryptBackupWithPassword).not.toHaveBeenCalled();
+      });
+
+      it('should not apply the length restriction in import mode', async () => {
+        component.closeModal();
+        component.pendingImportData.set('{"encrypted":"[]"}');
+        component.passwordPromptMode.set('import');
+        component.openModal('passwordPrompt');
+
+        component.passwordInput.set('abc'); // 3 chars — short, but allowed for import
+        await component.confirmPasswordPrompt();
+
+        expect(cryptoService.decryptBackupWithPassword).toHaveBeenCalledWith(
+          '{"encrypted":"[]"}',
+          'abc'
+        );
+      });
+    });
+
     it('should handle import of valid shifts', done => {
       const validData = [
         {
@@ -856,6 +1022,134 @@ describe('AppComponent - Integration Tests', () => {
 
       expect(shiftService.shifts()).toHaveLength(0);
       expect(component.activeModal()).toBe('none');
+    });
+  });
+
+  describe('Security flow coverage (T5)', () => {
+    describe('handleDateSearch', () => {
+      it('should reject dates before 1900 and keep the search modal open', () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+        const previousSearchDate = new Date('2025-01-01T00:00:00');
+
+        component.searchDate.set(previousSearchDate);
+        component.searchDateInput.set('1899-12-31');
+        component.openModal('searchDate');
+        component.handleDateSearch();
+
+        expect(errorSpy).toHaveBeenCalledWith(translationService.translate('dateOutOfRange'));
+        expect(component.searchDate()).toBe(previousSearchDate);
+        expect(component.activeModal()).toBe('searchDate');
+      });
+
+      it('should reject dates after 2100 and keep the search modal open', () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+        const previousSearchDate = new Date('2025-01-01T00:00:00');
+
+        component.searchDate.set(previousSearchDate);
+        component.searchDateInput.set('2101-01-01');
+        component.openModal('searchDate');
+        component.handleDateSearch();
+
+        expect(errorSpy).toHaveBeenCalledWith(translationService.translate('dateOutOfRange'));
+        expect(component.searchDate()).toBe(previousSearchDate);
+        expect(component.activeModal()).toBe('searchDate');
+      });
+
+      it('should reject invalid date values that parse to NaN', () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+        const previousSearchDate = new Date('2025-01-01T00:00:00');
+
+        component.searchDate.set(previousSearchDate);
+        component.searchDateInput.set('not-a-date');
+        component.openModal('searchDate');
+        component.handleDateSearch();
+
+        expect(errorSpy).toHaveBeenCalledWith(translationService.translate('invalidDateFormat'));
+        expect(component.searchDate()).toBe(previousSearchDate);
+        expect(component.activeModal()).toBe('searchDate');
+      });
+
+      it('should show a parse error toast if date construction throws', () => {
+        const errorSpy = jest.spyOn(toastService, 'error');
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const RealDate = Date;
+        const MockDate = jest.fn((value?: string | number | Date) => {
+          if (value === 'throw-dateT00:00:00') {
+            throw new Error('date constructor failed');
+          }
+          return value === undefined ? new RealDate() : new RealDate(value);
+        });
+        Object.assign(MockDate, {
+          now: RealDate.now,
+          parse: RealDate.parse,
+          UTC: RealDate.UTC,
+          prototype: RealDate.prototype,
+        });
+        jest.spyOn(globalThis, 'Date').mockImplementation(MockDate as unknown as DateConstructor);
+
+        component.searchDateInput.set('throw-date');
+        component.openModal('searchDate');
+        component.handleDateSearch();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Date parsing error:', expect.any(Error));
+        expect(errorSpy).toHaveBeenCalledWith(translationService.translate('failedToParseDate'));
+        expect(component.activeModal()).toBe('searchDate');
+      });
+    });
+
+    it('should reject import files larger than 5 MB before reading them', () => {
+      const errorSpy = jest.spyOn(toastService, 'error');
+      const readAsTextSpy = jest.spyOn(FileReader.prototype, 'readAsText');
+      const oversizedFile = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'too-large.json', {
+        type: 'application/json',
+      });
+
+      component.importBackup({ target: { files: [oversizedFile] } } as unknown as Event);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        translationService.translate('backupFileTooLarge'),
+        5000
+      );
+      expect(readAsTextSpy).not.toHaveBeenCalled();
+      expect(component.isImporting()).toBe(false);
+    });
+
+    it('should reset unreadable encrypted data only after decryption reset confirmation', () => {
+      const resetSpy = jest.spyOn(shiftService, 'resetAfterDecryptionError');
+      const successSpy = jest.spyOn(toastService, 'success');
+
+      component.openModal('decryptionError');
+      component.executeDecryptionReset();
+
+      expect(resetSpy).toHaveBeenCalledTimes(1);
+      expect(component.activeModal()).toBe('none');
+      expect(successSpy).toHaveBeenCalledWith(translationService.translate('resetSuccess'));
+    });
+
+    it('should dismiss decryption errors without resetting stored data', () => {
+      const resetSpy = jest.spyOn(shiftService, 'resetAfterDecryptionError');
+      const successSpy = jest.spyOn(toastService, 'success');
+
+      component.openModal('decryptionError');
+      component.dismissDecryptionError();
+
+      expect(resetSpy).not.toHaveBeenCalled();
+      expect(successSpy).not.toHaveBeenCalled();
+      expect(component.activeModal()).toBe('none');
+    });
+
+    it('should open the shift form from the add_shift URL action and clean the URL', () => {
+      const replaceStateSpy = jest.spyOn(window.history, 'replaceState');
+      window.history.pushState({}, '', '/?action=add_shift');
+
+      const actionFixture = TestBed.createComponent(AppComponent);
+      const actionComponent = actionFixture.componentInstance;
+
+      expect(actionComponent.activeModal()).toBe('form');
+      expect(actionComponent.editingShift()).toBeNull();
+      expect(replaceStateSpy).toHaveBeenCalledWith({}, '', '/');
+
+      window.history.pushState({}, '', '/');
     });
   });
 
@@ -980,6 +1274,247 @@ describe('AppComponent - Integration Tests', () => {
       expect(newComponent.theme()).toBe('dark');
       expect(shiftService.shifts()).toHaveLength(1);
       expect(shiftService.shifts()[0].title).toBe('Persistent Shift');
+    });
+  });
+
+  describe('app.component.ts residual coverage (T11)', () => {
+    describe('DatePipe ISO fallback', () => {
+      it('uses ISO fallback in resetForm() when DatePipe.transform returns null', () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(component.datePipe, 'transform').mockReturnValue(null);
+
+        component.resetForm();
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Failed to format reset dates, using ISO fallback'
+        );
+        expect(component.shiftStartDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(component.shiftStartTime()).toMatch(/^\d{2}:\d{2}$/);
+        expect(component.shiftEndDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(component.shiftEndTime()).toMatch(/^\d{2}:\d{2}$/);
+      });
+
+      it('uses ISO fallback in openEditShiftForm() when DatePipe.transform returns null', () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(component.datePipe, 'transform').mockReturnValue(null);
+
+        const shift: Shift = {
+          id: 'fallback-1',
+          seriesId: 'fallback-1',
+          title: 'Fallback Edit',
+          start: '2025-06-15T10:30:00.000Z',
+          end: '2025-06-15T14:30:00.000Z',
+          color: 'sky',
+          isRecurring: false,
+        };
+
+        component.openEditShiftForm(shift);
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Failed to format shift dates, using ISO fallback'
+        );
+        expect(component.shiftStartDate()).toBe('2025-06-15');
+        expect(component.shiftEndDate()).toBe('2025-06-15');
+        expect(component.shiftStartTime()).toMatch(/^\d{2}:\d{2}$/);
+        expect(component.shiftEndTime()).toMatch(/^\d{2}:\d{2}$/);
+        expect(component.shiftTitle()).toBe('Fallback Edit');
+      });
+
+      it('uses ISO fallback in the constructor when DatePipe.transform returns null', async () => {
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        TestBed.resetTestingModule();
+
+        const mockCryptoService = {
+          encrypt: jest.fn().mockImplementation(async (data: string) => data),
+          decrypt: jest.fn().mockImplementation(async (data: string) => data),
+          isEncrypted: jest.fn().mockReturnValue(false),
+          encryptBackupWithPassword: jest.fn(),
+          decryptBackupWithPassword: jest.fn(),
+          isPasswordProtectedBackupPayload: jest.fn().mockReturnValue(false),
+          secureStorageAvailable: signal(true),
+        };
+
+        await TestBed.configureTestingModule({
+          imports: [AppComponent],
+          providers: [
+            ShiftService,
+            TranslationService,
+            ToastService,
+            NotificationService,
+            { provide: CryptoService, useValue: mockCryptoService },
+          ],
+        })
+          .overrideComponent(AppComponent, {
+            set: { providers: [{ provide: DatePipe, useValue: { transform: () => null } }] },
+          })
+          .compileComponents();
+
+        const newFixture = TestBed.createComponent(AppComponent);
+        const newComponent = newFixture.componentInstance;
+
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Failed to format search date, using fallback'
+        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Failed to format stats dates, using fallback'
+        );
+        expect(newComponent.searchDateInput()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(newComponent.statsStartDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(newComponent.statsEndDate()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      });
+    });
+
+    describe('executeEdit(false) — single-instance edit from recurring series', () => {
+      it('updates only the current instance and detaches it from the recurrence', () => {
+        shiftService.deleteAllShifts();
+        shiftService.addShift({
+          title: 'Weekly Standup',
+          start: '2025-11-03T09:00:00',
+          end: '2025-11-03T10:00:00',
+          color: 'sky',
+          isRecurring: true,
+          repetition: { frequency: 'weeks', interval: 1 },
+        });
+
+        const allInstances = shiftService.shifts();
+        expect(allInstances.length).toBeGreaterThan(1);
+        const editingInstance = allInstances[0];
+
+        component.openEditShiftForm(editingInstance);
+        component.shiftTitle.set('One-off Standup');
+
+        const updateShiftSpy = jest.spyOn(shiftService, 'updateShift');
+        const updateShiftSeriesSpy = jest.spyOn(shiftService, 'updateShiftSeries');
+
+        component.handleFormSubmit();
+        expect(component.activeModal()).toBe('editSeriesConfirm');
+        expect(component.pendingShiftData()).not.toBeNull();
+
+        component.executeEdit(false);
+
+        expect(updateShiftSeriesSpy).not.toHaveBeenCalled();
+        expect(updateShiftSpy).toHaveBeenCalledTimes(1);
+        const updatedArg = updateShiftSpy.mock.calls[0][0] as Shift;
+        expect(updatedArg.id).toBe(editingInstance.id);
+        expect(updatedArg.title).toBe('One-off Standup');
+        expect(updatedArg.isRecurring).toBe(false);
+        expect(updatedArg.repetition).toBeUndefined();
+
+        expect(component.activeModal()).toBe('none');
+        expect(component.editingShift()).toBeNull();
+        expect(component.pendingShiftData()).toBeNull();
+      });
+
+      it('is a no-op when there is no editing target or pending data', () => {
+        const updateShiftSpy = jest.spyOn(shiftService, 'updateShift');
+        const updateShiftSeriesSpy = jest.spyOn(shiftService, 'updateShiftSeries');
+
+        component.editingShift.set(null);
+        component.pendingShiftData.set(null);
+
+        component.executeEdit(false);
+        component.executeEdit(true);
+
+        expect(updateShiftSpy).not.toHaveBeenCalled();
+        expect(updateShiftSeriesSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getColorClasses — all 8 color branches', () => {
+      const colors: ShiftColor[] = [
+        'sky',
+        'green',
+        'amber',
+        'rose',
+        'indigo',
+        'teal',
+        'fuchsia',
+        'slate',
+      ];
+
+      colors.forEach(color => {
+        it(`returns the full Tailwind class string for "${color}"`, () => {
+          const classes = component.getColorClasses(color);
+
+          expect(classes).toContain(`bg-${color}-100`);
+          expect(classes).toContain(`text-${color}-700`);
+          expect(classes).toContain(`border-${color}-500`);
+          expect(classes).toContain(`dark:bg-${color}-500/20`);
+          expect(classes).toContain(`dark:text-${color}-300`);
+          expect(classes).toContain(`dark:border-${color}-400`);
+        });
+      });
+
+      it('returns a distinct class string for every supported color', () => {
+        const allResults = colors.map(c => component.getColorClasses(c));
+        expect(new Set(allResults).size).toBe(colors.length);
+      });
+    });
+
+    describe('toggleViewMode / setViewMode', () => {
+      it('toggleViewMode: list → calendar preserves search and pagination', () => {
+        const searchDate = new Date('2025-10-15T00:00:00');
+        component.searchDate.set(searchDate);
+        component.listVisibleCount.set(123);
+        component.viewMode.set('list');
+
+        component.toggleViewMode();
+
+        expect(component.viewMode()).toBe('calendar');
+        expect(component.searchDate()).toBe(searchDate);
+        expect(component.listVisibleCount()).toBe(123);
+      });
+
+      it('toggleViewMode: calendar → list clears search and resets pagination', () => {
+        component.searchDate.set(new Date('2025-10-15T00:00:00'));
+        component.listVisibleCount.set(200);
+        component.viewMode.set('calendar');
+
+        component.toggleViewMode();
+
+        expect(component.viewMode()).toBe('list');
+        expect(component.searchDate()).toBeNull();
+        expect(component.listVisibleCount()).toBe(50);
+      });
+
+      it('setViewMode("list") from calendar clears search and resets pagination', () => {
+        component.searchDate.set(new Date('2025-10-15T00:00:00'));
+        component.listVisibleCount.set(150);
+        component.viewMode.set('calendar');
+
+        component.setViewMode('list');
+
+        expect(component.viewMode()).toBe('list');
+        expect(component.searchDate()).toBeNull();
+        expect(component.listVisibleCount()).toBe(50);
+      });
+
+      it('setViewMode("calendar") from list preserves search and pagination', () => {
+        const searchDate = new Date('2025-10-15T00:00:00');
+        component.searchDate.set(searchDate);
+        component.listVisibleCount.set(100);
+        component.viewMode.set('list');
+
+        component.setViewMode('calendar');
+
+        expect(component.viewMode()).toBe('calendar');
+        expect(component.searchDate()).toBe(searchDate);
+        expect(component.listVisibleCount()).toBe(100);
+      });
+
+      it('setViewMode("list") while already on list does not clear search', () => {
+        const searchDate = new Date('2025-10-15T00:00:00');
+        component.searchDate.set(searchDate);
+        component.listVisibleCount.set(75);
+        component.viewMode.set('list');
+
+        component.setViewMode('list');
+
+        expect(component.viewMode()).toBe('list');
+        expect(component.searchDate()).toBe(searchDate);
+        expect(component.listVisibleCount()).toBe(75);
+      });
     });
   });
 });

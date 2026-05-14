@@ -1,5 +1,5 @@
-import { Injectable, signal, effect, inject } from '@angular/core';
-import { Shift, Repetition } from '../shift.model';
+import { Injectable, signal, effect, inject, isDevMode } from '@angular/core';
+import { Shift, Repetition, ShiftColor, Allowance } from '../shift.model';
 import { ToastService } from './toast.service';
 import { NotificationService } from './notification.service';
 import { CryptoService } from './crypto.service';
@@ -12,6 +12,8 @@ export class ShiftService {
   private readonly MAX_NOTIFICATION_PREVIEW = 10;
   private readonly MAX_IMPORT_SIZE_BYTES = 5 * 1024 * 1024;
   private readonly DAYS_PER_WEEK = 7;
+  static readonly MAX_TITLE_LENGTH = 200;
+  static readonly MAX_NOTES_LENGTH = 2000;
   private readonly storageReady = signal(false);
   private latestSaveRequestId = 0;
 
@@ -33,6 +35,19 @@ export class ShiftService {
    * to decide whether to reset data or keep the (unreadable) ciphertext.
    */
   decryptionError = signal(false);
+
+  /**
+   * In dev mode logs the full error (stack + cause from CryptoService); in
+   * production logs only the message so that crypto internals are not
+   * exposed via DevTools.
+   */
+  private logError(message: string, error: unknown): void {
+    if (isDevMode()) {
+      console.error(message, error);
+    } else {
+      console.error(message);
+    }
+  }
 
   constructor() {
     this.loadShiftsFromStorage();
@@ -68,7 +83,7 @@ export class ShiftService {
           this.storageReady.set(true);
         })
         .catch(error => {
-          console.error('Failed to decrypt shifts:', error);
+          this.logError('Failed to decrypt shifts', error);
           // Do NOT clear data automatically — let the user decide.
           // Saves remain blocked (isLoaded stays false) to avoid overwriting
           // the ciphertext with an empty array.
@@ -137,11 +152,11 @@ export class ShiftService {
           }
         })
         .catch(error => {
-          console.error('Failed to encrypt shifts:', error);
+          this.logError('Failed to encrypt shifts', error);
           this.toastService.error('Failed to save shifts. Please try again.', 4000);
         });
     } catch (error) {
-      console.error('Failed to save shifts to localStorage:', error);
+      this.logError('Failed to save shifts to localStorage', error);
       this.toastService.error('Failed to save shifts. Please try again.', 4000);
     }
   }
@@ -327,12 +342,61 @@ export class ShiftService {
         return { success: false, error: 'No valid shifts found' };
       }
 
+      // Cancel any stale notifications from the previous dataset, then
+      // schedule reminders for the upcoming imported shifts.
+      void this.notificationService.cancelAllNotifications().then(() => {
+        const settings = this.notificationService.getSettings();
+        const upcoming = validShifts
+          .filter(s => new Date(s.start).getTime() > Date.now())
+          .slice(0, this.MAX_NOTIFICATION_PREVIEW);
+        upcoming.forEach(
+          shift => void this.notificationService.scheduleShiftNotification(shift, settings)
+        );
+      });
+
       this.shifts.set(validShifts);
       return { success: true, imported: validShifts.length };
     } catch (error) {
       console.error('Import failed:', error);
       return { success: false, error: 'Failed to parse JSON' };
     }
+  }
+
+  private static readonly VALID_COLORS: ReadonlySet<ShiftColor> = new Set<ShiftColor>([
+    'sky',
+    'green',
+    'amber',
+    'rose',
+    'indigo',
+    'teal',
+    'fuchsia',
+    'slate',
+  ]);
+
+  private static readonly VALID_FREQUENCIES: ReadonlySet<Repetition['frequency']> = new Set<
+    Repetition['frequency']
+  >(['days', 'weeks', 'months', 'years']);
+
+  private isValidColor(value: unknown): value is ShiftColor {
+    return typeof value === 'string' && ShiftService.VALID_COLORS.has(value as ShiftColor);
+  }
+
+  private isValidRepetition(value: unknown): value is Repetition {
+    if (typeof value !== 'object' || value === null) return false;
+    const r = value as Record<string, unknown>;
+    return (
+      typeof r.frequency === 'string' &&
+      ShiftService.VALID_FREQUENCIES.has(r.frequency as Repetition['frequency']) &&
+      typeof r.interval === 'number' &&
+      Number.isFinite(r.interval) &&
+      r.interval >= 1
+    );
+  }
+
+  private isValidAllowance(value: unknown): value is Allowance {
+    if (typeof value !== 'object' || value === null) return false;
+    const a = value as Record<string, unknown>;
+    return typeof a.name === 'string' && typeof a.amount === 'number' && Number.isFinite(a.amount);
   }
 
   private isValidShift(item: unknown): item is Shift {
@@ -348,6 +412,7 @@ export class ShiftService {
         typeof obj.id === 'string' &&
         'title' in obj &&
         typeof obj.title === 'string' &&
+        obj.title.length <= ShiftService.MAX_TITLE_LENGTH &&
         'start' in obj &&
         typeof obj.start === 'string' &&
         this.isValidISODate(obj.start) &&
@@ -355,13 +420,38 @@ export class ShiftService {
         typeof obj.end === 'string' &&
         this.isValidISODate(obj.end) &&
         'color' in obj &&
-        typeof obj.color === 'string' &&
+        this.isValidColor(obj.color) &&
         'isRecurring' in obj &&
         typeof obj.isRecurring === 'boolean' &&
         'seriesId' in obj &&
         typeof obj.seriesId === 'string'
       )
     ) {
+      return false;
+    }
+
+    // Validate optional fields when present
+    if (obj.repetition !== undefined && !this.isValidRepetition(obj.repetition)) {
+      return false;
+    }
+    if (
+      obj.notes !== undefined &&
+      (typeof obj.notes !== 'string' || obj.notes.length > ShiftService.MAX_NOTES_LENGTH)
+    ) {
+      return false;
+    }
+    if (
+      obj.overtimeHours !== undefined &&
+      !(typeof obj.overtimeHours === 'number' && Number.isFinite(obj.overtimeHours))
+    ) {
+      return false;
+    }
+    if (obj.allowances !== undefined) {
+      if (!Array.isArray(obj.allowances) || !obj.allowances.every(a => this.isValidAllowance(a))) {
+        return false;
+      }
+    }
+    if (obj.timezone !== undefined && typeof obj.timezone !== 'string') {
       return false;
     }
 
@@ -378,6 +468,7 @@ export class ShiftService {
   }
 
   deleteAllShifts() {
+    void this.notificationService.cancelAllNotifications();
     this.shifts.set([]);
   }
 }

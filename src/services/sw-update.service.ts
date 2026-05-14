@@ -44,11 +44,15 @@ export class SwUpdateService {
 
       // Handle controller change (after skipWaiting)
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
+        this.reloadPage();
       });
     } catch (error) {
       console.error('Service Worker registration failed:', error);
     }
+  }
+
+  protected reloadPage(): void {
+    window.location.reload();
   }
 
   activateUpdate(): void {

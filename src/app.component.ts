@@ -82,9 +82,12 @@ export class AppComponent {
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
   private readonly MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+  private readonly MIN_BACKUP_PASSWORD_LENGTH = 12;
+  private readonly BACKUP_REMINDER_THRESHOLD = 5;
+  private readonly BACKUP_REMINDER_STORAGE_KEY = 'easyturno_backup_reminder_shown';
 
-  // Native platform detection
-  isNativePlatform = Capacitor.isNativePlatform;
+  // Native platform detection (wrap to preserve `this` binding on Capacitor)
+  isNativePlatform = (): boolean => Capacitor.isNativePlatform();
 
   // Notification settings
   notificationSettings = signal<NotificationSettings>(this.notificationService.getSettings());
@@ -174,7 +177,7 @@ export class AppComponent {
     });
 
     // Keyboard shortcuts
-    effect(() => {
+    effect(onCleanup => {
       const handleKeyboard = (e: KeyboardEvent) => {
         // Ctrl/Cmd + N = New shift
         if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
@@ -195,19 +198,27 @@ export class AppComponent {
 
       window.addEventListener('keydown', handleKeyboard);
 
-      // Cleanup on destroy
-      return () => window.removeEventListener('keydown', handleKeyboard);
+      // Angular effects use onCleanup callback, not return value
+      onCleanup(() => window.removeEventListener('keydown', handleKeyboard));
     });
 
     // Open decryption-error modal when ShiftService reports a decrypt failure
-    effect(
-      () => {
-        if (this.shiftService.decryptionError()) {
-          this.openModal('decryptionError');
-        }
-      },
-      { allowSignalWrites: true }
-    );
+    effect(() => {
+      if (this.shiftService.decryptionError()) {
+        this.openModal('decryptionError');
+      }
+    });
+
+    // Warn the user once when the device key falls back to localStorage
+    // (IndexedDB unavailable). In that mode the AES key bytes are readable
+    // from disk, so the security posture is degraded.
+    let secureStorageWarned = false;
+    effect(() => {
+      if (!this.cryptoService.secureStorageAvailable() && !secureStorageWarned) {
+        secureStorageWarned = true;
+        this.toastService.error(this.translationService.translate('reducedSecurityStorage'), 6000);
+      }
+    });
 
     this.resetForm();
 
@@ -307,6 +318,12 @@ export class AppComponent {
   }
 
   closeModal() {
+    if (this.activeModal() === 'passwordPrompt') {
+      this.pendingImportData.set(null);
+      this.isImporting.set(false);
+      this.passwordInput.set('');
+      this.passwordConfirmInput.set('');
+    }
     this.activeModal.set('none');
     // Don't reset form here, as it clears pending data for confirmations
   }
@@ -409,7 +426,20 @@ export class AppComponent {
       this.shiftService.addShift(shiftData);
       this.activeModal.set('none');
       this.resetForm();
+      this.maybeSuggestBackupExport();
     }
+  }
+
+  // One-time hint to export an encrypted backup once the user reaches the
+  // threshold of shifts: there is no recovery path if the encryption key is
+  // lost (cleared browser data, switched device), so a backup is the only
+  // safety net. Persisted via localStorage so it fires at most once per
+  // browser profile.
+  private maybeSuggestBackupExport() {
+    if (localStorage.getItem(this.BACKUP_REMINDER_STORAGE_KEY) === '1') return;
+    if (this.shiftService.shifts().length < this.BACKUP_REMINDER_THRESHOLD) return;
+    localStorage.setItem(this.BACKUP_REMINDER_STORAGE_KEY, '1');
+    this.toastService.info(this.translationService.translate('backupReminderSuggestion'), 8000);
   }
 
   executeEdit(updateSeries: boolean) {
@@ -523,8 +553,10 @@ export class AppComponent {
     }
 
     try {
-      // Use native Date parsing for ISO format
-      const date = new Date(input);
+      // Parse as local midnight (input is "YYYY-MM-DD" from <input type="date">).
+      // Plain `new Date("YYYY-MM-DD")` is parsed as UTC, which can shift the day
+      // in negative-offset timezones.
+      const date = new Date(`${input}T00:00:00`);
 
       // Validate the date is valid
       if (isNaN(date.getTime())) {
@@ -569,6 +601,16 @@ export class AppComponent {
     }
 
     if (mode === 'export') {
+      if (password.length < this.MIN_BACKUP_PASSWORD_LENGTH) {
+        this.toastService.error(
+          this.translationService
+            .translate('backupPasswordTooShort')
+            .replace('{min}', String(this.MIN_BACKUP_PASSWORD_LENGTH)),
+          5000
+        );
+        return;
+      }
+
       const confirmation = this.passwordConfirmInput();
       if (password !== confirmation) {
         this.toastService.error(this.translationService.translate('backupPasswordMismatch'), 5000);
@@ -606,8 +648,6 @@ export class AppComponent {
       } catch {
         this.toastService.error(this.translationService.translate('backupPasswordInvalid'), 5000);
       }
-      this.pendingImportData.set(null);
-      this.isImporting.set(false);
     }
   }
 
@@ -709,9 +749,20 @@ export class AppComponent {
 
   updateAllowanceAmount(index: number, event: Event) {
     const amount = Number((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(amount) || amount < 0) {
+      return;
+    }
     this.shiftAllowances.update(allowances =>
       allowances.map((a, i) => (i === index ? { ...a, amount } : a))
     );
+  }
+
+  updateOvertimeHours(value: number | null) {
+    if (value === null || !Number.isFinite(value) || value < 0) {
+      this.shiftOvertimeHours.set(0);
+      return;
+    }
+    this.shiftOvertimeHours.set(value);
   }
 
   // --- Statistics ---

@@ -264,6 +264,190 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('Native branch coverage (T8)', () => {
+    describe('loadNotificationIdCounter', () => {
+      it('should initialize counter from highest pending notification ID', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
+          display: 'granted',
+        });
+        (LocalNotifications.addListener as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+        (LocalNotifications.getPending as jest.Mock).mockResolvedValue({
+          notifications: [{ id: 5 }, { id: 42 }, { id: 17 }],
+        });
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+
+        await service.initialize();
+
+        // Next scheduled notification ID must be greater than the existing maxId (42)
+        const futureShift: Shift = {
+          id: 'shift-after-load',
+          seriesId: 'series-after-load',
+          title: 'After load',
+          start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          color: 'sky',
+          isRecurring: false,
+        };
+        await service.scheduleShiftNotification(futureShift, {
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: false,
+        });
+
+        expect(LocalNotifications.schedule).toHaveBeenCalledTimes(1);
+        const scheduledArg = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0];
+        expect(scheduledArg.notifications[0].id).toBeGreaterThan(42);
+        expect(scheduledArg.notifications[0].id).toBe(43);
+      });
+
+      it('should reset counter to 0 when getPending throws', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
+          display: 'granted',
+        });
+        (LocalNotifications.addListener as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+        (LocalNotifications.getPending as jest.Mock).mockRejectedValue(new Error('IDB error'));
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {
+          /* noop */
+        });
+
+        await service.initialize();
+
+        const futureShift: Shift = {
+          id: 'shift-after-error',
+          seriesId: 'series-after-error',
+          title: 'After error',
+          start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          color: 'sky',
+          isRecurring: false,
+        };
+        await service.scheduleShiftNotification(futureShift, {
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: false,
+        });
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          'Failed to load notification counter:',
+          expect.any(Error)
+        );
+        // Counter was reset to 0 → first generated ID is 1
+        const scheduledArg = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0];
+        expect(scheduledArg.notifications[0].id).toBe(1);
+      });
+    });
+
+    describe('scheduleShiftNotification — day-before branch', () => {
+      it('should schedule the day-before reminder at 20:00 local time of the previous day', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+
+        // Shift starting 2 days from now at 09:00 local time, to be well after "yesterday 20:00"
+        const shiftStart = new Date();
+        shiftStart.setDate(shiftStart.getDate() + 2);
+        shiftStart.setHours(9, 0, 0, 0);
+        const shiftEnd = new Date(shiftStart);
+        shiftEnd.setHours(17, 0, 0, 0);
+
+        const shift: Shift = {
+          id: 'shift-day-before',
+          seriesId: 'series-day-before',
+          title: 'Day before test',
+          start: shiftStart.toISOString(),
+          end: shiftEnd.toISOString(),
+          color: 'sky',
+          isRecurring: false,
+        };
+
+        await service.scheduleShiftNotification(shift, {
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: true,
+        });
+
+        expect(LocalNotifications.schedule).toHaveBeenCalledTimes(1);
+        const notifications = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0]
+          .notifications;
+        expect(notifications).toHaveLength(2);
+
+        const dayBeforeNotification = notifications.find((n: { title: string }) =>
+          n.title.includes('🔔')
+        );
+        expect(dayBeforeNotification).toBeDefined();
+        const scheduledAt: Date = dayBeforeNotification.schedule.at;
+        const expectedDay = new Date(shiftStart);
+        expectedDay.setDate(expectedDay.getDate() - 1);
+        expectedDay.setHours(20, 0, 0, 0);
+        expect(scheduledAt.getTime()).toBe(expectedDay.getTime());
+        expect(scheduledAt.getHours()).toBe(20);
+        expect(scheduledAt.getMinutes()).toBe(0);
+      });
+
+      it('should skip the day-before reminder when 20:00 of the previous day is already in the past', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+
+        // Shift starting in 2 hours: "yesterday at 20:00" is far in the past
+        const shift: Shift = {
+          id: 'shift-soon',
+          seriesId: 'series-soon',
+          title: 'Soon shift',
+          start: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          end: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+          color: 'sky',
+          isRecurring: false,
+        };
+
+        await service.scheduleShiftNotification(shift, {
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: true,
+        });
+
+        expect(LocalNotifications.schedule).toHaveBeenCalledTimes(1);
+        const notifications = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0]
+          .notifications;
+        // Only the X-minutes-before reminder is scheduled, not the day-before one
+        expect(notifications).toHaveLength(1);
+        expect(notifications[0].title).toContain('📅');
+      });
+    });
+
+    describe('scheduleShiftNotification — invalid start date', () => {
+      it('should skip scheduling when shift.start is not a valid date', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+        const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {
+          /* noop */
+        });
+
+        const invalidShift: Shift = {
+          id: 'invalid-shift',
+          seriesId: 'invalid-series',
+          title: 'Invalid date',
+          start: 'not-a-date',
+          end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          color: 'sky',
+          isRecurring: false,
+        };
+
+        await service.scheduleShiftNotification(invalidShift, {
+          enabled: true,
+          reminderMinutesBefore: 60,
+          dayBeforeEnabled: true,
+        });
+
+        expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+        expect(warnSpy).toHaveBeenCalledWith(
+          'NotificationService: invalid shift start date, skipping notifications'
+        );
+      });
+    });
+  });
+
   describe('cancelAllNotifications', () => {
     it('should not attempt to cancel on web platform', async () => {
       (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(false);
@@ -286,6 +470,47 @@ describe('NotificationService', () => {
       expect(LocalNotifications.cancel).toHaveBeenCalledWith({
         notifications: [{ id: 1 }, { id: 2 }, { id: 3 }],
       });
+    });
+
+    it('should reset the notification ID counter after cancelling all (#9)', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
+        display: 'granted',
+      });
+      (LocalNotifications.addListener as jest.Mock).mockResolvedValue({ remove: jest.fn() });
+      // Pre-existing high IDs cause loadNotificationIdCounter to set counter = 42
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValueOnce({
+        notifications: [{ id: 5 }, { id: 42 }, { id: 17 }],
+      });
+      (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+      (LocalNotifications.cancel as jest.Mock).mockResolvedValue(undefined);
+
+      await service.initialize();
+
+      // cancelAllNotifications reads pending again and clears them
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValueOnce({
+        notifications: [{ id: 5 }, { id: 42 }, { id: 17 }],
+      });
+      await service.cancelAllNotifications();
+
+      // After cancellation, the next scheduled notification must restart at ID 1
+      const futureShift: Shift = {
+        id: 'shift-after-reset',
+        seriesId: 'series-after-reset',
+        title: 'After reset',
+        start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        end: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        color: 'sky',
+        isRecurring: false,
+      };
+      await service.scheduleShiftNotification(futureShift, {
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: false,
+      });
+
+      const scheduledArg = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0];
+      expect(scheduledArg.notifications[0].id).toBe(1);
     });
   });
 });

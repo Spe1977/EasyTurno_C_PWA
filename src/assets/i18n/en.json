@@ -34,6 +34,8 @@
   "backupPasswordPrompt": "Enter a password to encrypt the backup",
   "backupPasswordConfirmPrompt": "Confirm the backup password",
   "backupPasswordMismatch": "Backup passwords do not match.",
+  "backupPasswordTooShort": "The backup password must be at least {min} characters long.",
+  "backupPasswordHint": "Use at least 12 characters. A long, unique password protects your backup.",
   "backupPasswordImportPrompt": "Enter the backup password",
   "backupPasswordInvalid": "Invalid backup password or corrupted file.",
   "backupFileTooLarge": "The backup file is too large.",
@@ -113,6 +115,8 @@
   "invalidDateFormat": "Invalid date format. Please use YYYY-MM-DD.",
   "dateOutOfRange": "Please enter a date between 1900 and 2100.",
   "failedToParseDate": "Failed to parse date. Please check the format.",
+  "reducedSecurityStorage": "Reduced-security mode: IndexedDB unavailable, encryption key is stored in localStorage.",
+  "backupReminderSuggestion": "Tip: export an encrypted backup from Settings. If you clear browser data or switch device your shifts cannot be recovered.",
   "shifts": {
     "overtime": "overtime"
   }

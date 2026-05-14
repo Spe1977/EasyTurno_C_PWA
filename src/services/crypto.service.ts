@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, isDevMode, signal } from '@angular/core';
 
 /**
  * CryptoService - Provides encryption/decryption for localStorage data
@@ -20,11 +20,49 @@ export class CryptoService {
   private readonly IDB_DB_NAME = 'easyturno_keystore';
   private readonly IDB_STORE_NAME = 'keys';
   private readonly IDB_KEY_ID = 'deviceKey';
-  private readonly PBKDF2_ITERATIONS = 250000;
+  private readonly PBKDF2_ITERATIONS = 600000;
+  private readonly PBKDF2_MIN_ITERATIONS = 100000;
   private readonly PASSWORD_BACKUP_TYPE = 'easyturno-password-backup';
+  private readonly CIPHERTEXT_MAGIC_HEADER = 'ETBLOB1:';
+
+  /**
+   * In-flight key resolution. Sharing the same Promise across concurrent
+   * callers prevents two requests from generating distinct keys and racing
+   * to overwrite each other in IndexedDB.
+   */
+  private deviceKeyPromise: Promise<CryptoKey> | null = null;
+
+  /**
+   * Becomes false when the device key is persisted to localStorage instead
+   * of IndexedDB (IDB unavailable). In that mode the raw AES key bytes are
+   * readable from localStorage and exfiltrable by an XSS, so the UI should
+   * surface a warning to the user.
+   */
+  secureStorageAvailable = signal(true);
 
   private isIndexedDBAvailable(): boolean {
     return typeof indexedDB !== 'undefined';
+  }
+
+  /**
+   * In dev mode logs the full error (stack + cause); in production logs
+   * only the message so that crypto internals are not exposed via DevTools.
+   */
+  private logError(message: string, error: unknown): void {
+    if (isDevMode()) {
+      console.error(message, error);
+    } else {
+      console.error(message);
+    }
+  }
+
+  /**
+   * In dev mode wraps the original error as `cause` for debuggability; in
+   * production omits it so consumers logging the thrown error cannot leak
+   * crypto internals.
+   */
+  private wrapError(message: string, error: unknown): Error {
+    return isDevMode() ? new Error(message, { cause: error }) : new Error(message);
   }
 
   // ── IndexedDB helpers ────────────────────────────────────────────────────
@@ -102,8 +140,24 @@ export class CryptoService {
    * plain text.  On first run after the upgrade, a legacy key found in
    * localStorage is migrated and then removed.
    */
-  private async getDeviceKey(): Promise<CryptoKey> {
+  private getDeviceKey(): Promise<CryptoKey> {
+    // Reuse the in-flight resolution so concurrent encrypt/decrypt calls
+    // never race to generate competing keys.
+    if (!this.deviceKeyPromise) {
+      this.deviceKeyPromise = this.resolveDeviceKey().catch(error => {
+        // Reset on failure so a later call can retry.
+        this.deviceKeyPromise = null;
+        throw error;
+      });
+    }
+    return this.deviceKeyPromise;
+  }
+
+  private async resolveDeviceKey(): Promise<CryptoKey> {
     const canUseIndexedDB = this.isIndexedDBAvailable();
+    if (!canUseIndexedDB) {
+      this.secureStorageAvailable.set(false);
+    }
 
     // 1. Try IndexedDB when available (secure, non-extractable storage)
     if (canUseIndexedDB) {
@@ -161,11 +215,12 @@ export class CryptoService {
       combined.set(iv, 0);
       combined.set(new Uint8Array(encrypted), iv.length);
 
-      // Return as base64 string
-      return this.arrayBufferToBase64(combined.buffer);
+      // Return as base64 string prefixed with the magic header so that
+      // readers can deterministically identify the encrypted format.
+      return this.CIPHERTEXT_MAGIC_HEADER + this.arrayBufferToBase64(combined.buffer);
     } catch (error) {
-      console.error('Encryption failed:', error);
-      throw new Error('Failed to encrypt data');
+      this.logError('Encryption failed', error);
+      throw this.wrapError('Failed to encrypt data', error);
     }
   }
 
@@ -178,8 +233,14 @@ export class CryptoService {
     try {
       const key = await this.getDeviceKey();
 
+      // Strip the magic header when present; legacy records (pre-header) are
+      // accepted as-is and migrate to the new format on next save.
+      const payload = encryptedBase64.startsWith(this.CIPHERTEXT_MAGIC_HEADER)
+        ? encryptedBase64.slice(this.CIPHERTEXT_MAGIC_HEADER.length)
+        : encryptedBase64;
+
       // Decode from base64
-      const combined = this.base64ToArrayBuffer(encryptedBase64);
+      const combined = this.base64ToArrayBuffer(payload);
       const combinedArray = new Uint8Array(combined);
 
       // Extract IV and encrypted data
@@ -193,16 +254,22 @@ export class CryptoService {
       const decoder = new TextDecoder();
       return decoder.decode(decrypted);
     } catch (error) {
-      console.error('Decryption failed:', error);
-      throw new Error('Failed to decrypt data');
+      this.logError('Decryption failed', error);
+      throw this.wrapError('Failed to decrypt data', error);
     }
   }
 
   /**
-   * Checks if data is encrypted (basic heuristic check)
+   * Checks if data is encrypted. New records carry a deterministic magic
+   * header (`ETBLOB1:`); legacy records (pre-header) are matched via the
+   * original base64 heuristic and migrate to the new format on next save.
    */
   isEncrypted(data: string): boolean {
     if (!data || data.length === 0) return false;
+
+    if (data.startsWith(this.CIPHERTEXT_MAGIC_HEADER)) {
+      return true;
+    }
 
     const trimmedData = data.trim();
     if (trimmedData.startsWith('{') || trimmedData.startsWith('[')) {
@@ -225,7 +292,7 @@ export class CryptoService {
     try {
       const salt = crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
       const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
-      const key = await this.derivePasswordKey(password, salt, ['encrypt']);
+      const key = await this.derivePasswordKey(password, salt, this.PBKDF2_ITERATIONS, ['encrypt']);
       const encoded = new TextEncoder().encode(plaintext);
       const encrypted = await crypto.subtle.encrypt({ name: this.ALGORITHM, iv }, key, encoded);
 
@@ -240,22 +307,24 @@ export class CryptoService {
         data: this.arrayBufferToBase64(encrypted),
       });
     } catch (error) {
-      console.error('Backup encryption failed:', error);
-      throw new Error('Failed to encrypt backup');
+      this.logError('Backup encryption failed', error);
+      throw this.wrapError('Failed to encrypt backup', error);
     }
   }
 
   async decryptBackupWithPassword(payload: string, password: string): Promise<string> {
     try {
-      const backupPayload = JSON.parse(payload);
-      if (!this.isPasswordProtectedBackupPayload(payload)) {
+      const backupPayload = JSON.parse(payload) as Record<string, unknown>;
+      if (!this.isValidBackupPayloadObject(backupPayload)) {
         throw new Error('Invalid encrypted backup format');
       }
 
       const salt = this.base64ToArrayBuffer(backupPayload.salt);
       const iv = this.base64ToArrayBuffer(backupPayload.iv);
       const encrypted = this.base64ToArrayBuffer(backupPayload.data);
-      const key = await this.derivePasswordKey(password, salt, ['decrypt']);
+      const key = await this.derivePasswordKey(password, salt, backupPayload.iterations, [
+        'decrypt',
+      ]);
       const decrypted = await crypto.subtle.decrypt(
         { name: this.ALGORITHM, iv: new Uint8Array(iv) },
         key,
@@ -264,8 +333,8 @@ export class CryptoService {
 
       return new TextDecoder().decode(decrypted);
     } catch (error) {
-      console.error('Backup decryption failed:', error);
-      throw new Error('Failed to decrypt backup');
+      this.logError('Backup decryption failed', error);
+      throw this.wrapError('Failed to decrypt backup', error);
     }
   }
 
@@ -276,20 +345,33 @@ export class CryptoService {
 
     try {
       const parsed = JSON.parse(payload) as Record<string, unknown>;
-      return (
-        parsed.type === this.PASSWORD_BACKUP_TYPE &&
-        parsed.version === 1 &&
-        parsed.kdf === 'PBKDF2' &&
-        parsed.hash === 'SHA-256' &&
-        typeof parsed.iterations === 'number' &&
-        parsed.iterations >= 100000 &&
-        typeof parsed.salt === 'string' &&
-        typeof parsed.iv === 'string' &&
-        typeof parsed.data === 'string'
-      );
+      return this.isValidBackupPayloadObject(parsed);
     } catch {
       return false;
     }
+  }
+
+  private isValidBackupPayloadObject(parsed: Record<string, unknown>): parsed is {
+    type: string;
+    version: number;
+    kdf: string;
+    hash: string;
+    iterations: number;
+    salt: string;
+    iv: string;
+    data: string;
+  } {
+    return (
+      parsed.type === this.PASSWORD_BACKUP_TYPE &&
+      parsed.version === 1 &&
+      parsed.kdf === 'PBKDF2' &&
+      parsed.hash === 'SHA-256' &&
+      typeof parsed.iterations === 'number' &&
+      parsed.iterations >= this.PBKDF2_MIN_ITERATIONS &&
+      typeof parsed.salt === 'string' &&
+      typeof parsed.iv === 'string' &&
+      typeof parsed.data === 'string'
+    );
   }
 
   /**
@@ -324,6 +406,7 @@ export class CryptoService {
   private async derivePasswordKey(
     password: string,
     salt: BufferSource,
+    iterations: number,
     usages: KeyUsage[]
   ): Promise<CryptoKey> {
     const keyMaterial = await crypto.subtle.importKey(
@@ -338,7 +421,7 @@ export class CryptoService {
       {
         name: 'PBKDF2',
         salt,
-        iterations: this.PBKDF2_ITERATIONS,
+        iterations,
         hash: 'SHA-256',
       },
       keyMaterial,

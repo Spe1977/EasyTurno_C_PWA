@@ -271,3 +271,5 @@ See `P.md` for:
 - Type safety improvements implemented
 - Security enhancements (encryption, CSP, password-protected backups)
 - Accessibility compliance (WCAG 2.1 AA)
+
+See `fix.md` for the running security-audit log: residual findings, applied fixes (with file/line references and test impact), and verification status for each item.

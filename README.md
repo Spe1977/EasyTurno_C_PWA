@@ -115,6 +115,15 @@ src/
 - Hardened Content Security Policy (CSP), with `unsafe-inline` still allowed in local development for `ng serve` compatibility
 - Automatic migration of legacy unencrypted data
 
+### Security model
+
+- **Data at rest** is encrypted with a per-device AES-GCM 256-bit key. When IndexedDB is available the key is stored as a **non-extractable `CryptoKey`** (`extractable: false`): the raw key bytes never leave the browser cryptography context. A small ciphertext header (`ETBLOB1:`) marks each encrypted record so legacy formats can be migrated transparently.
+- **The device key is unique to this browser profile on this device.** It is **not** derived from a password and is **not** synchronized to any backend. Clearing the browser data, switching device or losing the storage destroys the key — and with it the ability to read the encrypted shifts. **There is no recovery path** other than restoring a previously exported backup.
+- **Encrypted backups** are produced with `PBKDF2-SHA256` (600 000 iterations) + AES-GCM keyed from the user-supplied password. Backups created before the 600 000-iter bump (e.g. 250 000 iter) are still decryptable thanks to the per-payload `iterations` field, but new exports always use the current parameters. The app **always requires a password ≥ 12 characters** at export time: there is **no plaintext export path**.
+- **Imports** accept either the password-protected format (most cases) or, only for backward compatibility, a legacy unencrypted JSON file. After import the shifts are immediately re-saved through the encrypted on-disk format.
+- **Server-side hardening**: the deployed app ships `_headers` (Cloudflare Pages / Netlify) with strict CSP, HSTS (`preload` + `includeSubDomains`), `X-Content-Type-Options`, COOP / CORP `same-origin`, restrictive `Permissions-Policy`, and `frame-ancestors 'none'`. The PWA cannot be embedded in iframes.
+- **Recommendation**: export an encrypted backup as soon as you accumulate non-trivial data. The first time you reach **5 shifts** the app shows a one-time reminder; you can repeat the export from Settings any time. Without a backup, a lost device or a cleared profile equals lost data.
+
 Important note:
 
 - Local storage encryption is useful against casual data exposure, but it is not strong protection against attackers who gain access to the browser execution context.

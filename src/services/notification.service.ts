@@ -25,20 +25,20 @@ export class NotificationService {
 
   async initialize(): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
-      console.warn('NotificationService: Running on web, native features disabled');
+      console.info('NotificationService: Running on web, native features disabled');
       return false;
     }
 
     // Richiedi permessi
     const permission = await LocalNotifications.requestPermissions();
     if (permission.display !== 'granted') {
-      console.warn('Notification permission not granted');
+      console.info('Notification permission not granted');
       return false;
     }
 
     // Listener per click su notifica
     await LocalNotifications.addListener('localNotificationActionPerformed', notification => {
-      console.warn('Notification clicked:', notification);
+      console.info('Notification clicked:', notification);
       // TODO: Naviga al turno specifico
     });
 
@@ -149,7 +149,7 @@ export class NotificationService {
 
       if (notifications.length > 0) {
         await LocalNotifications.schedule({ notifications });
-        console.warn(`Scheduled ${notifications.length} notification(s) for shift: ${shift.id}`);
+        console.info(`Scheduled ${notifications.length} notification(s) for shift: ${shift.id}`);
       }
     } catch (error) {
       console.error('Failed to schedule shift notifications:', error);
@@ -169,7 +169,7 @@ export class NotificationService {
         await LocalNotifications.cancel({
           notifications: toCancel.map(n => ({ id: n.id })),
         });
-        console.warn(`Cancelled ${toCancel.length} notification(s) for shift: ${shiftId}`);
+        console.info(`Cancelled ${toCancel.length} notification(s) for shift: ${shiftId}`);
       }
     } catch (error) {
       console.error('Failed to cancel shift notifications:', error);
@@ -186,8 +186,13 @@ export class NotificationService {
         await LocalNotifications.cancel({
           notifications: pending.notifications.map(n => ({ id: n.id })),
         });
-        console.warn(`Cancelled all ${pending.notifications.length} notifications`);
+        console.info(`Cancelled all ${pending.notifications.length} notifications`);
       }
+      // Reset counter and ID map: with no pending notifications, IDs can safely
+      // restart from 0 — prevents unbounded growth toward Number.MAX_SAFE_INTEGER
+      // on long-lived installs.
+      this.notificationIdCounter = 0;
+      this.notificationIdMap.clear();
     } catch (error) {
       console.error('Failed to cancel all notifications:', error);
       // Notifiche non critiche - non propagare l'errore

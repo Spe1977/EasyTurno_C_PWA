@@ -222,6 +222,63 @@ describe('CalendarService', () => {
     });
   });
 
+  describe('Month navigation across year boundaries (T9)', () => {
+    it('should rollback year when calling previousMonth from January', () => {
+      service.goToDate(2025, 0); // January 2025
+
+      service.previousMonth();
+
+      expect(service.currentYear()).toBe(2024);
+      expect(service.currentMonth()).toBe(11); // December
+    });
+
+    it('should advance year when calling nextMonth from December', () => {
+      service.goToDate(2025, 11); // December 2025
+
+      service.nextMonth();
+
+      expect(service.currentYear()).toBe(2026);
+      expect(service.currentMonth()).toBe(0); // January
+    });
+  });
+
+  describe('Day grid when first of month is Sunday or Monday (T9)', () => {
+    it('should add 6 leading days from previous month when first is Sunday', () => {
+      // June 1, 2025 is a Sunday
+      service.goToDate(2025, 5); // June 2025
+      const days = service.calendarDays();
+
+      const leadingDays = days.filter((d, i) => !d.isCurrentMonth && i < 7);
+      // 6 days from May (Mon May 26 → Sat May 31)
+      expect(leadingDays.length).toBe(6);
+      expect(leadingDays[0].dayNumber).toBe(26); // Monday May 26, 2025
+      expect(leadingDays[5].dayNumber).toBe(31); // Saturday May 31, 2025
+
+      // Day 7 (index 6) is the first of June
+      expect(days[6].isCurrentMonth).toBe(true);
+      expect(days[6].dayNumber).toBe(1);
+    });
+
+    it('should add no leading days from previous month when first is Monday', () => {
+      // September 1, 2025 is a Monday
+      service.goToDate(2025, 8); // September 2025
+      const days = service.calendarDays();
+
+      // First grid cell is the 1st of September
+      expect(days[0].isCurrentMonth).toBe(true);
+      expect(days[0].dayNumber).toBe(1);
+
+      // 30 current-month days, then 12 trailing days from October to fill 42
+      const currentMonthDays = days.filter(d => d.isCurrentMonth);
+      expect(currentMonthDays.length).toBe(30);
+
+      const trailingDays = days.slice(30);
+      expect(trailingDays.every(d => !d.isCurrentMonth)).toBe(true);
+      expect(trailingDays.length).toBe(12);
+      expect(trailingDays[0].dayNumber).toBe(1); // Oct 1
+    });
+  });
+
   describe('Signal reactivity', () => {
     it('should update calendarDays when month changes', () => {
       service.goToDate(2025, 0); // January

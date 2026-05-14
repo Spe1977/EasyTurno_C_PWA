@@ -73,7 +73,7 @@ import { Shift, ShiftColor } from '../shift.model';
       <div
         class="weekday-headers grid grid-cols-7 bg-gray-100 text-center text-sm font-semibold dark:bg-gray-700"
       >
-        @for (day of weekdayNames(); track day) {
+        @for (day of weekdayNames(); track $index) {
           <div class="py-2 text-gray-700 dark:text-gray-300">
             {{ day }}
           </div>

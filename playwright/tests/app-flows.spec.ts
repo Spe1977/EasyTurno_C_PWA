@@ -377,3 +377,226 @@ test('rejects import of an encrypted backup when the wrong password is provided'
   await page.reload();
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible({ timeout: 10000 });
 });
+
+test('rejects an import file larger than 5 MB without prompting for password', async ({ page }) => {
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(import backup|importa backup)$/i })
+    .click();
+  const fileChooser = await fileChooserPromise;
+
+  // 5 MiB + 1 byte — exactly one byte over MAX_IMPORT_FILE_SIZE_BYTES
+  const oversized = Buffer.alloc(5 * 1024 * 1024 + 1, 0x78); // 'x'
+  await fileChooser.setFiles({
+    name: 'oversized.json',
+    mimeType: 'application/json',
+    buffer: oversized,
+  });
+
+  const errorToast = page.locator('[role="alert"]').filter({ hasText: /troppo grande|too large/i });
+  await expect(errorToast.first()).toBeVisible({ timeout: 5000 });
+
+  // Password modal must NOT have opened (importBackup returned before readAsText)
+  await expect(page.locator('[data-cy="password-input"]')).not.toBeVisible();
+});
+
+test('imports a legacy backup encrypted with 250,000 PBKDF2 iterations', async ({ page }) => {
+  test.setTimeout(60000);
+
+  const backupPassword = 'LegacyBackup12345!';
+  const legacyShiftTitle = 'Legacy 250k Shift';
+  const startISO = new Date(Date.now() + 86_400_000).toISOString();
+  const endISO = new Date(Date.now() + 86_400_000 + 3_600_000).toISOString();
+
+  // Build a backup payload in the page context with iterations=250000 to
+  // emulate a backup produced before T2 raised the iteration count to 600k.
+  const legacyPayloadJson = await page.evaluate(
+    async ({ password, shiftTitle, start, end }) => {
+      const ITER = 250_000;
+      const ALGO = 'AES-GCM';
+      const KEY_LEN = 256;
+
+      const encoder = new TextEncoder();
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+      );
+      const key = await crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: ITER, hash: 'SHA-256' },
+        keyMaterial,
+        { name: ALGO, length: KEY_LEN },
+        false,
+        ['encrypt']
+      );
+
+      const shift = {
+        id: 'legacy-' + Date.now().toString(36),
+        seriesId: 'legacy-series',
+        title: shiftTitle,
+        start,
+        end,
+        color: 'sky',
+        isRecurring: false,
+      };
+      const plaintext = JSON.stringify([shift]);
+      const encrypted = await crypto.subtle.encrypt(
+        { name: ALGO, iv },
+        key,
+        encoder.encode(plaintext)
+      );
+
+      const bufToBase64 = (buf: ArrayBuffer): string => {
+        const bytes = new Uint8Array(buf);
+        const CHUNK = 8192;
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+        }
+        return btoa(binary);
+      };
+
+      return JSON.stringify({
+        type: 'easyturno-password-backup',
+        version: 1,
+        kdf: 'PBKDF2',
+        hash: 'SHA-256',
+        iterations: ITER,
+        salt: bufToBase64(salt.buffer),
+        iv: bufToBase64(iv.buffer),
+        data: bufToBase64(encrypted),
+      });
+    },
+    { password: backupPassword, shiftTitle: legacyShiftTitle, start: startISO, end: endISO }
+  );
+
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(import backup|importa backup)$/i })
+    .click();
+  const fileChooser = await fileChooserPromise;
+
+  await fileChooser.setFiles({
+    name: 'legacy_250k_backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(legacyPayloadJson, 'utf-8'),
+  });
+
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible({ timeout: 10000 });
+  await page.locator('[data-cy="password-input"]').fill(backupPassword);
+  await page.locator('[data-cy="password-confirm-btn"]').click();
+
+  await expect(page.getByText(legacyShiftTitle)).toBeVisible({ timeout: 20000 });
+
+  await page.reload();
+  await expect(page.getByText(legacyShiftTitle)).toBeVisible({ timeout: 10000 });
+});
+
+test('rejects backup export when password is shorter than 12 characters', async ({ page }) => {
+  await createShift(page, {
+    title: 'Short Password Guard',
+    date: isoDateDaysFromToday(2),
+    startTime: '09:00',
+    endTime: '17:00',
+  });
+
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  await page.locator('[data-cy="export-btn"]').click();
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+
+  // Hint mentioning 12-character minimum must be visible in export mode
+  await expect(page.getByText(/12/).first()).toBeVisible();
+
+  // Track whether a download is triggered (it must NOT be)
+  let downloadStarted = false;
+  page.once('download', () => {
+    downloadStarted = true;
+  });
+
+  await page.locator('[data-cy="password-input"]').fill('abc');
+  await page.locator('[data-cy="password-confirm-input"]').fill('abc');
+  await page.locator('[data-cy="password-confirm-btn"]').click();
+
+  // Error toast must appear and mention the 12-character requirement
+  const errorToast = page.locator('[role="alert"]').filter({ hasText: /12/ });
+  await expect(errorToast.first()).toBeVisible({ timeout: 5000 });
+
+  // Modal stays open so the user can correct the password
+  await expect(page.locator('[data-cy="password-input"]')).toBeVisible();
+
+  // No file was downloaded
+  // eslint-disable-next-line @typescript-eslint/no-floating-promises
+  await page.waitForTimeout(500);
+  expect(downloadStarted).toBe(false);
+});
+
+test('shows decryption error modal without auto-clearing data when ciphertext is unreadable', async ({
+  page,
+}) => {
+  // Seed localStorage with a payload that looks encrypted (magic header + plausible
+  // base64 length) but cannot be decrypted with the current device key. This
+  // simulates the real-world scenario where the IndexedDB key has been wiped
+  // or rotated while the ciphertext on disk is left behind.
+  const corruptedCiphertext = 'ETBLOB1:' + 'A'.repeat(64);
+  await page.evaluate(value => {
+    window.localStorage.setItem('easyturno_shifts', value);
+  }, corruptedCiphertext);
+
+  await page.reload();
+
+  // The decryption error modal must appear (alertdialog) and the user must be
+  // given the choice to either reset or keep the unreadable data.
+  const errorModal = page.locator('[role="alertdialog"]');
+  await expect(errorModal).toBeVisible({ timeout: 5000 });
+  await expect(errorModal.getByText(/unable to read|impossibile leggere/i)).toBeVisible();
+  await expect(
+    errorModal.getByRole('button', { name: /reset all data|azzera tutti i dati/i })
+  ).toBeVisible();
+  const keepDataBtn = errorModal.getByRole('button', { name: /keep data|mantieni i dati/i });
+  await expect(keepDataBtn).toBeVisible();
+
+  // Dismissing the modal must NOT wipe the ciphertext — the user might still
+  // want to restore a backup later. Verify both at the storage level and by
+  // reloading the page (the modal should reappear).
+  await keepDataBtn.click();
+  await expect(errorModal).not.toBeVisible();
+
+  const storedAfterDismiss = await page.evaluate(() =>
+    window.localStorage.getItem('easyturno_shifts')
+  );
+  expect(storedAfterDismiss).toBe(corruptedCiphertext);
+
+  await page.reload();
+  await expect(page.locator('[role="alertdialog"]')).toBeVisible({ timeout: 5000 });
+
+  // Now confirm the explicit reset path: ciphertext is cleared and the user
+  // lands on an empty list.
+  await page
+    .locator('[role="alertdialog"]')
+    .getByRole('button', { name: /reset all data|azzera tutti i dati/i })
+    .click();
+  await expect(page.locator('[role="alertdialog"]')).not.toBeVisible();
+
+  const storedAfterReset = await page.evaluate(() =>
+    window.localStorage.getItem('easyturno_shifts')
+  );
+  // After reset the service re-saves an empty encrypted array, so the value is
+  // either null (briefly) or a fresh ciphertext for "[]" — but never the
+  // original corrupted payload.
+  expect(storedAfterReset).not.toBe(corruptedCiphertext);
+});

@@ -500,6 +500,7 @@ Valutazione pratica attuale:
 - `npm install -D @playwright/test --legacy-peer-deps` -> completato il 2026-03-27; audit storico del momento: 28 vulnerabilita totali (25 moderate, 3 high), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo update Angular tooling: 22 vulnerabilita totali (22 moderate, 0 high, 0 critical), tutte dev-only
 - `npm audit --json` -> verificato il 2026-03-27 dopo override `handlebars`: 21 vulnerabilita totali (21 moderate, 0 high, 0 critical), tutte dev-only
+- 2026-05-14: tornata di hardening sicurezza (avviso storage ridotto, magic header `ETBLOB1:` su ciphertext, cap `title`/`notes`, logging error sanitizzato in prod). Dettaglio item-per-item, file/righe e impatto test in `fix.md`.
 
 ## Stack tecnologico attuale
 

@@ -617,10 +617,7 @@ describe('ShiftService', () => {
 
       // Wait for effect to run
       setTimeout(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          'Failed to encrypt shifts:',
-          expect.any(Error)
-        );
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to encrypt shifts', expect.any(Error));
         expect(errorSpy).toHaveBeenCalledWith('Failed to save shifts. Please try again.', 4000);
         consoleErrorSpy.mockRestore();
         done();
@@ -1265,6 +1262,237 @@ describe('ShiftService', () => {
       const shifts = service.shifts();
       expect(shifts).toHaveLength(1);
       expect(shifts[0].title).toBe(longTitle);
+    });
+  });
+
+  describe('isValidShift — optional field validation (T6)', () => {
+    const baseValidShift = {
+      id: 'test-id',
+      seriesId: 'test-series',
+      title: 'Base Shift',
+      start: '2025-09-30T09:00:00',
+      end: '2025-09-30T17:00:00',
+      color: 'sky' as const,
+      isRecurring: false,
+    };
+
+    it('should reject shift with allowances as non-array (object)', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        allowances: { name: 'Transport', amount: 10 },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with allowances as string', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        allowances: 'not-an-array',
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with allowance entries containing non-numeric amount', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        allowances: [{ name: 'Transport', amount: 'ten' }],
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with repetition.interval < 1', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        isRecurring: true,
+        repetition: { frequency: 'days', interval: 0 },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with negative repetition.interval', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        isRecurring: true,
+        repetition: { frequency: 'weeks', interval: -3 },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with invalid repetition.frequency', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        isRecurring: true,
+        repetition: { frequency: 'hours', interval: 1 },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with repetition missing frequency field', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        isRecurring: true,
+        repetition: { interval: 1 },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with notes as non-string (number)', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        notes: 42,
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with notes as object', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        notes: { text: 'invalid' },
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with timezone as non-string', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        timezone: 123,
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with overtimeHours = Infinity (via 1e500)', () => {
+      const json = JSON.stringify([baseValidShift]).replace(/\}\]$/, ',"overtimeHours":1e500}]');
+
+      const result = service.importShifts(json);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with overtimeHours = -Infinity (via -1e500)', () => {
+      const json = JSON.stringify([baseValidShift]).replace(/\}\]$/, ',"overtimeHours":-1e500}]');
+
+      const result = service.importShifts(json);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should reject shift with overtimeHours as string', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        overtimeHours: '2.5',
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
+
+    it('should accept shift with all optional fields valid', () => {
+      const validShift = {
+        ...baseValidShift,
+        isRecurring: true,
+        repetition: { frequency: 'weeks', interval: 2 },
+        notes: 'Some notes',
+        timezone: 'Europe/Rome',
+        overtimeHours: 1.5,
+        allowances: [{ name: 'Meal', amount: 12 }],
+      };
+
+      const result = service.importShifts(JSON.stringify([validShift]));
+
+      expect(result.success).toBe(true);
+      expect(result.imported).toBe(1);
+    });
+  });
+
+  describe('resetAfterDecryptionError (T6)', () => {
+    it('should clear decryptionError, remove stored ciphertext, and re-enable saves', async () => {
+      // Arrange a fresh service that enters the decryption-error state on load
+      TestBed.resetTestingModule();
+      localStorageMock['easyturno_shifts'] = 'corrupted-ciphertext';
+
+      const mockCryptoService = {
+        encrypt: jest.fn().mockImplementation(async (data: string) => `enc:${data}`),
+        decrypt: jest.fn().mockRejectedValue(new Error('Decryption failed')),
+        isEncrypted: jest.fn().mockReturnValue(true),
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: mockCryptoService },
+        ],
+      });
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const newService = TestBed.inject(ShiftService);
+
+      // Wait for the rejected decrypt promise to propagate
+      await flushAsyncWork();
+
+      expect(newService.decryptionError()).toBe(true);
+      // Ciphertext must still be present — service should not auto-clear on failure
+      expect(localStorageMock['easyturno_shifts']).toBe('corrupted-ciphertext');
+
+      // Act
+      newService.resetAfterDecryptionError();
+
+      // Assert: state cleared
+      expect(newService.decryptionError()).toBe(false);
+      expect(newService.shifts()).toEqual([]);
+
+      // Saves are re-enabled: the empty-array save effect must have run and
+      // written a fresh (encrypted) value to localStorage
+      await flushAsyncWork();
+
+      expect(mockCryptoService.encrypt).toHaveBeenCalledWith('[]');
+      expect(localStorageMock['easyturno_shifts']).toBe('enc:[]');
+
+      consoleErrorSpy.mockRestore();
     });
   });
 });
