@@ -143,6 +143,37 @@ describe('AuthScreenComponent', () => {
   describe('Registration Flow', () => {
     beforeEach(() => component.switchView('register'));
 
+    it('shows password requirements when the registration password field is focused', () => {
+      fixture.detectChanges();
+
+      expect(component.showPasswordHelp()).toBe(false);
+      expect(fixture.nativeElement.querySelector('#auth-password-help')).toBeNull();
+
+      const passwordInput = fixture.nativeElement.querySelector(
+        '#auth-password'
+      ) as HTMLInputElement;
+      passwordInput.dispatchEvent(new FocusEvent('focus'));
+      fixture.detectChanges();
+
+      expect(component.showPasswordHelp()).toBe(true);
+      expect(fixture.nativeElement.querySelector('#auth-password-help')).not.toBeNull();
+    });
+
+    it('shows password requirements while typing the registration password', () => {
+      fixture.detectChanges();
+
+      const passwordInput = fixture.nativeElement.querySelector(
+        '#auth-password'
+      ) as HTMLInputElement;
+      passwordInput.value = 'Weak';
+      passwordInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(component.password()).toBe('Weak');
+      expect(component.showPasswordHelp()).toBe(true);
+      expect(fixture.nativeElement.querySelector('#auth-password-help')).not.toBeNull();
+    });
+
     it('calls registerEmail and shows success toast on success', async () => {
       component.email.set('new@example.com');
       component.password.set('ValidPass123!');

@@ -384,6 +384,29 @@ Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
 Agent: Codex
+Date/time: 2026-05-21T15:32:03+02:00
+Task: Fix registration password requirements panel so it appears as soon as the user interacts with the password field.
+Status: done; not committed.
+Files changed:
+- `src/components/auth-screen.component.ts` (modified) — password input now opens the registration requirements panel on focus and on input, while preserving login behavior.
+- `src/components/auth-screen.component.spec.ts` (modified) — added focused registration tests for requirements visibility on focus and while typing.
+- `AGENT_HANDOFF.md` (modified) — added this handoff.
+Tests red:
+- `npm test -- src/components/auth-screen.component.spec.ts --runInBand` initially failed on the two new expectations because `showPasswordHelp()` stayed false on focus/input.
+Tests green:
+- `npm test -- src/components/auth-screen.component.spec.ts --runInBand` → 1 suite, 30 tests passed.
+- `npm test -- --runInBand` → 25 suites, 649 tests passed.
+- `npm run lint` → clean.
+- `npm run build` → OK.
+- Playwright smoke on `http://127.0.0.1:3100/` with mobile viewport confirmed `#auth-password-help` is visible after focus and after typing.
+Open concerns:
+- None for this bug.
+Next agent starts from:
+- Review/commit/push this small auth UI fix if the user gives permission, or continue with the pending security remediation roadmap.
+Do not touch:
+- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+
+Agent: Codex
 Date/time: 2026-05-21T14:30:15+02:00
 Task: Assess next phase for web/PWA verification and Cloudflare Pages deployment; commit and push current state to main after user authorization.
 Status: done locally; push to main authorized by user in chat.

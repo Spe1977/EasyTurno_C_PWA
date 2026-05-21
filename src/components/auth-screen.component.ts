@@ -137,7 +137,8 @@ const SPECIAL_RE = /[^A-Za-z0-9]/;
                   [attr.autocomplete]="view() === 'register' ? 'new-password' : 'current-password'"
                   required
                   [value]="password()"
-                  (input)="password.set($any($event.target).value)"
+                  (focus)="showRegistrationPasswordHelp()"
+                  (input)="handlePasswordInput($any($event.target).value)"
                   class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 pr-10 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100"
                   [attr.aria-invalid]="fieldError() === 'password' ? 'true' : null"
                 />
@@ -745,6 +746,17 @@ export class AuthScreenComponent {
 
   togglePasswordHelp(): void {
     this.showPasswordHelp.update(v => !v);
+  }
+
+  showRegistrationPasswordHelp(): void {
+    if (this.view() === 'register') {
+      this.showPasswordHelp.set(true);
+    }
+  }
+
+  handlePasswordInput(value: string): void {
+    this.password.set(value);
+    this.showRegistrationPasswordHelp();
   }
 
   async handleSubmit(event: Event): Promise<void> {
