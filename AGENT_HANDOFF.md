@@ -412,6 +412,40 @@ Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit further without explicit user permission.
 
 Agent: Codex
+Date/time: 2026-05-21T14:58:49+02:00
+Task: Commit current release state to main, push to GitHub, and verify Cloudflare Pages production deployment.
+Status: done
+Files changed:
+- `AGENT_HANDOFF.md` (modified) — added final push/deploy handoff.
+Git:
+- Commit pushed: `8d27879cf533ab607fcfb6647fcd1b1825508a40` (`feat: add auth sync pwa and android release prep`).
+- Remote: `origin/main`.
+Cloudflare:
+- Pages project: `easyturno`.
+- Production deployment: `8ad2ccb9-3f86-4d69-ae4c-ca4873836172`.
+- URL: `https://easyturno.pages.dev`.
+- Deployment status: success.
+Tests red:
+- None after commit/push. Earlier local HTTPS simulation remained unsuitable for reliable SW/offline proof; use the real Pages HTTPS URL for PWA testing.
+Tests green:
+- Pre-commit hook: Prettier, ESLint, related Jest tests passed.
+- Pre-push hook: `npm test -- --coverage --watchAll=false` → 25 suites, 647 tests passed; total coverage 98.45% statements / 95.19% branches / 97% functions / 99.28% lines.
+- Pre-push hook: `npm run build` → OK.
+- `curl -I https://easyturno.pages.dev` → HTTP/2 200 with CSP/HSTS/security headers.
+- `curl -I https://easyturno.pages.dev/manifest.webmanifest` → HTTP/2 200, `content-type: application/manifest+json`.
+- `curl -I https://easyturno.pages.dev/sw.js` → HTTP/2 200, `content-type: application/javascript`.
+Open concerns:
+- Firebase Console still needs production-domain verification before user testing: add/confirm `easyturno.pages.dev` under Firebase Authentication authorized domains.
+- Firestore security rules in `firestore.rules` are committed but should be deployed to Firebase project `easyturno` before testing sync against production Firestore.
+- Google login on the web may fail until the Pages domain is authorized in Firebase Auth.
+Next agent starts from:
+- In Firebase Console, add `easyturno.pages.dev` to Auth authorized domains if missing.
+- Deploy Firestore rules with `firebase deploy --only firestore:rules --project easyturno` after confirming production rules change.
+- Browser-test `https://easyturno.pages.dev`: installability, service worker, offline reload, guest mode, email/password login, Google login, Firestore sync, account deletion.
+Do not touch:
+- Do not commit further without explicit user permission. Do not commit ignored Firebase/Android signing files.
+
+Agent: Codex
 Date/time: 2026-05-21T14:12:13+02:00
 Task: Implement security remediation roadmap from `docs/superpowers/plans/2026-05-21-security-findings-remediation.md`.
 Status: done
