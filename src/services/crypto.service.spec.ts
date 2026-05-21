@@ -232,6 +232,16 @@ describe('CryptoService', () => {
     it('should reject invalid non-json strings as encrypted payloads', () => {
       expect(service.isEncrypted('not-valid-base64%%%')).toBe(false);
     });
+
+    it('should return false when base64 decoding throws', () => {
+      const atobSpy = jest.spyOn(globalThis, 'atob').mockImplementation(() => {
+        throw new Error('decoder failed');
+      });
+
+      expect(service.isEncrypted('QUJDRA==')).toBe(false);
+
+      atobSpy.mockRestore();
+    });
   });
 
   describe('Password protected backups', () => {
@@ -350,6 +360,25 @@ describe('CryptoService', () => {
         const decrypted = await service.decryptBackupWithPassword(encrypted, password);
         expect(decrypted).toBe(plaintext);
       });
+    });
+
+    it('should handle backup encryption errors gracefully', async () => {
+      jest
+        .spyOn(crypto.subtle, 'encrypt')
+        .mockRejectedValue(new Error('Backup encryption API error'));
+
+      await expect(service.encryptBackupWithPassword('sensitive-data', 'password')).rejects.toThrow(
+        'Failed to encrypt backup'
+      );
+    });
+
+    it('should return false for null, empty or non-JSON input in isPasswordProtectedBackupPayload', () => {
+      expect(service.isPasswordProtectedBackupPayload('')).toBe(false);
+      expect(service.isPasswordProtectedBackupPayload(null as any)).toBe(false);
+      expect(service.isPasswordProtectedBackupPayload(undefined as any)).toBe(false);
+      expect(service.isPasswordProtectedBackupPayload('not-a-json-string')).toBe(false);
+      expect(service.isPasswordProtectedBackupPayload('{"malformed": ')).toBe(false);
+      expect(service.isPasswordProtectedBackupPayload('{"foo": "bar"}')).toBe(false);
     });
   });
 
@@ -658,6 +687,43 @@ describe('CryptoService', () => {
       expect(localStorageMock['easyturno_device_key']).toBeTruthy();
       // Round-trip still works.
       expect(await fallbackService.decrypt(ciphertext)).toBe('fallback-data');
+    });
+
+    it('resets the cached device-key promise when key resolution fails', async () => {
+      const failingService = new CryptoService();
+      jest.spyOn(failingService as any, 'isIndexedDBAvailable').mockReturnValue(false);
+      jest.spyOn(failingService as any, 'getLegacyKeyFromLocalStorage').mockResolvedValue(null);
+      jest
+        .spyOn(failingService as any, 'generateDeviceKey')
+        .mockRejectedValueOnce(new Error('key generation failed'));
+
+      await expect((failingService as any).getDeviceKey()).rejects.toThrow('key generation failed');
+
+      expect((failingService as any).deviceKeyPromise).toBeNull();
+    });
+
+    it('continues with legacy key migration when IndexedDB key loading throws', async () => {
+      const legacyKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, [
+        'encrypt',
+        'decrypt',
+      ]);
+      const raw = await crypto.subtle.exportKey('raw', legacyKey);
+      localStorageMock['easyturno_device_key'] = arrayBufferToBase64(raw);
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest
+        .spyOn(idbService as any, 'getKeyFromIDB')
+        .mockRejectedValueOnce(new Error('IDB read failed'));
+
+      const encrypted = await idbService.encrypt('migrated-after-idb-error');
+
+      await expect(idbService.decrypt(encrypted)).resolves.toBe('migrated-after-idb-error');
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Failed to load key from IndexedDB, will try migration',
+        expect.any(Error)
+      );
+      expect(localStorageMock['easyturno_device_key']).toBeUndefined();
+
+      warnSpy.mockRestore();
     });
 
     it('shares a single device-key promise across concurrent encrypts (no race)', async () => {

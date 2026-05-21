@@ -16,6 +16,14 @@ export async function bootEmptyApp(page: Page): Promise<void> {
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
   await expect(page.getByText('EasyTurno')).toBeVisible();
+  await page
+    .getByRole('button', { name: /continue without an account|continua senza account/i })
+    .click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: /continue|continua/i })
+    .click();
+  await expect(page.locator('[data-cy="view-toggle"]')).toBeVisible();
 }
 
 export async function createShift(

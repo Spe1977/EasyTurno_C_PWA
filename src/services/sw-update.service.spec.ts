@@ -1,5 +1,16 @@
 import { TestBed } from '@angular/core/testing';
-import { SwUpdateService } from './sw-update.service';
+
+const mockIsDevMode = jest.fn().mockReturnValue(true);
+
+jest.mock('@angular/core', () => {
+  const original = jest.requireActual('@angular/core');
+  return {
+    ...original,
+    isDevMode: () => mockIsDevMode(),
+  };
+});
+
+const { SwUpdateService } = require('./sw-update.service');
 
 describe('SwUpdateService', () => {
   let service: SwUpdateService;
@@ -7,6 +18,7 @@ describe('SwUpdateService', () => {
   let mockNewWorker: any;
 
   beforeEach(() => {
+    mockIsDevMode.mockReturnValue(true);
     // Mock ServiceWorkerRegistration
     mockNewWorker = {
       state: 'installing',
@@ -380,6 +392,125 @@ describe('SwUpdateService', () => {
       expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
 
       clearIntervalSpy.mockRestore();
+    });
+  });
+
+  describe('Environment checks and edge branches', () => {
+    let originalUserAgent: string;
+    let mockHostname: string = 'localhost';
+
+    beforeAll(() => {
+      // Define a getter on Location.prototype to return our mockHostname dynamically
+      Object.defineProperty(window.location.constructor.prototype, 'hostname', {
+        configurable: true,
+        get: () => mockHostname,
+      });
+    });
+
+    afterAll(() => {
+      // Restore original hostname getter
+      delete (window.location.constructor.prototype as any).hostname;
+    });
+
+    beforeEach(() => {
+      originalUserAgent = navigator.userAgent;
+    });
+
+    afterEach(() => {
+      Object.defineProperty(navigator, 'userAgent', {
+        writable: true,
+        configurable: true,
+        value: originalUserAgent,
+      });
+    });
+
+    it('should not register if serviceWorker is completely absent from navigator', async () => {
+      const originalNavigator = global.navigator;
+      Object.defineProperty(global, 'navigator', {
+        writable: true,
+        configurable: true,
+        value: {
+          userAgent: originalNavigator.userAgent,
+        },
+      });
+
+      await service.checkForUpdates();
+
+      Object.defineProperty(global, 'navigator', {
+        writable: true,
+        configurable: true,
+        value: originalNavigator,
+      });
+    });
+
+    it('should return early in non-test environment and localHost', async () => {
+      // Mock userAgent to not contain "jsdom"
+      Object.defineProperty(navigator, 'userAgent', {
+        writable: true,
+        configurable: true,
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X)',
+      });
+
+      mockHostname = 'localhost';
+
+      const nonTestService = new SwUpdateService();
+      const registerSpy = jest.spyOn(navigator.serviceWorker, 'register');
+
+      await nonTestService.checkForUpdates();
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      registerSpy.mockRestore();
+    });
+
+    it('should return early in non-test environment and devMode is true even if hostname is remote', async () => {
+      // Mock userAgent to not contain "jsdom"
+      Object.defineProperty(navigator, 'userAgent', {
+        writable: true,
+        configurable: true,
+        value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X)',
+      });
+
+      mockHostname = 'easyturno.app';
+
+      // Mock isDevMode to return true
+      mockIsDevMode.mockReturnValue(true);
+
+      const nonTestService = new SwUpdateService();
+      const registerSpy = jest.spyOn(navigator.serviceWorker, 'register');
+
+      await nonTestService.checkForUpdates();
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      registerSpy.mockRestore();
+    });
+
+    it('should register in non-test environment and prodMode (isDevMode false) and remote hostname', async () => {
+      mockIsDevMode.mockReturnValue(false);
+
+      const nonTestService = new SwUpdateService();
+      (nonTestService as unknown as { isTestEnvironment: boolean }).isTestEnvironment = false;
+      (nonTestService as unknown as { isLocalHost: boolean }).isLocalHost = false;
+
+      const registerSpy = jest
+        .spyOn(navigator.serviceWorker, 'register')
+        .mockResolvedValue(mockRegistration);
+
+      await nonTestService.checkForUpdates();
+
+      expect(registerSpy).toHaveBeenCalledWith('/sw.js');
+      registerSpy.mockRestore();
+    });
+  });
+
+  describe('reloadPage', () => {
+    it('should invoke reloadPage wrapper without throwing', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(() => {
+        (service as any).reloadPage();
+      }).not.toThrow();
+
+      consoleSpy.mockRestore();
     });
   });
 });

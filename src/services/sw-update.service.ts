@@ -6,7 +6,7 @@ import { Injectable, isDevMode, signal } from '@angular/core';
 export class SwUpdateService {
   updateAvailable = signal(false);
   private registration: ServiceWorkerRegistration | null = null;
-  // eslint-disable-next-line no-undef
+
   private updateCheckInterval: ReturnType<typeof setInterval> | null = null;
   private readonly isTestEnvironment =
     typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent);
@@ -25,7 +25,7 @@ export class SwUpdateService {
       this.registration = await navigator.serviceWorker.register('/sw.js');
 
       // Check for updates every 60 seconds
-      // eslint-disable-next-line no-undef
+
       this.updateCheckInterval = setInterval(() => {
         void this.registration?.update();
       }, 60000);
@@ -64,7 +64,6 @@ export class SwUpdateService {
 
   cleanup(): void {
     if (this.updateCheckInterval !== null) {
-      // eslint-disable-next-line no-undef
       clearInterval(this.updateCheckInterval);
       this.updateCheckInterval = null;
     }

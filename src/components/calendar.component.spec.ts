@@ -71,6 +71,13 @@ describe('CalendarComponent', () => {
       expect(component.monthName()).toBeDefined();
       expect(typeof component.monthName()).toBe('string');
     });
+
+    it('should switch computed locale when language is English', () => {
+      translationService.setLanguage('en');
+
+      expect(component.weekdayNames()[0]).toMatch(/Mon|Monday/i);
+      expect(component.monthName()).toBeTruthy();
+    });
   });
 
   describe('Navigation', () => {
@@ -276,6 +283,20 @@ describe('CalendarComponent', () => {
       });
 
       expect(indicatorColor).toBe('#6366F1');
+    });
+
+    it('should use custom shift colors directly when not in the semantic color map', () => {
+      const indicatorColor = component.getShiftIndicatorColor({
+        id: 'custom-color',
+        seriesId: 'custom-color',
+        title: 'Custom Color',
+        start: '2025-01-20T09:00:00',
+        end: '2025-01-20T17:00:00',
+        color: '#123456',
+        isRecurring: false,
+      });
+
+      expect(indicatorColor).toBe('#123456');
     });
   });
 
@@ -522,6 +543,23 @@ describe('CalendarComponent', () => {
 
       // Should still match shifts on that day regardless of time
       expect(shifts).toBeDefined();
+    });
+
+    it('should return empty keys and ignore shifts with invalid start or end dates', () => {
+      const invalidShift: Shift = {
+        id: 'invalid-date-shift',
+        title: 'Invalid Date Shift',
+        start: 'invalid-date-format',
+        end: '2025-01-15T17:00:00',
+        color: '#EF4444',
+      };
+
+      fixture.componentRef.setInput('shifts', [invalidShift]);
+      fixture.detectChanges();
+
+      // No shift should be mapped/returned since start date is invalid
+      const shifts = component.getShiftsForDay(new Date(2025, 0, 15));
+      expect(shifts.length).toBe(0);
     });
   });
 

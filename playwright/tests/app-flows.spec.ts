@@ -553,8 +553,9 @@ test('shows decryption error modal without auto-clearing data when ciphertext is
   // simulates the real-world scenario where the IndexedDB key has been wiped
   // or rotated while the ciphertext on disk is left behind.
   const corruptedCiphertext = 'ETBLOB1:' + 'A'.repeat(64);
+  const storageKey = 'easyturno_user_data_v2';
   await page.evaluate(value => {
-    window.localStorage.setItem('easyturno_shifts', value);
+    window.localStorage.setItem('easyturno_user_data_v2', value);
   }, corruptedCiphertext);
 
   await page.reload();
@@ -576,8 +577,9 @@ test('shows decryption error modal without auto-clearing data when ciphertext is
   await keepDataBtn.click();
   await expect(errorModal).not.toBeVisible();
 
-  const storedAfterDismiss = await page.evaluate(() =>
-    window.localStorage.getItem('easyturno_shifts')
+  const storedAfterDismiss = await page.evaluate(
+    key => window.localStorage.getItem(key),
+    storageKey
   );
   expect(storedAfterDismiss).toBe(corruptedCiphertext);
 
@@ -592,9 +594,7 @@ test('shows decryption error modal without auto-clearing data when ciphertext is
     .click();
   await expect(page.locator('[role="alertdialog"]')).not.toBeVisible();
 
-  const storedAfterReset = await page.evaluate(() =>
-    window.localStorage.getItem('easyturno_shifts')
-  );
+  const storedAfterReset = await page.evaluate(key => window.localStorage.getItem(key), storageKey);
   // After reset the service re-saves an empty encrypted array, so the value is
   // either null (briefly) or a fresh ciphertext for "[]" — but never the
   // original corrupted payload.

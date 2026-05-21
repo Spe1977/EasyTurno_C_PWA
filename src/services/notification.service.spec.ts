@@ -162,6 +162,28 @@ describe('NotificationService', () => {
       );
     });
 
+    it('should log notification action callbacks from native listener', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
+        display: 'granted',
+      });
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValue({ notifications: [] });
+      let actionCallback: ((notification: unknown) => void) | undefined;
+      (LocalNotifications.addListener as jest.Mock).mockImplementation((_event, callback) => {
+        actionCallback = callback;
+        return Promise.resolve({ remove: jest.fn() });
+      });
+      const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+
+      await service.initialize();
+      actionCallback?.({ notification: { id: 1 } });
+
+      expect(infoSpy).toHaveBeenCalledWith('Notification clicked:', {
+        notification: { id: 1 },
+      });
+      infoSpy.mockRestore();
+    });
+
     it('should return false if permission is denied', async () => {
       (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
       (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
@@ -233,6 +255,45 @@ describe('NotificationService', () => {
         ]),
       });
     });
+
+    it('should not schedule when all notification times are already past', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      const pastShift: Shift = {
+        id: 'past-shift',
+        seriesId: 'past-series',
+        title: 'Past Shift',
+        start: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        end: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        color: 'sky',
+        isRecurring: false,
+      };
+
+      await service.scheduleShiftNotification(pastShift, {
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: true,
+      });
+
+      expect(LocalNotifications.schedule).not.toHaveBeenCalled();
+    });
+
+    it('should log and swallow schedule failures', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.schedule as jest.Mock).mockRejectedValue(new Error('schedule failed'));
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.scheduleShiftNotification(mockShift, {
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: false,
+      });
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to schedule shift notifications:',
+        expect.any(Error)
+      );
+      errorSpy.mockRestore();
+    });
   });
 
   describe('cancelShiftNotifications', () => {
@@ -262,10 +323,29 @@ describe('NotificationService', () => {
         notifications: [{ id: 1 }, { id: 3 }],
       });
     });
+
+    it('should not cancel when no pending notifications match the shift', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValue({
+        notifications: [{ id: 1, extra: { shiftId: 'other-id' } }],
+      });
+
+      await service.cancelShiftNotifications('missing-id');
+
+      expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+    });
   });
 
   describe('Native branch coverage (T8)', () => {
     describe('loadNotificationIdCounter', () => {
+      it('should skip counter loading when called on web platform', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(false);
+
+        await (service as any).loadNotificationIdCounter();
+
+        expect(LocalNotifications.getPending).not.toHaveBeenCalled();
+      });
+
       it('should initialize counter from highest pending notification ID', async () => {
         (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
         (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
@@ -386,6 +466,40 @@ describe('NotificationService', () => {
         expect(scheduledAt.getMinutes()).toBe(0);
       });
 
+      it('should format day-before notification dates with Italian locale when selected', async () => {
+        (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+        (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
+        (service as any).translationService.setLanguage('it');
+        const shiftStart = new Date();
+        shiftStart.setDate(shiftStart.getDate() + 2);
+        shiftStart.setHours(9, 0, 0, 0);
+
+        await service.scheduleShiftNotification(
+          {
+            id: 'shift-it',
+            seriesId: 'series-it',
+            title: 'Turno IT',
+            start: shiftStart.toISOString(),
+            end: new Date(shiftStart.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+            color: 'sky',
+            isRecurring: false,
+          },
+          {
+            enabled: true,
+            reminderMinutesBefore: 60,
+            dayBeforeEnabled: true,
+          }
+        );
+
+        const notifications = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0]
+          .notifications;
+        expect(
+          notifications.some((notification: { body: string }) =>
+            notification.body.includes('Turno IT')
+          )
+        ).toBe(true);
+      });
+
       it('should skip the day-before reminder when 20:00 of the previous day is already in the past', async () => {
         (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
         (LocalNotifications.schedule as jest.Mock).mockResolvedValue(undefined);
@@ -472,6 +586,17 @@ describe('NotificationService', () => {
       });
     });
 
+    it('should not cancel all when there are no pending notifications', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValue({
+        notifications: [],
+      });
+
+      await service.cancelAllNotifications();
+
+      expect(LocalNotifications.cancel).not.toHaveBeenCalled();
+    });
+
     it('should reset the notification ID counter after cancelling all (#9)', async () => {
       (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
       (LocalNotifications.requestPermissions as jest.Mock).mockResolvedValue({
@@ -511,6 +636,102 @@ describe('NotificationService', () => {
 
       const scheduledArg = (LocalNotifications.schedule as jest.Mock).mock.calls[0][0];
       expect(scheduledArg.notifications[0].id).toBe(1);
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    it('handles loadNotificationIdCounter on native platform when getPending fails', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.getPending as jest.Mock).mockRejectedValue(
+        new Error('getPending failed')
+      );
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const newService = TestBed.inject(NotificationService);
+      await newService.initialize();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to load notification counter:',
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('handles cancelShiftNotifications when LocalNotifications.cancel fails', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.getPending as jest.Mock).mockResolvedValue({
+        notifications: [{ id: 1, extra: { shiftId: 'error-shift' } }],
+      });
+      (LocalNotifications.cancel as jest.Mock).mockRejectedValue(new Error('cancel failed'));
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.cancelShiftNotifications('error-shift');
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to cancel shift notifications:',
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('handles cancelAllNotifications when getPending fails', async () => {
+      (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+      (LocalNotifications.getPending as jest.Mock).mockRejectedValue(
+        new Error('getPending failed')
+      );
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.cancelAllNotifications();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to cancel all notifications:',
+        expect.any(Error)
+      );
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('handles sanitizeSettings when stored settings are null or not an object', () => {
+      localStorageMock['easyturno_notification_settings'] = 'null';
+      let settings = service.getSettings();
+      expect(settings).toEqual({
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: true,
+      });
+
+      localStorageMock['easyturno_notification_settings'] = '"just-a-string"';
+      settings = service.getSettings();
+      expect(settings).toEqual({
+        enabled: true,
+        reminderMinutesBefore: 60,
+        dayBeforeEnabled: true,
+      });
+    });
+
+    it('should reuse the same notification ID for the same shift and suffix', () => {
+      const first = (service as any).getNotificationId('same-shift');
+      const second = (service as any).getNotificationId('same-shift');
+      const third = (service as any).getNotificationId('same-shift', '-daybefore');
+
+      expect(second).toBe(first);
+      expect(third).toBeGreaterThan(first);
+    });
+
+    it('should sanitize missing boolean settings when saving', () => {
+      service.saveSettings({
+        enabled: 'yes',
+        reminderMinutesBefore: 15,
+        dayBeforeEnabled: undefined,
+      } as any);
+
+      expect(JSON.parse(localStorageMock['easyturno_notification_settings'])).toEqual({
+        enabled: true,
+        reminderMinutesBefore: 15,
+        dayBeforeEnabled: true,
+      });
     });
   });
 });

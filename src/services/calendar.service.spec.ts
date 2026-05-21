@@ -194,6 +194,15 @@ describe('CalendarService', () => {
 
       expect(isoString).toBe('2025-01-05');
     });
+
+    it('should use default locale when none is specified', () => {
+      const weekdays = service.getWeekdayNames();
+      expect(weekdays.length).toBe(7);
+      expect(weekdays[0].toLowerCase()).toContain('lun'); // Italian default
+
+      const monthName = service.getMonthName(0);
+      expect(monthName.toLowerCase()).toContain('gennaio'); // Italian default
+    });
   });
 
   describe('Edge cases', () => {

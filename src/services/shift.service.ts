@@ -1,17 +1,34 @@
-import { Injectable, signal, effect, inject, isDevMode } from '@angular/core';
-import { Shift, Repetition, ShiftColor, Allowance } from '../shift.model';
+import { Injectable, signal, computed, effect, inject, isDevMode } from '@angular/core';
+import {
+  Shift,
+  Repetition,
+  ShiftColor,
+  Allowance,
+  ManualShift,
+  ShiftDataState,
+  ShiftOverride,
+  ShiftSeries,
+} from '../shift.model';
 import { ToastService } from './toast.service';
 import { NotificationService } from './notification.service';
 import { CryptoService } from './crypto.service';
+import { UserDataService } from './user-data.service';
+import { generateOccurrencesForRange } from './occurrence-generator';
+import {
+  EMPTY_SHIFT_DATA_STATE,
+  LEGACY_SHIFT_STORAGE_KEY,
+  USER_DATA_STORAGE_KEY,
+} from './user-data.model';
 
 @Injectable({ providedIn: 'root' })
 export class ShiftService {
-  private readonly STORAGE_KEY = 'easyturno_shifts';
-  private readonly MAX_RECURRING_INSTANCES = 200;
-  private readonly MAX_YEARS_AHEAD = 2;
+  private readonly STORAGE_KEY_V2 = USER_DATA_STORAGE_KEY;
+  private readonly STORAGE_KEY_LEGACY = LEGACY_SHIFT_STORAGE_KEY;
+  // Per-series generation window (matches the legacy eager-materialization
+  // behavior of MAX_YEARS_AHEAD = 2 from the pre-v2 ShiftService).
+  private readonly MAX_YEARS_PER_SERIES = 2;
   private readonly MAX_NOTIFICATION_PREVIEW = 10;
   private readonly MAX_IMPORT_SIZE_BYTES = 5 * 1024 * 1024;
-  private readonly DAYS_PER_WEEK = 7;
   static readonly MAX_TITLE_LENGTH = 200;
   static readonly MAX_NOTES_LENGTH = 2000;
   private readonly storageReady = signal(false);
@@ -20,13 +37,17 @@ export class ShiftService {
   private toastService = inject(ToastService);
   private notificationService = inject(NotificationService);
   private cryptoService = inject(CryptoService);
-  shifts = signal<Shift[]>([]);
+  private userDataService = inject(UserDataService);
+
+  private readonly state = this.userDataService.state;
+
+  shifts = computed<Shift[]>(() => this.materializeOccurrences(this.state()));
 
   /**
    * Becomes true only after the initial load from storage completes
    * (either synchronously for legacy data, or after async decryption).
    * Saves are blocked until this flag is set to prevent the effect() from
-   * overwriting stored data with an empty array before decryption finishes.
+   * overwriting stored data with an empty state before decryption finishes.
    */
   private isLoaded = false;
 
@@ -36,11 +57,6 @@ export class ShiftService {
    */
   decryptionError = signal(false);
 
-  /**
-   * In dev mode logs the full error (stack + cause from CryptoService); in
-   * production logs only the message so that crypto internals are not
-   * exposed via DevTools.
-   */
   private logError(message: string, error: unknown): void {
     if (isDevMode()) {
       console.error(message, error);
@@ -50,95 +66,186 @@ export class ShiftService {
   }
 
   constructor() {
-    this.loadShiftsFromStorage();
+    this.loadFromStorage();
     effect(() => {
       if (!this.storageReady()) {
         return;
       }
-
-      this.saveShiftsToStorage(this.shifts());
+      this.saveStateToStorage(this.state());
     });
   }
 
-  private loadShiftsFromStorage() {
-    const data = localStorage.getItem(this.STORAGE_KEY);
-    if (!data) {
-      // Nothing stored yet — allow saves immediately
-      this.isLoaded = true;
-      this.shifts.set([]);
-      this.storageReady.set(true);
+  // ------------------------------------------------------------------
+  // Load / migration
+  // ------------------------------------------------------------------
+
+  private loadFromStorage(): void {
+    const v2 = localStorage.getItem(this.STORAGE_KEY_V2);
+    if (v2) {
+      this.decodeAndLoad(v2, parsed => this.applyV2Parsed(parsed));
       return;
     }
 
-    // Check if data is encrypted
-    if (this.cryptoService.isEncrypted(data)) {
-      // Decrypt data asynchronously
+    const legacy = localStorage.getItem(this.STORAGE_KEY_LEGACY);
+    if (legacy) {
+      this.decodeAndLoad(legacy, parsed => this.applyLegacyParsed(parsed));
+      return;
+    }
+
+    this.isLoaded = true;
+    this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+    this.storageReady.set(true);
+  }
+
+  private decodeAndLoad(raw: string, apply: (parsed: unknown) => void): void {
+    if (this.cryptoService.isEncrypted(raw)) {
       this.cryptoService
-        .decrypt(data)
+        .decrypt(raw)
         .then(decrypted => {
-          // Enable saves BEFORE updating the signal so the effect that fires
-          // immediately after the signal change is not blocked.
           this.isLoaded = true;
-          this.shifts.set(JSON.parse(decrypted));
+          try {
+            apply(JSON.parse(decrypted));
+          } catch (error) {
+            this.logError('Failed to parse decrypted data', error);
+            this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+          }
           this.storageReady.set(true);
         })
         .catch(error => {
-          this.logError('Failed to decrypt shifts', error);
-          // Do NOT clear data automatically — let the user decide.
-          // Saves remain blocked (isLoaded stays false) to avoid overwriting
-          // the ciphertext with an empty array.
+          this.logError('Failed to decrypt user data', error);
           this.decryptionError.set(true);
         });
-    } else {
-      // Legacy unencrypted data — load and re-save encrypted
-      try {
-        const shifts = JSON.parse(data) as Shift[];
-        this.isLoaded = true;
-        this.shifts.set(shifts);
-        // Will be automatically re-saved as encrypted via effect
-      } catch (error) {
-        console.error('Failed to parse shifts:', error);
-        this.isLoaded = true;
-        this.shifts.set([]);
-      }
-      this.storageReady.set(true);
+      return;
     }
+
+    try {
+      apply(JSON.parse(raw));
+      this.isLoaded = true;
+    } catch (error) {
+      this.logError('Failed to parse stored user data', error);
+      this.isLoaded = true;
+      this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+    }
+    this.storageReady.set(true);
+  }
+
+  private applyV2Parsed(parsed: unknown): void {
+    if (this.isShiftDataState(parsed)) {
+      this.userDataService.setState(parsed);
+    } else {
+      this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+    }
+  }
+
+  private applyLegacyParsed(parsed: unknown): void {
+    if (Array.isArray(parsed)) {
+      this.userDataService.setState(this.migrateLegacyShifts(parsed));
+    } else {
+      this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+    }
+  }
+
+  private migrateLegacyShifts(rawShifts: unknown[]): ShiftDataState {
+    const validShifts = rawShifts.filter(item => this.isValidShift(item));
+    return this.buildStateFromShifts(validShifts);
+  }
+
+  private buildStateFromShifts(validShifts: Shift[]): ShiftDataState {
+    const now = new Date().toISOString();
+    const seriesById = new Map<string, ShiftSeries>();
+    const manualShifts: ManualShift[] = [];
+
+    const recurring = validShifts.filter(s => s.isRecurring && s.repetition);
+    const recurringSorted = [...recurring].sort(
+      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+    );
+
+    for (const shift of recurringSorted) {
+      if (seriesById.has(shift.seriesId)) continue;
+      seriesById.set(shift.seriesId, {
+        id: shift.seriesId,
+        title: shift.title,
+        start: shift.start,
+        end: shift.end,
+        color: shift.color,
+        repetition: shift.repetition!,
+        notes: shift.notes,
+        overtimeHours: shift.overtimeHours,
+        allowances: shift.allowances,
+        timezone: shift.timezone,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    for (const shift of validShifts) {
+      if (shift.isRecurring && shift.repetition) continue;
+      manualShifts.push({
+        id: shift.id,
+        title: shift.title,
+        start: shift.start,
+        end: shift.end,
+        color: shift.color,
+        notes: shift.notes,
+        overtimeHours: shift.overtimeHours,
+        allowances: shift.allowances,
+        timezone: shift.timezone,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      schemaVersion: 2,
+      shiftSeries: Array.from(seriesById.values()),
+      manualShifts,
+      shiftOverrides: [],
+    };
+  }
+
+  private isShiftDataState(value: unknown): value is ShiftDataState {
+    if (typeof value !== 'object' || value === null) return false;
+    const obj = value as Record<string, unknown>;
+    return (
+      obj.schemaVersion === 2 &&
+      Array.isArray(obj.shiftSeries) &&
+      Array.isArray(obj.manualShifts) &&
+      Array.isArray(obj.shiftOverrides)
+    );
   }
 
   /**
    * Called when the user explicitly confirms they want to reset all data
    * after a decryption failure.
    */
-  resetAfterDecryptionError() {
-    // Remove corrupted ciphertext so a page reload won't re-trigger the error.
-    localStorage.removeItem(this.STORAGE_KEY);
+  resetAfterDecryptionError(): void {
+    localStorage.removeItem(this.STORAGE_KEY_V2);
+    localStorage.removeItem(this.STORAGE_KEY_LEGACY);
     this.decryptionError.set(false);
     this.isLoaded = true;
-    // Re-enable the save effect before updating shifts so the empty array
-    // is immediately persisted (encrypted) to localStorage.
     this.storageReady.set(true);
-    this.shifts.set([]);
+    this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
   }
 
-  private saveShiftsToStorage(shifts: Shift[]) {
-    // Guard: do not save until the initial load has completed to avoid
-    // overwriting stored ciphertext with an empty array.
+  // ------------------------------------------------------------------
+  // Persistence
+  // ------------------------------------------------------------------
+
+  private saveStateToStorage(state: ShiftDataState): void {
     if (!this.isLoaded) return;
 
     try {
-      const data = JSON.stringify(shifts);
+      const data = JSON.stringify(state);
       const saveRequestId = ++this.latestSaveRequestId;
 
-      // Encrypt data before storing
       this.cryptoService
         .encrypt(data)
         .then(encrypted => {
           if (saveRequestId !== this.latestSaveRequestId) {
             return;
           }
-
           try {
-            localStorage.setItem(this.STORAGE_KEY, encrypted);
+            localStorage.setItem(this.STORAGE_KEY_V2, encrypted);
           } catch (error) {
             if (error instanceof DOMException && error.name === 'QuotaExceededError') {
               console.error('LocalStorage quota exceeded. Cannot save shifts.');
@@ -161,17 +268,48 @@ export class ShiftService {
     }
   }
 
-  private addDays(date: Date, days: number): Date {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
+  // ------------------------------------------------------------------
+  // Occurrence materialization
+  // ------------------------------------------------------------------
+
+  private materializeOccurrences(state: ShiftDataState): Shift[] {
+    const result: Shift[] = [];
+
+    // Manual shifts are not bounded by the visibility window — the AppComponent
+    // applies its own [today-12m, today+24m] filter for the list view.
+    const MANUAL_RANGE_START = new Date(-8640000000000000);
+    const MANUAL_RANGE_END = new Date(8640000000000000);
+    const manualOccurrences = generateOccurrencesForRange({
+      shiftSeries: [],
+      manualShifts: state.manualShifts,
+      shiftOverrides: [],
+      rangeStart: MANUAL_RANGE_START,
+      rangeEnd: MANUAL_RANGE_END,
+    });
+    result.push(...manualOccurrences);
+
+    for (const series of state.shiftSeries) {
+      if (series.deletedAt) continue;
+      const rangeStart = new Date(series.start);
+      // Subtract 1 ms so an occurrence falling exactly on +MAX_YEARS_PER_SERIES
+      // is excluded (matches the legacy `currentStart < maxDateAhead` semantics).
+      const rangeEnd = new Date(this.addYears(rangeStart, this.MAX_YEARS_PER_SERIES).getTime() - 1);
+      const occurrences = generateOccurrencesForRange({
+        shiftSeries: [series],
+        manualShifts: [],
+        shiftOverrides: state.shiftOverrides.filter(o => o.seriesId === series.id),
+        rangeStart,
+        rangeEnd,
+      });
+      result.push(...occurrences);
+    }
+
+    return result.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
   }
 
-  private addMonths(date: Date, months: number): Date {
-    const result = new Date(date);
-    result.setMonth(result.getMonth() + months);
-    return result;
-  }
+  // ------------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------------
 
   private addYears(date: Date, years: number): Date {
     const result = new Date(date);
@@ -179,149 +317,340 @@ export class ShiftService {
     return result;
   }
 
-  private advanceDate(date: Date, repetition: Repetition): Date {
-    switch (repetition.frequency) {
-      case 'days':
-        return this.addDays(date, repetition.interval);
-      case 'weeks':
-        return this.addDays(date, repetition.interval * this.DAYS_PER_WEEK);
-      case 'months':
-        return this.addMonths(date, repetition.interval);
-      case 'years':
-        return this.addYears(date, repetition.interval);
-    }
+  private parseOccurrenceId(id: string): { seriesId: string; occurrenceStart: string } | null {
+    const sep = id.indexOf('__');
+    if (sep === -1) return null;
+    const seriesId = id.slice(0, sep);
+    const occurrenceStart = id.slice(sep + 2);
+    if (!seriesId || !occurrenceStart) return null;
+    return { seriesId, occurrenceStart };
   }
 
-  private generateRecurringInstances(
-    baseShift: Omit<Shift, 'id'>,
-    seriesId: string,
-    repetition: Repetition
-  ): Shift[] {
-    let currentStartDate = new Date(baseShift.start);
-    const shiftDuration = new Date(baseShift.end).getTime() - currentStartDate.getTime();
-    const maxDateAhead = this.addYears(currentStartDate, this.MAX_YEARS_AHEAD);
+  // ------------------------------------------------------------------
+  // Public CRUD
+  // ------------------------------------------------------------------
 
-    const generatedShifts: Shift[] = [];
-    let count = 0;
-    while (currentStartDate < maxDateAhead && count < this.MAX_RECURRING_INSTANCES) {
-      const currentEndDate = new Date(currentStartDate.getTime() + shiftDuration);
-      generatedShifts.push({
-        ...baseShift,
-        id: crypto.randomUUID(),
-        seriesId,
-        start: currentStartDate.toISOString(),
-        end: currentEndDate.toISOString(),
-      });
-      currentStartDate = this.advanceDate(currentStartDate, repetition);
-      count++;
-    }
-    return generatedShifts;
-  }
-
-  addShift(shiftData: Omit<Shift, 'id' | 'seriesId'> & { repetition?: Repetition }) {
+  addShift(shiftData: Omit<Shift, 'id' | 'seriesId'> & { repetition?: Repetition }): void {
     const settings = this.notificationService.getSettings();
+    const now = new Date().toISOString();
 
     if (!shiftData.isRecurring || !shiftData.repetition) {
       const id = crypto.randomUUID();
-      const newShift: Shift = { ...shiftData, id, seriesId: id };
-      this.shifts.update(s => [...s, newShift]);
+      const manual: ManualShift = {
+        id,
+        title: shiftData.title,
+        start: shiftData.start,
+        end: shiftData.end,
+        color: shiftData.color,
+        notes: shiftData.notes,
+        overtimeHours: shiftData.overtimeHours,
+        allowances: shiftData.allowances,
+        timezone: shiftData.timezone,
+        createdAt: now,
+        updatedAt: now,
+      };
+      void this.userDataService.mutate(s => ({ ...s, manualShifts: [...s.manualShifts, manual] }), {
+        type: 'manual',
+        data: manual,
+      });
 
-      void this.notificationService.scheduleShiftNotification(newShift, settings);
-    } else {
-      const seriesId = crypto.randomUUID();
-      const generatedShifts = this.generateRecurringInstances(
-        { ...shiftData, seriesId },
-        seriesId,
-        shiftData.repetition
-      );
-
-      this.shifts.update(s => [...s, ...generatedShifts]);
-
-      const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
-      upcomingShifts.forEach(
-        shift => void this.notificationService.scheduleShiftNotification(shift, settings)
-      );
+      const materialized: Shift = { ...manual, seriesId: id, isRecurring: false };
+      void this.notificationService.scheduleShiftNotification(materialized, settings);
+      return;
     }
+
+    const seriesId = crypto.randomUUID();
+    const series: ShiftSeries = {
+      id: seriesId,
+      title: shiftData.title,
+      start: shiftData.start,
+      end: shiftData.end,
+      color: shiftData.color,
+      repetition: shiftData.repetition,
+      notes: shiftData.notes,
+      overtimeHours: shiftData.overtimeHours,
+      allowances: shiftData.allowances,
+      timezone: shiftData.timezone,
+      createdAt: now,
+      updatedAt: now,
+    };
+    void this.userDataService.mutate(s => ({ ...s, shiftSeries: [...s.shiftSeries, series] }), {
+      type: 'series',
+      data: series,
+    });
+
+    const upcomingShifts = this.shifts()
+      .filter(s => s.seriesId === seriesId)
+      .slice(0, this.MAX_NOTIFICATION_PREVIEW);
+    upcomingShifts.forEach(
+      shift => void this.notificationService.scheduleShiftNotification(shift, settings)
+    );
   }
 
-  updateShift(updatedShift: Shift) {
-    this.shifts.update(shifts => shifts.map(s => (s.id === updatedShift.id ? updatedShift : s)));
+  updateShift(updatedShift: Shift): void {
+    const parsed = this.parseOccurrenceId(updatedShift.id);
+    if (parsed) {
+      // Updating a generated occurrence of a series: persist as a 'modified' override.
+      this.upsertOverride(parsed.seriesId, parsed.occurrenceStart, updatedShift);
+      return;
+    }
+
+    // Manual shift: replace fields on the ManualShift document.
+    const now = new Date().toISOString();
+    void this.userDataService.mutate(
+      s => ({
+        ...s,
+        manualShifts: s.manualShifts.map(m =>
+          m.id === updatedShift.id
+            ? {
+                ...m,
+                title: updatedShift.title,
+                start: updatedShift.start,
+                end: updatedShift.end,
+                color: updatedShift.color,
+                notes: updatedShift.notes,
+                overtimeHours: updatedShift.overtimeHours,
+                allowances: updatedShift.allowances,
+                timezone: updatedShift.timezone,
+                updatedAt: now,
+              }
+            : m
+        ),
+      }),
+      {
+        type: 'manual',
+        data: {
+          ...updatedShift,
+          createdAt:
+            this.state().manualShifts.find(m => m.id === updatedShift.id)?.createdAt || now,
+          updatedAt: now,
+        } as ManualShift,
+      }
+    );
   }
 
-  updateShiftSeries(updatedShift: Shift) {
+  private upsertOverride(
+    seriesId: string,
+    occurrenceStart: string,
+    source: Partial<Shift> & { action?: 'modified' | 'deleted' }
+  ): void {
+    const now = new Date().toISOString();
+    const existing = this.state().shiftOverrides.find(
+      o => o.seriesId === seriesId && o.occurrenceStart === occurrenceStart
+    );
+    const action = source.action ?? 'modified';
+    const overrideFields: Partial<ShiftOverride> =
+      action === 'modified'
+        ? {
+            title: source.title,
+            start: source.start,
+            end: source.end,
+            color: source.color,
+            notes: source.notes,
+            overtimeHours: source.overtimeHours,
+            allowances: source.allowances,
+            timezone: source.timezone,
+          }
+        : {};
+
+    const finalOverride: ShiftOverride = existing
+      ? { ...existing, ...overrideFields, action, updatedAt: now, deletedAt: undefined }
+      : {
+          id: crypto.randomUUID(),
+          seriesId,
+          occurrenceStart,
+          action,
+          ...overrideFields,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+    void this.userDataService.mutate(
+      s => ({
+        ...s,
+        shiftOverrides: existing
+          ? s.shiftOverrides.map(o => (o.id === finalOverride.id ? finalOverride : o))
+          : [...s.shiftOverrides, finalOverride],
+      }),
+      { type: 'override', data: finalOverride }
+    );
+  }
+
+  updateShiftSeries(updatedShift: Shift): void {
     const seriesId = updatedShift.seriesId;
-
-    // Find the original shift being edited to get its start date
-    const originalShift = this.shifts().find(s => s.id === updatedShift.id);
-    if (!originalShift) {
-      // If we can't find the original shift, fallback to deleting entire series
+    const series = this.state().shiftSeries.find(s => s.id === seriesId);
+    if (!series) {
+      // Fall back to deleting (if any) and adding fresh — same as the legacy
+      // behavior when the original series cannot be located.
       this.deleteShiftSeries(seriesId);
       this.addShift({ ...updatedShift });
       return;
     }
 
-    const originalStartTime = new Date(originalShift.start).getTime();
+    const parsed = this.parseOccurrenceId(updatedShift.id);
+    const originalStartIso = parsed ? parsed.occurrenceStart : series.start;
+    const originalStartMs = new Date(originalStartIso).getTime();
 
-    // Split the series into three parts:
-    // 1. Keep: shifts BEFORE the edited shift (start < originalStartTime)
-    // 2. Delete: the edited shift and all AFTER (start >= originalStartTime)
-    // 3. Generate new: from updatedShift onwards
-
+    // Cancel notifications for occurrences at or after the edit start that
+    // will receive new properties.
     const allShifts = this.shifts();
-    const seriesShifts = allShifts.filter(s => s.seriesId === seriesId);
+    allShifts
+      .filter(s => s.seriesId === seriesId && new Date(s.start).getTime() >= originalStartMs)
+      .forEach(s => void this.notificationService.cancelShiftNotifications(s.id));
 
-    // Keep shifts that occur before the edited shift
-    const shiftsToKeep = seriesShifts.filter(s => new Date(s.start).getTime() < originalStartTime);
+    // Snapshot the original series properties so we can preserve them on the
+    // occurrences strictly before originalStart via 'modified' overrides.
+    const originalProps = {
+      title: series.title,
+      color: series.color,
+      notes: series.notes,
+      overtimeHours: series.overtimeHours,
+      allowances: series.allowances,
+      timezone: series.timezone,
+    };
 
-    // Shifts to delete (edited shift and all after it)
-    const shiftsToDelete = seriesShifts.filter(
-      s => new Date(s.start).getTime() >= originalStartTime
+    const pastOccurrences = allShifts.filter(
+      s => s.seriesId === seriesId && new Date(s.start).getTime() < originalStartMs
     );
 
-    // Cancel notifications for deleted shifts
-    shiftsToDelete.forEach(
-      shift => void this.notificationService.cancelShiftNotifications(shift.id)
-    );
+    const now = new Date().toISOString();
+    let updatedSeries: ShiftSeries;
+    let nextOverrides: ShiftOverride[] = [];
 
-    // Generate new shifts from the updated shift onwards before touching the signal.
-    const settings = this.notificationService.getSettings();
-    let newShifts: Shift[];
+    const state = this.state();
+    nextOverrides = state.shiftOverrides;
 
-    if (!updatedShift.isRecurring || !updatedShift.repetition) {
-      const newShift: Shift = { ...updatedShift, id: crypto.randomUUID(), seriesId };
-      newShifts = [newShift];
-      void this.notificationService.scheduleShiftNotification(newShift, settings);
-    } else {
-      const generatedShifts = this.generateRecurringInstances(
-        { ...updatedShift, seriesId },
-        seriesId,
-        updatedShift.repetition
+    // Add overrides for past occurrences only when they don't already have
+    // one (do not clobber prior user customisations).
+    for (const occ of pastOccurrences) {
+      const key = `${seriesId}|${occ.start}`;
+      const exists = nextOverrides.some(
+        o => `${o.seriesId}|${o.occurrenceStart}` === key && !o.deletedAt
       );
-      newShifts = generatedShifts;
-      const upcomingShifts = generatedShifts.slice(0, this.MAX_NOTIFICATION_PREVIEW);
-      upcomingShifts.forEach(
-        shift => void this.notificationService.scheduleShiftNotification(shift, settings)
-      );
+      if (exists) continue;
+      nextOverrides = [
+        ...nextOverrides,
+        {
+          id: crypto.randomUUID(),
+          seriesId,
+          occurrenceStart: occ.start,
+          action: 'modified',
+          start: occ.start,
+          end: occ.end,
+          ...originalProps,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
     }
 
-    // Single update: remove old series, add kept shifts and new shifts in one operation
-    // to avoid triggering two separate encrypt+save cycles.
-    this.shifts.update(shifts => {
-      const withoutSeries = shifts.filter(s => s.seriesId !== seriesId);
-      return [...withoutSeries, ...shiftsToKeep, ...newShifts];
-    });
+    // Remove overrides at or after originalStart (they are about to be
+    // recomputed from the new series properties).
+    nextOverrides = nextOverrides.filter(
+      o => o.seriesId !== seriesId || new Date(o.occurrenceStart).getTime() < originalStartMs
+    );
+
+    // Update the series document with the new properties. We preserve the
+    // series.start (so the iteration anchor matches the original occurrence
+    // grid) and only swap the displayed fields and repetition.
+    updatedSeries = {
+      ...series,
+      title: updatedShift.title,
+      color: updatedShift.color,
+      notes: updatedShift.notes,
+      overtimeHours: updatedShift.overtimeHours,
+      allowances: updatedShift.allowances,
+      timezone: updatedShift.timezone,
+      repetition: updatedShift.repetition ?? series.repetition,
+      updatedAt: now,
+    };
+
+    void this.userDataService.mutate(
+      s => ({
+        ...s,
+        shiftSeries: s.shiftSeries.map(s => (s.id === seriesId ? updatedSeries : s)),
+        shiftOverrides: nextOverrides,
+      }),
+      {
+        type: 'batch',
+        series: [updatedSeries],
+        overrides: nextOverrides.filter(o => o.seriesId === seriesId),
+      }
+    );
+
+    const settings = this.notificationService.getSettings();
+    const upcoming = this.shifts()
+      .filter(s => s.seriesId === seriesId && new Date(s.start).getTime() >= originalStartMs)
+      .slice(0, this.MAX_NOTIFICATION_PREVIEW);
+    upcoming.forEach(
+      shift => void this.notificationService.scheduleShiftNotification(shift, settings)
+    );
   }
 
-  deleteShift(id: string) {
+  deleteShift(id: string): void {
     void this.notificationService.cancelShiftNotifications(id);
-    this.shifts.update(shifts => shifts.filter(s => s.id !== id));
+
+    const parsed = this.parseOccurrenceId(id);
+    if (parsed) {
+      this.upsertOverride(parsed.seriesId, parsed.occurrenceStart, { action: 'deleted' });
+      return;
+    }
+
+    // Manual shift removal: soft-delete for Firestore sync compatibility.
+    const now = new Date().toISOString();
+    const manual = this.state().manualShifts.find(m => m.id === id);
+    if (manual) {
+      const deletedManual = { ...manual, deletedAt: now, updatedAt: now };
+      void this.userDataService.mutate(
+        s => ({
+          ...s,
+          manualShifts: s.manualShifts.map(m => (m.id === id ? deletedManual : m)),
+        }),
+        { type: 'manual', data: deletedManual }
+      );
+    }
   }
 
-  deleteShiftSeries(seriesId: string) {
-    // Cancella notifiche per tutti i turni della serie
+  deleteShiftSeries(seriesId: string): void {
     const seriesShifts = this.shifts().filter(s => s.seriesId === seriesId);
     seriesShifts.forEach(shift => void this.notificationService.cancelShiftNotifications(shift.id));
-    this.shifts.update(shifts => shifts.filter(s => s.seriesId !== seriesId));
+
+    const now = new Date().toISOString();
+    const series = this.state().shiftSeries.find(s => s.id === seriesId);
+    if (series) {
+      const deletedSeries = { ...series, deletedAt: now, updatedAt: now };
+      const overridesToDelete = this.state().shiftOverrides.filter(o => o.seriesId === seriesId);
+      const deletedOverrides = overridesToDelete.map(o => ({
+        ...o,
+        deletedAt: now,
+        updatedAt: now,
+      }));
+
+      void this.userDataService.mutate(
+        s => ({
+          ...s,
+          shiftSeries: s.shiftSeries.map(s => (s.id === seriesId ? deletedSeries : s)),
+          shiftOverrides: s.shiftOverrides.map(o => {
+            const deleted = deletedOverrides.find(d => d.id === o.id);
+            return deleted ?? o;
+          }),
+        }),
+        {
+          type: 'batch',
+          series: [deletedSeries],
+          overrides: deletedOverrides,
+        }
+      );
+    }
+  }
+
+  deleteAllShifts(): void {
+    void this.notificationService.cancelAllNotifications();
+    this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+  }
+
+  exportBackupPayload(): string {
+    return JSON.stringify(this.userDataService.state(), null, 2);
   }
 
   importShifts(json: string): { success: boolean; error?: string; imported?: number } {
@@ -331,6 +660,12 @@ export class ShiftService {
       }
 
       const data = JSON.parse(json);
+
+      if (this.isShiftDataState(data)) {
+        void this.notificationService.cancelAllNotifications();
+        this.userDataService.setState(data);
+        return { success: true, imported: data.manualShifts.length + data.shiftSeries.length };
+      }
 
       if (!Array.isArray(data)) {
         return { success: false, error: 'Invalid format: expected array' };
@@ -342,8 +677,6 @@ export class ShiftService {
         return { success: false, error: 'No valid shifts found' };
       }
 
-      // Cancel any stale notifications from the previous dataset, then
-      // schedule reminders for the upcoming imported shifts.
       void this.notificationService.cancelAllNotifications().then(() => {
         const settings = this.notificationService.getSettings();
         const upcoming = validShifts
@@ -354,13 +687,17 @@ export class ShiftService {
         );
       });
 
-      this.shifts.set(validShifts);
+      this.userDataService.setState(this.buildStateFromShifts(validShifts));
       return { success: true, imported: validShifts.length };
     } catch (error) {
       console.error('Import failed:', error);
       return { success: false, error: 'Failed to parse JSON' };
     }
   }
+
+  // ------------------------------------------------------------------
+  // Validation (re-used for legacy migration and backup import)
+  // ------------------------------------------------------------------
 
   private static readonly VALID_COLORS: ReadonlySet<ShiftColor> = new Set<ShiftColor>([
     'sky',
@@ -430,7 +767,6 @@ export class ShiftService {
       return false;
     }
 
-    // Validate optional fields when present
     if (obj.repetition !== undefined && !this.isValidRepetition(obj.repetition)) {
       return false;
     }
@@ -455,7 +791,6 @@ export class ShiftService {
       return false;
     }
 
-    // Validate end is not before start
     return new Date(obj.end as string).getTime() >= new Date(obj.start as string).getTime();
   }
 
@@ -465,10 +800,5 @@ export class ShiftService {
     }
     const date = new Date(dateString);
     return !isNaN(date.getTime());
-  }
-
-  deleteAllShifts() {
-    void this.notificationService.cancelAllNotifications();
-    this.shifts.set([]);
   }
 }

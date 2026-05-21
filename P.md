@@ -17,7 +17,11 @@ Workspace analizzato: `spe1977/easyturno_c_pwa`
 - Cancellazione singola o di serie.
 - Ricerca turni per data con paginazione (50 elementi, incremento di 50).
 - Reset completo dei dati con conferma.
-- Backup esportabile e importabile in JSON con validazione type guard.
+- Backup esportabile e importabile in JSON con validazione type guard (v2 schema aware).
+- Sincronizzazione cloud con Firebase Firestore (serie, turni manuali, override).
+- Autenticazione completa (Email/Password, Google Login, Verifica Email).
+- Gestione multi-dispositivo con registrazione e limite soft (4 device).
+- Pulizia dati cloud alla cancellazione dell'account.
 
 ### Dati e dominio
 
@@ -472,6 +476,7 @@ EasyTurno e una applicazione avanzata e funzionalmente completa. Aree residue:
 
 - Verifica offline reale su smartphone dopo installazione/cache fresca.
 - Validazione notifiche native su device fisico.
+- Rafforzamento test suite: copertura componenti UI Auth (< 45%) e rami asincroni batch in FirestoreUserDataService.
 - Hardening sicurezza applicativa ancora aperto soprattutto sulla strategia chiavi dello storage locale; backup cifrati, CSP, validation difensiva e scope del caching runtime sono stati rinforzati.
 
 Valutazione pratica attuale:

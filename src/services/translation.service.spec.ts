@@ -133,6 +133,10 @@ describe('TranslationService', () => {
       expect(result).toBe(nonExistentKey);
     });
 
+    it('should return the key itself when the resolved translation is not a string', () => {
+      expect(service.translate('auth')).toBe('auth');
+    });
+
     it('should return different translations for different languages', () => {
       service.setLanguage('it');
       const italianTranslation = service.translate('app_title');

@@ -8,6 +8,7 @@ export default {
     'src/**/*.ts',
     '!src/**/*.spec.ts',
     '!src/main.ts',
+    '!src/testing/**/*.ts',
   ],
   moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/src/$1',

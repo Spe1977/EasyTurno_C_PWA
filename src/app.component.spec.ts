@@ -5,6 +5,7 @@ import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
 import { NotificationService } from './services/notification.service';
 import { CryptoService } from './services/crypto.service';
+import { FirestoreUserDataService } from './services/firestore-user-data.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 import { Shift, ShiftColor } from './shift.model';
@@ -17,6 +18,7 @@ describe('AppComponent - Integration Tests', () => {
   let toastService: ToastService;
   let notificationService: NotificationService;
   let cryptoService: CryptoService;
+  let firestoreUserDataService: FirestoreUserDataService;
   let localStorageMock: { [key: string]: string };
 
   beforeEach(async () => {
@@ -83,6 +85,7 @@ describe('AppComponent - Integration Tests', () => {
     toastService = TestBed.inject(ToastService);
     notificationService = TestBed.inject(NotificationService);
     cryptoService = TestBed.inject(CryptoService);
+    firestoreUserDataService = TestBed.inject(FirestoreUserDataService);
   });
 
   afterEach(() => {
@@ -200,6 +203,21 @@ describe('AppComponent - Integration Tests', () => {
     });
   });
 
+  describe('Auth Exit Label', () => {
+    it('should expose the correct label for guest and authenticated modes', () => {
+      const guestMode = signal(true);
+      component.authService = {
+        ...(component.authService as any),
+        isGuest: () => guestMode(),
+      } as any;
+
+      expect(component.authExitLabelKey()).toBe('authLoginLink');
+
+      guestMode.set(false);
+      expect(component.authExitLabelKey()).toBe('authLogout');
+    });
+  });
+
   describe('Modal Management', () => {
     it('should open and close modals', () => {
       expect(component.activeModal()).toBe('none');
@@ -257,6 +275,165 @@ describe('AppComponent - Integration Tests', () => {
 
       component.openModal('statistics');
       expect(component.activeModal()).toBe('statistics');
+    });
+
+    it('should open the account deletion warning from settings', () => {
+      component.openDeleteAccountWarning();
+
+      expect(component.activeModal()).toBe('deleteAccountWarning');
+    });
+
+    it('should reset delete account form when closing delete modals', () => {
+      component.deleteAccountEmailInput.set('delete@example.com');
+      component.deleteAccountPasswordInput.set('secret');
+      component.isDeletingAccount.set(true);
+      component.openModal('deleteAccountWarning');
+
+      component.closeModal();
+
+      expect(component.activeModal()).toBe('none');
+      expect(component.deleteAccountEmailInput()).toBe('');
+      expect(component.deleteAccountPasswordInput()).toBe('');
+    });
+
+    it('should open the decryption error modal when ShiftService reports a decrypt failure', () => {
+      shiftService.decryptionError.set(true);
+      fixture.detectChanges();
+
+      expect(component.activeModal()).toBe('decryptionError');
+    });
+  });
+
+  describe('Account Deletion', () => {
+    beforeEach(() => {
+      component.authService = {
+        state: () => ({
+          mode: 'authenticated',
+          uid: 'u-delete',
+          email: 'delete@example.com',
+          emailVerified: true,
+          providerIds: ['password'],
+        }),
+        isGuest: () => false,
+        isAuthenticated: () => true,
+        hasPasswordProvider: () => true,
+        signOut: jest.fn().mockResolvedValue(undefined),
+        deleteAccount: jest.fn().mockResolvedValue(undefined),
+      } as any;
+    });
+
+    it('should block account deletion when the confirmation email does not match', async () => {
+      const deleteSpy = component.authService.deleteAccount as jest.Mock;
+      const toastSpy = jest.spyOn(toastService, 'error');
+
+      component.proceedDeleteAccountConfirmation();
+      component.deleteAccountEmailInput.set('wrong@example.com');
+      component.deleteAccountPasswordInput.set('Password1!');
+
+      await component.executeDeleteAccount();
+
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(component.activeModal()).toBe('deleteAccountConfirm');
+      expect(toastSpy).toHaveBeenCalledWith(
+        translationService.translate('authDeleteAccountEmailMismatch')
+      );
+    });
+
+    it('should delete the account, clear local data, and return to auth screen on success', async () => {
+      shiftService.addShift({
+        title: 'Sensitive shift',
+        start: '2026-01-10T08:00:00.000Z',
+        end: '2026-01-10T16:00:00.000Z',
+        color: 'indigo',
+        isRecurring: false,
+      });
+      localStorageMock['easyturno_shifts'] = 'encrypted-data';
+      localStorageMock['easyturno_device_key'] = 'legacy-key';
+      localStorageMock['easyturno_backup_reminder_shown'] = '1';
+      localStorageMock['easyturno_notification_settings'] = '{}';
+      const deleteSpy = component.authService.deleteAccount as jest.Mock;
+      const toastSpy = jest.spyOn(toastService, 'success');
+
+      component.proceedDeleteAccountConfirmation();
+      component.deleteAccountEmailInput.set('delete@example.com');
+      component.deleteAccountPasswordInput.set('Password1!');
+
+      await component.executeDeleteAccount();
+
+      expect(deleteSpy).toHaveBeenCalledWith({ password: 'Password1!' });
+      expect(shiftService.shifts()).toEqual([]);
+      expect(localStorageMock['easyturno_shifts']).toBeUndefined();
+      expect(localStorageMock['easyturno_device_key']).toBeUndefined();
+      expect(localStorageMock['easyturno_backup_reminder_shown']).toBeUndefined();
+      expect(localStorageMock['easyturno_notification_settings']).toBeUndefined();
+      expect(component.activeModal()).toBe('none');
+      expect(toastSpy).toHaveBeenCalledWith(
+        translationService.translate('authDeleteAccountSuccess')
+      );
+    });
+
+    it('should force sign out when Firebase requires a recent login for deletion', async () => {
+      const auth = component.authService as any;
+      auth.deleteAccount.mockRejectedValueOnce({ code: 'auth/requires-recent-login' });
+      const toastSpy = jest.spyOn(toastService, 'error');
+
+      component.proceedDeleteAccountConfirmation();
+      component.deleteAccountEmailInput.set('delete@example.com');
+      component.deleteAccountPasswordInput.set('Password1!');
+
+      await component.executeDeleteAccount();
+
+      expect(auth.signOut).toHaveBeenCalled();
+      expect(toastSpy).toHaveBeenCalledWith(
+        translationService.translate('authDeleteAccountReauthRequired'),
+        6000
+      );
+      expect(component.activeModal()).toBe('none');
+    });
+
+    it('should ignore duplicate account deletion submissions while already deleting', async () => {
+      const deleteSpy = component.authService.deleteAccount as jest.Mock;
+      component.isDeletingAccount.set(true);
+
+      await component.executeDeleteAccount();
+
+      expect(deleteSpy).not.toHaveBeenCalled();
+    });
+
+    it('should show the network error message if account deletion fails offline', async () => {
+      const auth = component.authService as any;
+      auth.deleteAccount.mockRejectedValueOnce({ code: 'auth/network-request-failed' });
+      const toastSpy = jest.spyOn(toastService, 'error');
+
+      component.proceedDeleteAccountConfirmation();
+      component.deleteAccountEmailInput.set('delete@example.com');
+      component.deleteAccountPasswordInput.set('Password1!');
+
+      await component.executeDeleteAccount();
+
+      expect(toastSpy).toHaveBeenCalledWith(translationService.translate('authErrorNetwork'), 6000);
+    });
+
+    it('should omit password payload for non-password account deletion', async () => {
+      component.authService = {
+        ...(component.authService as any),
+        state: () => ({
+          mode: 'authenticated',
+          uid: 'u-google',
+          email: 'delete@example.com',
+          emailVerified: true,
+          providerIds: ['google.com'],
+        }),
+        hasPasswordProvider: () => false,
+        deleteAccount: jest.fn().mockResolvedValue(undefined),
+      } as any;
+
+      component.proceedDeleteAccountConfirmation();
+      component.deleteAccountEmailInput.set('delete@example.com');
+
+      await component.executeDeleteAccount();
+
+      expect(component.authService.deleteAccount).toHaveBeenCalledWith({});
     });
   });
 
@@ -340,6 +517,34 @@ describe('AppComponent - Integration Tests', () => {
       expect(component.shiftNotes()).toBe('');
       expect(component.shiftOvertimeHours()).toBe(0);
       expect(component.shiftAllowances()).toEqual([]);
+    });
+
+    it('should fall back to interval 1 for unknown frequency changes', () => {
+      component.shiftRepetition.set({ frequency: 'days', interval: 15 });
+
+      component.onFrequencyChange({ target: { value: 'quarters' } } as unknown as Event);
+
+      expect(component.shiftRepetition()).toEqual({ frequency: 'quarters' as any, interval: 1 });
+    });
+
+    it('should show the backup reminder only once after reaching the threshold', () => {
+      const infoSpy = jest.spyOn(toastService, 'info');
+
+      for (let index = 0; index < 20; index++) {
+        shiftService.addShift({
+          title: `Reminder ${index}`,
+          start: `2026-06-${String(index + 1).padStart(2, '0')}T08:00:00.000Z`,
+          end: `2026-06-${String(index + 1).padStart(2, '0')}T16:00:00.000Z`,
+          color: 'sky',
+          isRecurring: false,
+        });
+      }
+
+      (component as any).maybeSuggestBackupExport();
+      (component as any).maybeSuggestBackupExport();
+
+      expect(infoSpy).toHaveBeenCalledTimes(1);
+      expect(localStorageMock['easyturno_backup_reminder_shown']).toBe('1');
     });
   });
 
@@ -464,31 +669,57 @@ describe('AppComponent - Integration Tests', () => {
       expect(component.listShifts().length).toBe(50); // Back to default pagination
     });
 
-    it('should only show upcoming shifts by default (not past)', () => {
+    it('should show shifts within the -12/+24 month window and hide those outside', () => {
       shiftService.deleteAllShifts();
 
-      // Add past shift
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const monthMs = 30 * dayMs;
+
+      const isoAt = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+
+      // Far past — outside the -12 month window
       shiftService.addShift({
-        title: 'Past Shift',
-        start: '2020-01-01T08:00:00',
-        end: '2020-01-01T16:00:00',
+        title: 'Far Past Shift',
+        start: isoAt(-24 * monthMs),
+        end: isoAt(-24 * monthMs + 8 * 60 * 60 * 1000),
         color: 'sky',
         isRecurring: false,
       });
 
-      // Add future shift
+      // Recent past — inside the -12 month window
       shiftService.addShift({
-        title: 'Future Shift',
-        start: '2030-01-01T08:00:00',
-        end: '2030-01-01T16:00:00',
+        title: 'Recent Past Shift',
+        start: isoAt(-3 * monthMs),
+        end: isoAt(-3 * monthMs + 8 * 60 * 60 * 1000),
+        color: 'sky',
+        isRecurring: false,
+      });
+
+      // Near future — inside the +24 month window
+      shiftService.addShift({
+        title: 'Near Future Shift',
+        start: isoAt(6 * monthMs),
+        end: isoAt(6 * monthMs + 8 * 60 * 60 * 1000),
         color: 'green',
         isRecurring: false,
       });
 
-      const listedShifts = component.listShifts();
+      // Far future — outside the +24 month window
+      shiftService.addShift({
+        title: 'Far Future Shift',
+        start: isoAt(36 * monthMs),
+        end: isoAt(36 * monthMs + 8 * 60 * 60 * 1000),
+        color: 'green',
+        isRecurring: false,
+      });
 
-      expect(listedShifts.length).toBe(1);
-      expect(listedShifts[0].title).toBe('Future Shift');
+      const titles = component.listShifts().map(s => s.title);
+
+      expect(titles).toContain('Recent Past Shift');
+      expect(titles).toContain('Near Future Shift');
+      expect(titles).not.toContain('Far Past Shift');
+      expect(titles).not.toContain('Far Future Shift');
     });
   });
 
@@ -795,6 +1026,71 @@ describe('AppComponent - Integration Tests', () => {
       expect(stats.totalHours).toBe(0);
       expect(stats.totalOvertime).toBe(0);
     });
+
+    it('should expose statistic keys for template iteration', () => {
+      expect(component.statsShiftTitles()).toEqual(['Shift 1', 'Shift 2']);
+      expect(component.statsAllowanceNames()).toEqual(['Meal', 'Transport']);
+    });
+
+    it('should return the first matching shift color and fall back to indigo', () => {
+      expect(component.getShiftColorForTitle('Shift 1')).toBe('sky');
+      expect(component.getShiftColorForTitle('Missing')).toBe('indigo');
+    });
+
+    it('should map statistic shift colors to bar and label styles', () => {
+      expect(component.getShiftStylesForTitle('Shift 2')).toEqual({
+        bar: 'bg-emerald-500',
+        labelBg: 'bg-emerald-100/70 dark:bg-emerald-950/40',
+        text: 'text-emerald-700 dark:text-emerald-300',
+      });
+      expect(component.getShiftStylesForTitle('Missing')).toEqual({
+        bar: 'bg-indigo-500',
+        labelBg: 'bg-indigo-100/70 dark:bg-indigo-950/40',
+        text: 'text-indigo-700 dark:text-indigo-300',
+      });
+    });
+
+    it('should update statistics date range from quick presets', () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-05-20T12:00:00.000Z'));
+
+      try {
+        component.setStatsPreset('thisMonth');
+        expect(component.statsStartDate()).toBe('2026-05-01');
+        expect(component.statsEndDate()).toBe('2026-05-31');
+
+        component.setStatsPreset('lastMonth');
+        expect(component.statsStartDate()).toBe('2026-04-01');
+        expect(component.statsEndDate()).toBe('2026-04-30');
+
+        component.setStatsPreset('last30Days');
+        expect(component.statsStartDate()).toBe('2026-04-20');
+        expect(component.statsEndDate()).toBe('2026-05-20');
+
+        component.setStatsPreset('thisYear');
+        expect(component.statsStartDate()).toBe('2026-01-01');
+        expect(component.statsEndDate()).toBe('2026-12-31');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  describe('Device Limit Warning', () => {
+    it('should turn on only when active devices exceed the soft limit', () => {
+      (
+        firestoreUserDataService as unknown as {
+          _activeDeviceCount: { set: (value: number) => void };
+        }
+      )._activeDeviceCount.set(4);
+      expect(component.deviceLimitExceeded()).toBe(false);
+
+      (
+        firestoreUserDataService as unknown as {
+          _activeDeviceCount: { set: (value: number) => void };
+        }
+      )._activeDeviceCount.set(5);
+      expect(component.deviceLimitExceeded()).toBe(true);
+    });
   });
 
   describe('Settings Management', () => {
@@ -1069,6 +1365,39 @@ describe('AppComponent - Integration Tests', () => {
         expect(component.activeModal()).toBe('searchDate');
       });
 
+      it('should close the date search modal when the input is empty', () => {
+        component.searchDateInput.set('');
+        component.openModal('searchDate');
+
+        component.handleDateSearch();
+
+        expect(component.activeModal()).toBe('none');
+      });
+
+      it('should show an informational toast for searches before the visible range', () => {
+        const infoSpy = jest.spyOn(toastService, 'info');
+        component.searchDateInput.set('1900-01-01');
+
+        component.handleDateSearch();
+
+        expect(infoSpy).toHaveBeenCalledWith(
+          translationService.translate('searchOutsideRange'),
+          5000
+        );
+      });
+
+      it('should show an informational toast for searches after the visible range', () => {
+        const infoSpy = jest.spyOn(toastService, 'info');
+        component.searchDateInput.set('2100-01-01');
+
+        component.handleDateSearch();
+
+        expect(infoSpy).toHaveBeenCalledWith(
+          translationService.translate('searchOutsideRange'),
+          5000
+        );
+      });
+
       it('should show a parse error toast if date construction throws', () => {
         const errorSpy = jest.spyOn(toastService, 'error');
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -1112,6 +1441,74 @@ describe('AppComponent - Integration Tests', () => {
       );
       expect(readAsTextSpy).not.toHaveBeenCalled();
       expect(component.isImporting()).toBe(false);
+    });
+
+    it('should show an import error and reset loading when FileReader fails', () => {
+      const originalFileReader = globalThis.FileReader;
+      const errorSpy = jest.spyOn(toastService, 'error');
+      const readAsText = jest.fn(function (this: FileReader) {
+        this.onerror?.(new ProgressEvent('error') as ProgressEvent<FileReader>);
+      });
+      class ErrorFileReader {
+        onload: FileReader['onload'] = null;
+        onerror: FileReader['onerror'] = null;
+        readAsText = readAsText;
+      }
+      Object.defineProperty(globalThis, 'FileReader', {
+        configurable: true,
+        writable: true,
+        value: ErrorFileReader,
+      });
+
+      const file = new File(['not used'], 'broken.json', { type: 'application/json' });
+      component.importBackup({ target: { files: [file] } } as unknown as Event);
+
+      expect(readAsText).toHaveBeenCalledWith(file);
+      expect(errorSpy).toHaveBeenCalledWith(translationService.translate('importError'));
+      expect(component.isImporting()).toBe(false);
+
+      Object.defineProperty(globalThis, 'FileReader', {
+        configurable: true,
+        writable: true,
+        value: originalFileReader,
+      });
+    });
+
+    it('should ignore import when no file is selected', () => {
+      component.importBackup({ target: { files: [] } } as unknown as Event);
+
+      expect(component.isImporting()).toBe(false);
+    });
+
+    it('should show import error without suffix when import fails without details', () => {
+      jest.spyOn(shiftService, 'importShifts').mockReturnValue({ success: false });
+      const errorSpy = jest.spyOn(toastService, 'error');
+
+      (component as any).finishImport('bad-json');
+
+      expect(errorSpy).toHaveBeenCalledWith(translationService.translate('importError'), 5000);
+    });
+
+    it('should do nothing when password prompt is confirmed without a password', async () => {
+      component.openModal('passwordPrompt');
+      component.passwordPromptMode.set('export');
+      component.passwordInput.set('');
+
+      await component.confirmPasswordPrompt();
+
+      expect(component.activeModal()).toBe('passwordPrompt');
+      expect(component.isExporting()).toBe(false);
+    });
+
+    it('should return from import password confirmation when pending import data is missing', async () => {
+      component.openModal('passwordPrompt');
+      component.passwordPromptMode.set('import');
+      component.passwordInput.set('secret');
+      component.pendingImportData.set(null);
+
+      await component.confirmPasswordPrompt();
+
+      expect(component.activeModal()).toBe('passwordPrompt');
     });
 
     it('should reset unreadable encrypted data only after decryption reset confirmation', () => {
@@ -1265,7 +1662,7 @@ describe('AppComponent - Integration Tests', () => {
 
       // Verify persistence in localStorage
       expect(localStorageMock['easyturno_theme']).toBe('dark');
-      expect(localStorageMock['easyturno_shifts']).toBeTruthy();
+      expect(localStorageMock['easyturno_user_data_v2']).toBeTruthy();
 
       // Create new component instance (simulating page reload)
       const newFixture = TestBed.createComponent(AppComponent);
@@ -1419,6 +1816,40 @@ describe('AppComponent - Integration Tests', () => {
         expect(updateShiftSpy).not.toHaveBeenCalled();
         expect(updateShiftSeriesSpy).not.toHaveBeenCalled();
       });
+
+      it('updates the whole recurring series when confirmed', () => {
+        const editing = {
+          id: 'series-1__2026-05-21T08:00:00.000Z',
+          seriesId: 'series-1',
+          title: 'Old',
+          start: '2026-05-21T08:00:00.000Z',
+          end: '2026-05-21T16:00:00.000Z',
+          color: 'sky' as const,
+          isRecurring: true,
+          repetition: { frequency: 'days' as const, interval: 1 },
+        };
+        const shiftData = {
+          title: 'Updated series',
+          start: '2026-05-21T09:00:00.000Z',
+          end: '2026-05-21T17:00:00.000Z',
+          color: 'green' as const,
+          isRecurring: true,
+          repetition: { frequency: 'days' as const, interval: 1 },
+          notes: undefined,
+          overtimeHours: undefined,
+          allowances: undefined,
+          timezone: 'Europe/Rome',
+        };
+        const updateShiftSeriesSpy = jest.spyOn(shiftService, 'updateShiftSeries');
+
+        component.editingShift.set(editing);
+        component.pendingShiftData.set(shiftData);
+
+        component.executeEdit(true);
+
+        expect(updateShiftSeriesSpy).toHaveBeenCalledWith({ ...editing, ...shiftData });
+        expect(component.activeModal()).toBe('none');
+      });
     });
 
     describe('getColorClasses — all 8 color branches', () => {
@@ -1514,6 +1945,209 @@ describe('AppComponent - Integration Tests', () => {
         expect(component.viewMode()).toBe('list');
         expect(component.searchDate()).toBe(searchDate);
         expect(component.listVisibleCount()).toBe(75);
+      });
+    });
+
+    describe('onNotificationSettingsChange', () => {
+      it('should save notification settings and retrieve the updated settings', () => {
+        const spySave = jest.spyOn(component['notificationService'], 'saveSettings');
+        const spyGet = jest.spyOn(component['notificationService'], 'getSettings').mockReturnValue({
+          enabled: true,
+          leadTimeMinutes: 45,
+        });
+
+        component.notificationSettings.set({ enabled: true, leadTimeMinutes: 45 });
+        component.onNotificationSettingsChange();
+
+        expect(spySave).toHaveBeenCalledWith({ enabled: true, leadTimeMinutes: 45 });
+        expect(spyGet).toHaveBeenCalled();
+        expect(component.notificationSettings()).toEqual({ enabled: true, leadTimeMinutes: 45 });
+      });
+    });
+
+    describe('onCalendarDaySelected', () => {
+      it('should set searchDate if a date is provided', () => {
+        const testDate = new Date('2026-05-21T00:00:00');
+        component.onCalendarDaySelected(testDate);
+        expect(component.searchDate()).toBe(testDate);
+      });
+
+      it('should clear searchDate if date is null', () => {
+        component.onCalendarDaySelected(null);
+        expect(component.searchDate()).toBeNull();
+      });
+    });
+
+    describe('onCalendarShiftClick', () => {
+      it('should open edit shift form for the clicked shift', () => {
+        const testShift: Shift = {
+          id: 's-1',
+          seriesId: 's-1',
+          title: 'Shift 1',
+          start: '2026-05-21T08:00:00Z',
+          end: '2026-05-21T16:00:00Z',
+          color: 'indigo',
+          isRecurring: false,
+        };
+        const spyOpen = jest.spyOn(component, 'openEditShiftForm').mockImplementation(() => {});
+        component.onCalendarShiftClick(testShift);
+        expect(spyOpen).toHaveBeenCalledWith(testShift);
+        spyOpen.mockRestore();
+      });
+    });
+
+    describe('Hardening & Coverage Improvements (T12)', () => {
+      describe('Keyboard Shortcuts', () => {
+        beforeEach(() => {
+          fixture.detectChanges();
+        });
+
+        it('should trigger openNewShiftForm on Ctrl+N', () => {
+          const spy = jest.spyOn(component, 'openNewShiftForm').mockImplementation(() => {});
+          const event = new KeyboardEvent('keydown', { ctrlKey: true, key: 'n' });
+          window.dispatchEvent(event);
+          expect(spy).toHaveBeenCalled();
+          spy.mockRestore();
+        });
+
+        it('should trigger closeModal on Escape when a modal is active', () => {
+          const spy = jest.spyOn(component, 'closeModal').mockImplementation(() => {});
+          component.activeModal.set('settings'); // Make activeModal !== 'none'
+          fixture.detectChanges(); // Trigger effects to update bindings
+          const event = new KeyboardEvent('keydown', { key: 'Escape' });
+          window.dispatchEvent(event);
+          expect(spy).toHaveBeenCalled();
+          spy.mockRestore();
+        });
+
+        it('should trigger openStatistics on Ctrl+S when in settings modal', () => {
+          const spy = jest.spyOn(component, 'openStatistics').mockImplementation(() => {});
+          component.activeModal.set('settings');
+          fixture.detectChanges(); // Trigger effects to update bindings
+          const event = new KeyboardEvent('keydown', { ctrlKey: true, key: 's' });
+          window.dispatchEvent(event);
+          expect(spy).toHaveBeenCalled();
+          spy.mockRestore();
+        });
+
+        it('should open the statistics modal when openStatistics runs', () => {
+          component.openStatistics();
+
+          expect(component.activeModal()).toBe('statistics');
+        });
+      });
+
+      describe('Storage Warning', () => {
+        it('should display reducedSecurityStorage warning when secureStorageAvailable is false', async () => {
+          await TestBed.resetTestingModule();
+          const customMockCryptoService = {
+            encrypt: jest.fn().mockImplementation(async (data: string) => data),
+            decrypt: jest.fn().mockImplementation(async (data: string) => data),
+            isEncrypted: jest.fn().mockReturnValue(false),
+            secureStorageAvailable: signal(false), // Initialize as false!
+          };
+          await TestBed.configureTestingModule({
+            imports: [AppComponent],
+            providers: [
+              ShiftService,
+              TranslationService,
+              ToastService,
+              NotificationService,
+              DatePipe,
+              { provide: CryptoService, useValue: customMockCryptoService },
+            ],
+          }).compileComponents();
+          const customFixture = TestBed.createComponent(AppComponent);
+          const toastSpy = jest.spyOn(TestBed.inject(ToastService), 'error');
+          customFixture.detectChanges(); // Trigger effects
+          expect(toastSpy).toHaveBeenCalledWith(
+            TestBed.inject(TranslationService).translate('reducedSecurityStorage'),
+            6000
+          );
+        });
+      });
+
+      describe('Form Validations', () => {
+        it('should block shift creation when end date/time is on or before start date/time', () => {
+          const toastSpy = jest.spyOn(toastService, 'error');
+          component.shiftTitle.set('Valid Title');
+          component.shiftStartDate.set('2026-05-21');
+          component.shiftStartTime.set('12:00');
+          component.shiftEndDate.set('2026-05-21');
+          component.shiftEndTime.set('11:00'); // End is before start!
+
+          component.handleFormSubmit();
+
+          expect(toastSpy).toHaveBeenCalledWith(
+            translationService.translate('endMustBeAfterStart')
+          );
+        });
+      });
+
+      describe('Logout States', () => {
+        it('should call exitGuestMode when in guest mode', async () => {
+          const exitGuestSpy = jest.fn();
+          component.authService = {
+            isGuest: () => true,
+            exitGuestMode: exitGuestSpy,
+          } as any;
+
+          await component.handleAuthExit();
+
+          expect(exitGuestSpy).toHaveBeenCalled();
+        });
+
+        it('should call signOut when authenticated', async () => {
+          const signOutSpy = jest.fn().mockResolvedValue(undefined);
+          component.authService = {
+            isGuest: () => false,
+            signOut: signOutSpy,
+          } as any;
+
+          await component.handleAuthExit();
+
+          expect(signOutSpy).toHaveBeenCalled();
+        });
+
+        it('should toast an error if signOut throws an exception', async () => {
+          const signOutSpy = jest.fn().mockRejectedValue(new Error('Signout failed'));
+          const toastSpy = jest.spyOn(toastService, 'error');
+          component.authService = {
+            isGuest: () => false,
+            signOut: signOutSpy,
+          } as any;
+
+          await component.handleAuthExit();
+
+          expect(toastSpy).toHaveBeenCalledWith(translationService.translate('authGenericError'));
+        });
+      });
+
+      describe('goToToday Pagination Cutoff', () => {
+        it('should dynamically scale up listVisibleCount when the target index is beyond listVisibleCount', () => {
+          shiftService.deleteAllShifts();
+
+          const now = Date.now();
+          const hourMs = 60 * 60 * 1000;
+          const dayMs = 24 * hourMs;
+
+          for (let i = 0; i < 65; i++) {
+            const shiftTime = now - 30 * dayMs + i * hourMs;
+            shiftService.addShift({
+              title: `Past Shift ${i}`,
+              start: new Date(shiftTime).toISOString(),
+              end: new Date(shiftTime + 30 * 60 * 1000).toISOString(),
+              color: 'sky',
+              isRecurring: false,
+            });
+          }
+
+          component.listVisibleCount.set(50);
+
+          component.goToToday('auto');
+
+          expect(component.listVisibleCount()).toBe(100);
+        });
       });
     });
   });

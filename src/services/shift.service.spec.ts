@@ -109,7 +109,7 @@ describe('ShiftService', () => {
 
       const shifts = service.shifts();
       expect(shifts.length).toBeGreaterThan(1);
-      expect(shifts.length).toBeLessThanOrEqual(200); // Safety limit
+      expect(shifts.length).toBeLessThanOrEqual(800); // Safety limit
 
       // All shifts should have the same seriesId
       const seriesId = shifts[0].seriesId;
@@ -174,49 +174,54 @@ describe('ShiftService', () => {
         return secondSave.promise;
       });
 
-      (service as any).saveShiftsToStorage([
-        {
-          id: 'shift-1',
-          seriesId: 'shift-1',
-          title: 'First Shift',
-          start: '2025-09-30T09:00:00',
-          end: '2025-09-30T17:00:00',
-          color: 'sky',
-          isRecurring: false,
-        },
-      ]);
+      const stateA = {
+        schemaVersion: 2 as const,
+        shiftSeries: [],
+        manualShifts: [
+          {
+            id: 'shift-1',
+            title: 'First Shift',
+            start: '2025-09-30T09:00:00',
+            end: '2025-09-30T17:00:00',
+            color: 'sky' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        shiftOverrides: [],
+      };
 
-      (service as any).saveShiftsToStorage([
-        {
-          id: 'shift-1',
-          seriesId: 'shift-1',
-          title: 'First Shift',
-          start: '2025-09-30T09:00:00',
-          end: '2025-09-30T17:00:00',
-          color: 'sky',
-          isRecurring: false,
-        },
-        {
-          id: 'shift-2',
-          seriesId: 'shift-2',
-          title: 'Second Shift',
-          start: '2025-10-01T09:00:00',
-          end: '2025-10-01T17:00:00',
-          color: 'green',
-          isRecurring: false,
-        },
-      ]);
+      const stateB = {
+        schemaVersion: 2 as const,
+        shiftSeries: [],
+        manualShifts: [
+          ...stateA.manualShifts,
+          {
+            id: 'shift-2',
+            title: 'Second Shift',
+            start: '2025-10-01T09:00:00',
+            end: '2025-10-01T17:00:00',
+            color: 'green' as const,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        shiftOverrides: [],
+      };
+
+      (service as any).saveStateToStorage(stateA);
+      (service as any).saveStateToStorage(stateB);
 
       expect(encryptCallCount).toBe(2);
 
       firstSave.resolve('encrypted-first');
       await flushAsyncWork();
-      expect(localStorageMock['easyturno_shifts']).toBeUndefined();
+      expect(localStorageMock['easyturno_user_data_v2']).toBeUndefined();
 
       secondSave.resolve('encrypted-second');
       await flushAsyncWork();
 
-      expect(localStorageMock['easyturno_shifts']).toBe('encrypted-second');
+      expect(localStorageMock['easyturno_user_data_v2']).toBe('encrypted-second');
     });
   });
 
@@ -247,13 +252,19 @@ describe('ShiftService', () => {
 
       expect(delayedService.shifts()).toEqual([]);
       expect(encryptSpy).not.toHaveBeenCalled();
+      // The legacy ciphertext must stay intact until decrypt completes.
       expect(localStorageMock['easyturno_shifts']).toBe('encrypted-payload');
+      expect(localStorageMock['easyturno_user_data_v2']).toBeUndefined();
 
       decryptReady.resolve('[]');
       await flushAsyncWork();
 
-      expect(encryptSpy).toHaveBeenCalledWith('[]');
-      expect(localStorageMock['easyturno_shifts']).toBe('encrypted-after-load');
+      // After successful migration from legacy, the v2 key receives the
+      // re-encrypted (empty) state. The legacy key is left alone — a future
+      // task may clean it up after a stable v2 release window.
+      const persistedState = (encryptSpy as jest.Mock).mock.calls[0][0];
+      expect(JSON.parse(persistedState)).toMatchObject({ schemaVersion: 2 });
+      expect(localStorageMock['easyturno_user_data_v2']).toBe('encrypted-after-load');
     });
   });
 
@@ -391,6 +402,32 @@ describe('ShiftService', () => {
 
       expect(service.shifts()).toHaveLength(0);
     });
+
+    it('should delete a single occurrence of a recurring series by setting a deleted override', () => {
+      const shiftData = {
+        title: 'Recurring Series Instance',
+        start: '2025-09-30T09:00:00',
+        end: '2025-09-30T17:00:00',
+        color: 'sky' as const,
+        isRecurring: true,
+        repetition: {
+          frequency: 'days' as const,
+          interval: 1,
+        },
+      };
+
+      service.addShift(shiftData);
+      const shifts = service.shifts();
+      // An occurrence of a recurring series has an ID of the form "seriesId:occurrenceStartMs"
+      const targetShift = shifts[1];
+      const shiftId = targetShift.id;
+
+      service.deleteShift(shiftId);
+
+      // Verify that this specific occurrence is deleted/removed from shifts list
+      const updatedShifts = service.shifts();
+      expect(updatedShifts.find(s => s.id === shiftId)).toBeUndefined();
+    });
   });
 
   describe('deleteShiftSeries', () => {
@@ -417,6 +454,40 @@ describe('ShiftService', () => {
       service.deleteShiftSeries(seriesId);
 
       expect(service.shifts()).toHaveLength(0);
+    });
+
+    it('should delete a recurring series and all its overrides', () => {
+      const shiftData = {
+        title: 'Series with Overrides',
+        start: '2025-09-30T09:00:00',
+        end: '2025-09-30T17:00:00',
+        color: 'green' as const,
+        isRecurring: true,
+        repetition: {
+          frequency: 'days' as const,
+          interval: 1,
+        },
+      };
+
+      service.addShift(shiftData);
+      const shifts = service.shifts();
+      const seriesId = shifts[0].seriesId;
+
+      // Edit a single instance to create an override
+      service.updateShift({
+        ...shifts[1],
+        title: 'Overridden Instance',
+        color: 'amber',
+      });
+
+      // Now delete the entire series
+      service.deleteShiftSeries(seriesId);
+
+      expect(service.shifts()).toHaveLength(0);
+      // Verify that overrides for this series are also soft-deleted (deletedAt is set)
+      const overrides = (service as any).state().shiftOverrides;
+      const seriesOverrides = overrides.filter((o: any) => o.seriesId === seriesId);
+      expect(seriesOverrides.every((o: any) => o.deletedAt !== undefined)).toBe(true);
     });
   });
 
@@ -489,6 +560,39 @@ describe('ShiftService', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Backup file too large');
     });
+
+    it('imports legacy Shift[] backups into v2 manual state', () => {
+      const result = service.importShifts(
+        JSON.stringify([
+          {
+            id: 'backup-1',
+            seriesId: 'backup-1',
+            title: 'Backup manual',
+            start: '2026-02-01T08:00:00.000Z',
+            end: '2026-02-01T16:00:00.000Z',
+            color: 'teal',
+            isRecurring: false,
+          },
+        ])
+      );
+
+      expect(result.success).toBe(true);
+      expect(service.shifts().some(s => s.title === 'Backup manual')).toBe(true);
+    });
+
+    it('exports v2 state for new backups', () => {
+      service.addShift({
+        title: 'Backup v2',
+        start: '2026-02-02T08:00:00.000Z',
+        end: '2026-02-02T16:00:00.000Z',
+        color: 'indigo',
+        isRecurring: false,
+      });
+
+      // @ts-ignore - exportBackupPayload might not exist yet
+      const backup = service.exportBackupPayload();
+      expect(JSON.parse(backup).schemaVersion).toBe(2);
+    });
   });
 
   describe('deleteAllShifts', () => {
@@ -526,11 +630,12 @@ describe('ShiftService', () => {
 
       // Wait for effect to run
       setTimeout(() => {
-        const storedData = localStorageMock['easyturno_shifts'];
+        const storedData = localStorageMock['easyturno_user_data_v2'];
         expect(storedData).toBeTruthy();
         const parsed = JSON.parse(storedData);
-        expect(parsed.length).toBeGreaterThanOrEqual(1);
-        expect(parsed[0].title).toBe('Persistent Shift');
+        expect(parsed.schemaVersion).toBe(2);
+        expect(parsed.manualShifts).toHaveLength(1);
+        expect(parsed.manualShifts[0].title).toBe('Persistent Shift');
         done();
       }, 100);
     });
@@ -737,7 +842,7 @@ describe('ShiftService', () => {
   });
 
   describe('Edge Cases - Recurring Shifts Boundary Conditions', () => {
-    it('should respect MAX_RECURRING_INSTANCES limit (200)', () => {
+    it('should cap a daily recurrence at MAX_YEARS_AHEAD (≈730 days over 2 years)', () => {
       const shiftData = {
         title: 'Daily Max Test',
         start: '2025-01-01T09:00:00',
@@ -746,14 +851,17 @@ describe('ShiftService', () => {
         isRecurring: true,
         repetition: {
           frequency: 'days' as const,
-          interval: 1, // Daily - would generate many more than 200 in 2 years
+          interval: 1,
         },
       };
 
       service.addShift(shiftData);
 
       const shifts = service.shifts();
-      expect(shifts.length).toBe(200); // Should stop at MAX_RECURRING_INSTANCES
+      // Daily over a 2-year horizon yields ~730 instances; the count cap
+      // (MAX_RECURRING_INSTANCES = 800) is the upper safety bound.
+      expect(shifts.length).toBeGreaterThan(720);
+      expect(shifts.length).toBeLessThanOrEqual(800);
     });
 
     it('should respect MAX_YEARS_AHEAD limit (2 years)', () => {
@@ -824,7 +932,7 @@ describe('ShiftService', () => {
 
       const shifts = service.shifts();
       // Should still respect MAX_RECURRING_INSTANCES limit
-      expect(shifts.length).toBeLessThanOrEqual(200);
+      expect(shifts.length).toBeLessThanOrEqual(800);
     });
 
     it('should handle monthly shifts with different month lengths', () => {
@@ -1446,6 +1554,85 @@ describe('ShiftService', () => {
       expect(result.success).toBe(true);
       expect(result.imported).toBe(1);
     });
+
+    it('should successfully import a valid v2 schema JSON and cancel old notifications', () => {
+      const v2State = {
+        schemaVersion: 2,
+        shiftSeries: [
+          {
+            id: 'series-1',
+            title: 'Series 1',
+            start: '2026-05-20T08:00:00.000Z',
+            end: '2026-05-20T16:00:00.000Z',
+            color: 'indigo',
+            isRecurring: true,
+            repetition: { frequency: 'days', interval: 1 },
+          },
+        ],
+        manualShifts: [
+          {
+            id: 'manual-1',
+            title: 'Manual 1',
+            start: '2026-05-21T08:00:00.000Z',
+            end: '2026-05-21T16:00:00.000Z',
+            color: 'green',
+            isRecurring: false,
+          },
+        ],
+        shiftOverrides: [],
+      };
+
+      const notificationService = (service as any).notificationService;
+      const cancelSpy = jest
+        .spyOn(notificationService, 'cancelAllNotifications')
+        .mockResolvedValue(undefined as any);
+
+      const result = service.importShifts(JSON.stringify(v2State));
+      expect(result.success).toBe(true);
+      expect(result.imported).toBe(2);
+      expect(cancelSpy).toHaveBeenCalled();
+      cancelSpy.mockRestore();
+    });
+
+    it('should schedule notifications for upcoming shifts in legacy import', async () => {
+      const futureDate = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      const legacyShifts = [
+        {
+          id: 'legacy-future',
+          seriesId: 'legacy-future',
+          title: 'Future Legacy Shift',
+          start: futureDate,
+          end: futureDate,
+          color: 'indigo',
+          isRecurring: false,
+        },
+      ];
+
+      const notificationService = (service as any).notificationService;
+      const scheduleSpy = jest
+        .spyOn(notificationService, 'scheduleShiftNotification')
+        .mockResolvedValue(undefined as any);
+
+      const result = service.importShifts(JSON.stringify(legacyShifts));
+      expect(result.success).toBe(true);
+      expect(result.imported).toBe(1);
+
+      // flush promise inside then() callback
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(scheduleSpy).toHaveBeenCalled();
+      scheduleSpy.mockRestore();
+    });
+
+    it('should fail isValidISODate when non-string is passed to validation', () => {
+      const invalidShift = {
+        ...baseValidShift,
+        start: 1234567890, // number, not string
+      };
+
+      const result = service.importShifts(JSON.stringify([invalidShift]));
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No valid shifts found');
+    });
   });
 
   describe('resetAfterDecryptionError (T6)', () => {
@@ -1485,14 +1672,384 @@ describe('ShiftService', () => {
       expect(newService.decryptionError()).toBe(false);
       expect(newService.shifts()).toEqual([]);
 
-      // Saves are re-enabled: the empty-array save effect must have run and
-      // written a fresh (encrypted) value to localStorage
+      // Saves are re-enabled: the empty-state save effect must have run and
+      // written a fresh (encrypted) value to localStorage under the v2 key.
+      // The legacy ciphertext key is removed by the reset.
       await flushAsyncWork();
 
-      expect(mockCryptoService.encrypt).toHaveBeenCalledWith('[]');
-      expect(localStorageMock['easyturno_shifts']).toBe('enc:[]');
+      const emptyState = JSON.stringify({
+        schemaVersion: 2,
+        shiftSeries: [],
+        manualShifts: [],
+        shiftOverrides: [],
+      });
+      expect(mockCryptoService.encrypt).toHaveBeenCalledWith(emptyState);
+      expect(localStorageMock['easyturno_user_data_v2']).toBe(`enc:${emptyState}`);
+      expect(localStorageMock['easyturno_shifts']).toBeUndefined();
 
       consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('v2 state migration', () => {
+    it('loads legacy easyturno_shifts into manual and series state without losing visible shifts', async () => {
+      const legacy = [
+        {
+          id: 'legacy-1',
+          seriesId: 'legacy-1',
+          title: 'Legacy manual',
+          start: '2026-01-01T08:00:00.000Z',
+          end: '2026-01-01T16:00:00.000Z',
+          color: 'indigo',
+          isRecurring: false,
+        },
+      ];
+      localStorageMock['easyturno_shifts'] = JSON.stringify(legacy);
+
+      TestBed.resetTestingModule();
+      const mockCryptoService = {
+        encrypt: jest.fn().mockImplementation(async (data: string) => data),
+        decrypt: jest.fn().mockImplementation(async (data: string) => data),
+        isEncrypted: jest.fn().mockReturnValue(false),
+      };
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: mockCryptoService },
+        ],
+      });
+      const migrated = TestBed.inject(ShiftService);
+      await flushAsyncWork();
+
+      expect(migrated.shifts()).toHaveLength(1);
+      expect(migrated.shifts()[0].title).toBe('Legacy manual');
+    });
+
+    it('persists new shifts to easyturno_user_data_v2', async () => {
+      service.addShift({
+        title: 'Stored manual',
+        start: '2026-01-02T08:00:00.000Z',
+        end: '2026-01-02T16:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+
+      await flushAsyncWork();
+
+      expect(localStorageMock['easyturno_user_data_v2']).toContain('Stored manual');
+    });
+  });
+
+  describe('Hardening & Coverage Improvements (T12)', () => {
+    it('should directly validate dates using isValidISODate', () => {
+      expect((service as any).isValidISODate(123)).toBe(false);
+      expect((service as any).isValidISODate(null)).toBe(false);
+      expect((service as any).isValidISODate(undefined)).toBe(false);
+      expect((service as any).isValidISODate('invalid-date')).toBe(false);
+      expect((service as any).isValidISODate('2026-05-21')).toBe(true);
+    });
+
+    it('should handle malformed JSON v2 parsing failure in loadFromStorage', async () => {
+      TestBed.resetTestingModule();
+      localStorageMock['easyturno_user_data_v2'] = '{invalid-json-v2';
+
+      const mockCryptoService = {
+        encrypt: jest.fn().mockImplementation(async (data: string) => data),
+        decrypt: jest.fn().mockImplementation(async (data: string) => data),
+        isEncrypted: jest.fn().mockReturnValue(false),
+      };
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: mockCryptoService },
+        ],
+      });
+
+      const newService = TestBed.inject(ShiftService);
+      await flushAsyncWork();
+
+      expect(newService.shifts()).toEqual([]);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle malformed decrypted V2 parsing failure', async () => {
+      TestBed.resetTestingModule();
+      localStorageMock['easyturno_user_data_v2'] = 'encrypted-v2-data';
+
+      const mockCryptoService = {
+        encrypt: jest.fn().mockImplementation(async (data: string) => data),
+        decrypt: jest.fn().mockResolvedValue('{invalid decrypted v2 json'),
+        isEncrypted: jest.fn().mockReturnValue(true),
+      };
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: mockCryptoService },
+        ],
+      });
+
+      const newService = TestBed.inject(ShiftService);
+      await flushAsyncWork();
+
+      expect(newService.shifts()).toEqual([]);
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('should handle JSON.stringify / Quota Exceeded error on saveStateToStorage', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const toastSpy = jest.spyOn(toastService, 'error');
+
+      const stringifySpy = jest.spyOn(JSON, 'stringify').mockImplementation(() => {
+        throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+      });
+
+      service.addShift({
+        title: 'Quota Shift',
+        start: '2026-05-21T09:00:00.000Z',
+        end: '2026-05-21T17:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+
+      await flushAsyncWork();
+
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(toastSpy).toHaveBeenCalledWith('Failed to save shifts. Please try again.', 4000);
+
+      consoleErrorSpy.mockRestore();
+      toastSpy.mockRestore();
+      stringifySpy.mockRestore();
+    });
+
+    it('should reset to an empty state when legacy parsed storage is not an array', () => {
+      (service as any).applyLegacyParsed({ invalid: true });
+
+      expect(service.shifts()).toEqual([]);
+      expect((service as any).state()).toEqual({
+        schemaVersion: 2,
+        shiftSeries: [],
+        manualShifts: [],
+        shiftOverrides: [],
+      });
+    });
+
+    it('should reject non-object and malformed v2 state shapes', () => {
+      expect((service as any).isShiftDataState(null)).toBe(false);
+      expect((service as any).isShiftDataState('not-state')).toBe(false);
+      expect((service as any).isShiftDataState({ schemaVersion: 2 })).toBe(false);
+    });
+
+    it('should not save state before initial loading has completed', () => {
+      (service as any).isLoaded = false;
+
+      (service as any).saveStateToStorage({
+        schemaVersion: 2,
+        shiftSeries: [],
+        manualShifts: [],
+        shiftOverrides: [],
+      });
+
+      expect(cryptoService.encrypt).not.toHaveBeenCalled();
+    });
+
+    it('should return null for malformed occurrence IDs', () => {
+      expect((service as any).parseOccurrenceId('manual-id')).toBeNull();
+      expect((service as any).parseOccurrenceId('__2026-05-21T08:00:00.000Z')).toBeNull();
+      expect((service as any).parseOccurrenceId('series-1__')).toBeNull();
+    });
+
+    it('should ignore deleted series when materializing occurrences', () => {
+      const result = (service as any).materializeOccurrences({
+        schemaVersion: 2,
+        manualShifts: [],
+        shiftOverrides: [],
+        shiftSeries: [
+          {
+            id: 'deleted-series',
+            title: 'Deleted',
+            start: '2026-05-21T08:00:00.000Z',
+            end: '2026-05-21T16:00:00.000Z',
+            color: 'sky',
+            repetition: { frequency: 'days', interval: 1 },
+            createdAt: '2026-05-21T00:00:00.000Z',
+            updatedAt: '2026-05-21T00:00:00.000Z',
+            deletedAt: '2026-05-22T00:00:00.000Z',
+          },
+        ],
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    it('should build state from recurring shifts with identical start dates', () => {
+      const sameStart = '2026-05-21T08:00:00.000Z';
+      const state = (service as any).buildStateFromShifts([
+        {
+          id: 'occ-1',
+          seriesId: 'series-1',
+          title: 'First',
+          start: sameStart,
+          end: '2026-05-21T16:00:00.000Z',
+          color: 'sky',
+          isRecurring: true,
+          repetition: { frequency: 'days', interval: 1 },
+        },
+        {
+          id: 'occ-2',
+          seriesId: 'series-2',
+          title: 'Second',
+          start: sameStart,
+          end: '2026-05-21T17:00:00.000Z',
+          color: 'green',
+          isRecurring: true,
+          repetition: { frequency: 'weeks', interval: 1 },
+        },
+      ]);
+
+      expect(state.shiftSeries.map((series: any) => series.id)).toEqual(['series-1', 'series-2']);
+      expect(state.manualShifts).toEqual([]);
+    });
+
+    it('should report generic save failures that are not quota errors', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const toastSpy = jest.spyOn(toastService, 'error');
+      (Storage.prototype.setItem as jest.Mock).mockImplementation(() => {
+        throw new Error('storage unavailable');
+      });
+
+      service.addShift({
+        title: 'Generic Save Failure',
+        start: '2026-05-21T09:00:00.000Z',
+        end: '2026-05-21T17:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+
+      await flushAsyncWork();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to encrypt shifts', expect.any(Error));
+      expect(toastSpy).toHaveBeenCalledWith('Failed to save shifts. Please try again.', 4000);
+
+      consoleErrorSpy.mockRestore();
+      toastSpy.mockRestore();
+    });
+
+    it('should overwrite / update an existing shift override when modified again', async () => {
+      // 1. Add a recurring series
+      service.addShift({
+        title: 'Recurring Series',
+        start: '2026-05-21T08:00:00.000Z',
+        end: '2026-05-21T16:00:00.000Z',
+        color: 'indigo',
+        isRecurring: true,
+        repetition: { frequency: 'days', interval: 1 },
+      });
+
+      await flushAsyncWork();
+
+      const allShifts = service.shifts();
+      const occurrence = allShifts.find(s => s.start.startsWith('2026-05-22'));
+      expect(occurrence).toBeTruthy();
+
+      // 2. Modify that occurrence (creates first override)
+      const updatedOccurrence1 = {
+        ...occurrence!,
+        title: 'Modified Once',
+      };
+
+      service.updateShift(updatedOccurrence1);
+      await flushAsyncWork();
+
+      const overridesAfterFirst = (service as any).state().shiftOverrides;
+      expect(overridesAfterFirst).toHaveLength(1);
+      expect(overridesAfterFirst[0].action).toBe('modified');
+      expect(overridesAfterFirst[0].title).toBe('Modified Once');
+
+      // 3. Modify the same occurrence again (should overwrite the existing override)
+      const updatedOccurrence2 = {
+        ...updatedOccurrence1,
+        title: 'Modified Twice',
+      };
+
+      service.updateShift(updatedOccurrence2);
+      await flushAsyncWork();
+
+      const overridesAfterSecond = (service as any).state().shiftOverrides;
+      expect(overridesAfterSecond).toHaveLength(1); // Still 1, did not duplicate!
+      expect(overridesAfterSecond[0].title).toBe('Modified Twice');
+    });
+
+    it('should fallback to deleting and adding fresh if series is not found in updateShiftSeries', async () => {
+      const deleteSpy = jest.spyOn(service, 'deleteShiftSeries');
+      const addSpy = jest.spyOn(service, 'addShift');
+
+      const nonExistentShift = {
+        id: 'non-existent-occurrence-id',
+        seriesId: 'non-existent-series-id',
+        title: 'Ghost Series',
+        start: '2026-05-21T09:00:00.000Z',
+        end: '2026-05-21T17:00:00.000Z',
+        color: 'sky' as const,
+        isRecurring: true,
+        repetition: { frequency: 'days' as const, interval: 1 },
+      };
+
+      service.updateShiftSeries(nonExistentShift);
+      await flushAsyncWork();
+
+      expect(deleteSpy).toHaveBeenCalledWith('non-existent-series-id');
+      expect(addSpy).toHaveBeenCalled();
+    });
+
+    it('should update an existing series when the edited shift ID is not an occurrence ID', async () => {
+      service.addShift({
+        title: 'Base Series',
+        start: '2026-05-21T08:00:00.000Z',
+        end: '2026-05-21T16:00:00.000Z',
+        color: 'sky',
+        isRecurring: true,
+        repetition: { frequency: 'days', interval: 1 },
+      });
+      await flushAsyncWork();
+      const series = (service as any).state().shiftSeries[0];
+
+      service.updateShiftSeries({
+        id: series.id,
+        seriesId: series.id,
+        title: 'Updated Direct Series',
+        start: series.start,
+        end: series.end,
+        color: 'green',
+        isRecurring: true,
+        repetition: { frequency: 'weeks', interval: 1 },
+      });
+      await flushAsyncWork();
+
+      expect((service as any).state().shiftSeries[0]).toMatchObject({
+        title: 'Updated Direct Series',
+        repetition: { frequency: 'weeks', interval: 1 },
+      });
+    });
+
+    it('should reject malformed repetitions and allowances through private validators', () => {
+      expect((service as any).isValidRepetition(null)).toBe(false);
+      expect((service as any).isValidRepetition({ frequency: 'quarters', interval: 1 })).toBe(
+        false
+      );
+      expect((service as any).isValidRepetition({ frequency: 'days', interval: 0 })).toBe(false);
+      expect((service as any).isValidAllowance(null)).toBe(false);
+      expect((service as any).isValidAllowance({ name: 'Meal', amount: Number.NaN })).toBe(false);
     });
   });
 });

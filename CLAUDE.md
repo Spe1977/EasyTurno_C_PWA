@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Multi-Agent Handoff
+
+This repository is also worked on by Codex and sometimes Gemini CLI. Before editing, read `AGENT_HANDOFF.md`, then follow its start-of-shift and end-of-shift checklists. The worktree may be dirty because another CLI agent or the user has active changes; do not reset, revert, delete, or clean changes you did not make. Do not commit unless the user explicitly asks.
+
 ## Project Overview
 
 EasyTurno is a Progressive Web App (PWA) for work shift management, built with Angular and designed to be offline-first. The application allows users to create, edit, and manage work shifts with support for recurring shifts, overtime tracking, allowances management, statistical analysis, and data export/import.
@@ -144,18 +148,17 @@ The app generates individual shift instances for recurring patterns rather than 
 - Dynamic UI for adding/removing allowances
 - Statistics aggregate allowances by name across selected period
 
-#### Statistics Dashboard
+#### Statistics Dashboard (Premium Drawer)
 
-- Accessible from Settings menu
-- Customizable date range selection (default: last 30 days)
-- Real-time computed statistics:
-  - Total shifts count
-  - Total hours worked
-  - Total overtime hours
-  - Shifts breakdown by type/title
-  - Allowances breakdown by name with totals
-- Responsive design with color-coded summary cards
-- Empty state handling with appropriate messaging
+- Accessible from Settings menu as a premium mobile-first sliding drawer (rounded-t-3xl) or desktop dashboard.
+- **Quick Timeframe Presets**: One-click filters for "This Month", "Last Month", "Last 30 Days", and "This Year" alongside customizable start/end date selectors.
+- **Asymmetric Metric Grid**: Visually stunning dashboard panel integrating:
+  - Active Workload (Total shifts count with visual badge).
+  - Cumulative Hours Worked & Overtime hours (highlighted with color-coded theme and clock icon).
+- **Proportional Chromatic Progress Bars**: Shows worked shifts by type as elegant progress bars inheriting colors dynamically from the custom shift configuration (e.g. sky, green, amber).
+- **Financial Portfolio**: List of aggregated allowances by name shown as digital wallet components with currency formatted in emerald green.
+- **High-Fidelity Empty State**: Illustrated SVG bar charts showing helpful instructions if no shifts are recorded in the selected period.
+
 
 #### Calendar View
 

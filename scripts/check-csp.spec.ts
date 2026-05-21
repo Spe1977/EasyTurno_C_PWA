@@ -9,6 +9,23 @@ const DIST_INDEX = join(PROJECT_ROOT, 'dist', 'index.html');
 const DIST_HEADERS = join(PROJECT_ROOT, 'dist', '_headers');
 const ANGULAR_JSON = join(PROJECT_ROOT, 'angular.json');
 
+// Explicit allowlist of remote origins required by Firebase Auth + Firestore.
+// Any addition here must be justified by a concrete Firebase SDK requirement.
+const FIREBASE_SCRIPT_ORIGINS = new Set([
+  'https://apis.google.com', // Google Sign-In gapi loader
+  'https://www.gstatic.com', // Firebase JS SDK assets / Google branding
+]);
+const FIREBASE_CONNECT_ORIGINS = new Set([
+  'https://*.googleapis.com', // identitytoolkit, securetoken, firestore, firebaseinstallations
+  'https://*.firebaseio.com', // Auth/RTDB endpoints
+  'wss://*.firebaseio.com', // Auth/RTDB realtime — explicit wildcard host, not a blanket wss:
+  'https://*.firebaseapp.com', // Auth iframe origin (project.firebaseapp.com)
+]);
+const FIREBASE_FRAME_ORIGINS = new Set([
+  'https://*.firebaseapp.com', // Auth handler iframe
+  'https://accounts.google.com', // Google OAuth popup/redirect
+]);
+
 function extractCsp(html: string): string {
   const match = html.match(
     /<meta\s+http-equiv=["']Content-Security-Policy["']\s+content=(?:"([^"]+)"|'([^']+)')/i
@@ -79,25 +96,39 @@ describe('Production CSP (T3)', () => {
       expect(scriptSrc).not.toContain("'unsafe-eval'");
     });
 
-    it('restricts script-src to self (no remote/CDN origins)', () => {
+    it('restricts script-src to self plus the Firebase allowlist (no other origins)', () => {
       const scriptSrc = directives.get('script-src') ?? [];
-      const allowed = new Set(["'self'", "'strict-dynamic'"]);
+      const allowed = new Set(["'self'", "'strict-dynamic'", ...FIREBASE_SCRIPT_ORIGINS]);
       for (const source of scriptSrc) {
         if (source.startsWith("'nonce-") || source.startsWith("'sha")) continue;
         expect(allowed.has(source)).toBe(true);
       }
     });
 
-    it('does not contain localhost / 127.0.0.1 / ws: origins in any directive', () => {
+    it('does not contain localhost / 127.0.0.1 / blanket ws(s): origins', () => {
       expect(csp).not.toMatch(/localhost/i);
       expect(csp).not.toMatch(/127\.0\.0\.1/);
-      expect(csp).not.toMatch(/(?:^|\s)ws:/);
-      expect(csp).not.toMatch(/(?:^|\s)wss:/);
+      // Reject standalone `ws:` / `wss:` tokens (would allow ANY ws server).
+      // Explicit wss://host is OK and goes through the allowlist below.
+      expect(csp).not.toMatch(/(?:^|\s)ws:(?!\/\/)/);
+      expect(csp).not.toMatch(/(?:^|\s)wss:(?!\/\/)/);
     });
 
-    it('restricts connect-src to self', () => {
+    it('restricts connect-src to self plus the Firebase allowlist', () => {
       const connectSrc = directives.get('connect-src') ?? [];
-      expect(connectSrc).toEqual(["'self'"]);
+      const allowed = new Set(["'self'", ...FIREBASE_CONNECT_ORIGINS]);
+      for (const source of connectSrc) {
+        expect(allowed.has(source)).toBe(true);
+      }
+      expect(connectSrc).toContain("'self'");
+    });
+
+    it('restricts frame-src to the Firebase allowlist', () => {
+      const frameSrc = directives.get('frame-src') ?? [];
+      const allowed = new Set([...FIREBASE_FRAME_ORIGINS]);
+      for (const source of frameSrc) {
+        expect(allowed.has(source)).toBe(true);
+      }
     });
 
     it("sets object-src to 'none'", () => {
@@ -152,6 +183,10 @@ describe('Production CSP (T3)', () => {
       expect(extractHeader(headers, 'X-Content-Type-Options')).toBe('nosniff');
       expect(extractHeader(headers, 'Referrer-Policy')).toBe('no-referrer');
     });
+
+    it('keeps OAuth popups usable for Firebase Auth', () => {
+      expect(extractHeader(headers, 'Cross-Origin-Opener-Policy')).toBe('same-origin-allow-popups');
+    });
   });
 
   describe('dist/index.html (only when a production build exists)', () => {
@@ -169,8 +204,8 @@ describe('Production CSP (T3)', () => {
 
       expect(csp).not.toMatch(/localhost/i);
       expect(csp).not.toMatch(/127\.0\.0\.1/);
-      expect(csp).not.toMatch(/(?:^|\s)ws:/);
-      expect(csp).not.toMatch(/(?:^|\s)wss:/);
+      expect(csp).not.toMatch(/(?:^|\s)ws:(?!\/\/)/);
+      expect(csp).not.toMatch(/(?:^|\s)wss:(?!\/\/)/);
 
       expect(directives.get('object-src')).toEqual(["'none'"]);
       expect(directives.has('frame-ancestors')).toBe(false);

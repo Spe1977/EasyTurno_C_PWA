@@ -28,12 +28,12 @@ Italian documentation is available in [README_IT.md](README_IT.md).
 
 | Technology   | Version |
 | ------------ | ------- |
-| Angular      | 21.2.5  |
+| Angular      | 21.2.13 |
 | TypeScript   | 5.9.3   |
 | Tailwind CSS | 4.2.2   |
-| Capacitor    | 8.3.0   |
+| Capacitor    | 8.3.4   |
 | Jest         | 30.3.0  |
-| Cypress      | 15.13.0 |
+| Cypress      | 15.3.0  |
 | Playwright   | 1.58.2  |
 
 ## Quick Start
@@ -135,18 +135,58 @@ Important note:
 
 ## Current Status
 
-- Build verified with Angular 21.2.5, TypeScript 5.9.3, and Tailwind CSS 4.2.2 (821.62 KB initial bundle)
-- Unit tests: 319/319 passing (82% statement coverage)
-- Cypress E2E: 55/55 passing
-- Playwright browser flows: 13/13 passing
-- Lint, type check, formatting, and local builds verified
-- Full internationalization: all user-facing strings use translation keys (Italian/English)
-- Password modal for encrypted backup export/import (replaces `window.prompt()`)
-- Main remaining open items: native notification validation on a physical device and a future review of the local storage key strategy
+- Build verified with Angular 21.2.13, TypeScript 5.9.3, and Tailwind CSS 4.2.2
+- Cloud synchronization with Firebase Firestore implemented and tested
+- Full Authentication (Email/Password + Google Login) complete
+- Unit tests: **495+ passing** (including new specs for Sync, Auth, Firestore, and Push Notifications)
+- Playwright browser flows: 14/14 passing (including cloud sync smoke tests)
+- Firebase Emulator Suite integrated for local integration testing
+- Push Notifications (FCM) configured and tested on native Android
+- Adaptive Icons, Splash Screen, and release signing Keystore ready for Play Store submission
+- Build, lint, and formatting checked and 100% clean
 
-## Project Status
+## Firebase Synchronization
 
-See [`P.md`](P.md) for detailed status, open gaps, and the operational plan.
+Guest users save encrypted data locally. Authenticated users save series, manual shifts, and overrides in Firestore under `users/{uid}`. Firestore's offline cache enables networkless usage, and synchronization resumes automatically when connectivity is restored.
+
+### Known Limitations
+- The per-account device limit is set to 4 (soft limit).
+- Synchronization requires an email-verified account or verification via Google Login.
+
+## Firebase Emulator Suite
+
+For local development and testing of synchronization and authentication, the project integrates the Firebase Emulator Suite:
+
+```bash
+# Start the local emulators (Auth and Firestore)
+npm run emulators
+
+# Run integration tests against the local emulator suite
+npm run test:firebase
+```
+
+## Mobile Development (Capacitor & Android)
+
+EasyTurno supports native Android export using **Capacitor 8**.
+
+### Prerequisites
+- **JDK 21** (required by Capacitor 8 / Gradle)
+- **Android SDK** configured or Android Studio installed
+
+### Mobile Development Commands
+
+```bash
+# Build the web application and sync assets with Android native folder
+npm run build:mobile
+
+# Open the native project in Android Studio for development/debugging
+npm run android:dev
+
+# Generate a signed production build (Release APK)
+npm run android:build
+```
+
+Signing files (`release.keystore`), credential properties (`android/keystore.properties`), and the Google services configuration (`google-services.json`) are excluded from Git tracking for security reasons, but are preconfigured inside the Gradle configuration.
 
 ## Browser E2E
 

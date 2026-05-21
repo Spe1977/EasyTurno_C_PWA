@@ -36,3 +36,10 @@ cypress/downloads
 playwright-report
 test-results
 .playwright
+
+# Android signing — NEVER commit keystores or passwords
+*.keystore
+*.jks
+keystore.properties
+android/keystore.properties
+google-services.json

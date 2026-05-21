@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.easyturno.app',
+  appId: 'com.spe1977.easyturno',
   appName: 'EasyTurno',
   webDir: 'dist',
   server: {

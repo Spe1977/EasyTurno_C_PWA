@@ -36,3 +36,46 @@ export interface Shift {
   allowances?: Allowance[]; // Array of allowances
   timezone?: string; // IANA timezone identifier (e.g., 'Europe/Rome')
 }
+
+export interface ShiftBase {
+  title: string;
+  start: string;
+  end: string;
+  color: ShiftColor;
+  notes?: string;
+  overtimeHours?: number;
+  allowances?: Allowance[];
+  timezone?: string;
+}
+
+export interface ShiftSeries extends ShiftBase {
+  id: string;
+  repetition: Repetition;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface ManualShift extends ShiftBase {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface ShiftOverride extends Partial<ShiftBase> {
+  id: string;
+  seriesId: string;
+  occurrenceStart: string;
+  action: 'modified' | 'deleted';
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+}
+
+export interface ShiftDataState {
+  schemaVersion: 2;
+  shiftSeries: ShiftSeries[];
+  manualShifts: ManualShift[];
+  shiftOverrides: ShiftOverride[];
+}

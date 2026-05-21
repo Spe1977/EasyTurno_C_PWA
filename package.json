@@ -33,7 +33,9 @@
     "test:pw:ui": "playwright test --ui",
     "test:pw:headed": "playwright test --headed",
     "test:pw:debug": "playwright test --debug",
-    "test:pw:install": "playwright install --with-deps chromium"
+    "test:pw:install": "playwright install --with-deps chromium",
+    "emulators": "firebase emulators:start --project demo-easyturno --only auth,firestore",
+    "test:firebase": "firebase emulators:exec --project demo-easyturno --only auth,firestore \"npm test -- src/services/sync-emulator.spec.ts --runInBand\""
   },
   "dependencies": {
     "@angular/build": "^21.2.11",
@@ -50,10 +52,12 @@
     "@capacitor/core": "^8.3.0",
     "@capacitor/haptics": "^8.0.1",
     "@capacitor/local-notifications": "^8.0.2",
+    "@capacitor/push-notifications": "^8.1.1",
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@tailwindcss/postcss": "^4.2.2",
+    "firebase": "^12.13.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
@@ -69,6 +73,7 @@
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "firebase-tools": "^15.18.0",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
