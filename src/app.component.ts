@@ -958,13 +958,21 @@ export class AppComponent {
   }
 
   updateAllowanceAmount(index: number, event: Event) {
-    const amount = Number((event.target as HTMLInputElement).value);
-    if (!Number.isFinite(amount) || amount < 0) {
+    const raw = Number((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(raw) || raw < 0) {
       return;
     }
+    const amount = Math.floor(raw);
     this.shiftAllowances.update(allowances =>
       allowances.map((a, i) => (i === index ? { ...a, amount } : a))
     );
+  }
+
+  formatAllowanceAmount(amount: number): string {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return '0';
+    }
+    return String(Math.floor(amount));
   }
 
   updateOvertimeHours(value: number | null) {
@@ -1149,22 +1157,30 @@ export class AppComponent {
   // Calendar view methods
   toggleViewMode() {
     const currentMode = this.viewMode();
+    const goingToList = currentMode === 'calendar';
     // Reset search filter when switching from calendar to list view
-    if (currentMode === 'calendar') {
+    if (goingToList) {
       this.searchDate.set(null);
       this.listVisibleCount.set(this.INITIAL_LIST_SIZE);
     }
     this.viewMode.update(mode => (mode === 'list' ? 'calendar' : 'list'));
+    if (goingToList) {
+      this.goToToday('auto');
+    }
   }
 
   setViewMode(mode: ViewMode) {
     const currentMode = this.viewMode();
+    const goingToList = currentMode === 'calendar' && mode === 'list';
     // Reset search filter when switching from calendar to list view
-    if (currentMode === 'calendar' && mode === 'list') {
+    if (goingToList) {
       this.searchDate.set(null);
       this.listVisibleCount.set(this.INITIAL_LIST_SIZE);
     }
     this.viewMode.set(mode);
+    if (goingToList) {
+      this.goToToday('auto');
+    }
   }
 
   onCalendarDaySelected(date: Date | null) {

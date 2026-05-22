@@ -811,13 +811,31 @@ describe('AppComponent - Integration Tests', () => {
       expect(component.shiftAllowances()[0].name).toBe('Transport');
     });
 
-    it('should update allowance amount', () => {
+    it('should update allowance amount as integer', () => {
       component.addAllowance();
 
-      const event = { target: { value: '25.50' } } as any;
+      const event = { target: { value: '25' } } as any;
       component.updateAllowanceAmount(0, event);
 
-      expect(component.shiftAllowances()[0].amount).toBe(25.5);
+      expect(component.shiftAllowances()[0].amount).toBe(25);
+    });
+
+    it('should floor decimal allowance amounts to integers', () => {
+      component.addAllowance();
+
+      const event = { target: { value: '1.5' } } as any;
+      component.updateAllowanceAmount(0, event);
+
+      expect(component.shiftAllowances()[0].amount).toBe(1);
+    });
+
+    it('should floor multi-decimal allowance amounts to integers', () => {
+      component.addAllowance();
+
+      const event = { target: { value: '25.99' } } as any;
+      component.updateAllowanceAmount(0, event);
+
+      expect(component.shiftAllowances()[0].amount).toBe(25);
     });
 
     it('should remove allowance', () => {
@@ -1945,6 +1963,86 @@ describe('AppComponent - Integration Tests', () => {
         expect(component.viewMode()).toBe('list');
         expect(component.searchDate()).toBe(searchDate);
         expect(component.listVisibleCount()).toBe(75);
+      });
+
+      it('toggleViewMode: calendar → list scrolls back to today', () => {
+        const goToTodaySpy = jest.spyOn(component, 'goToToday').mockImplementation(() => {});
+        component.viewMode.set('calendar');
+
+        component.toggleViewMode();
+
+        expect(component.viewMode()).toBe('list');
+        expect(goToTodaySpy).toHaveBeenCalledWith('auto');
+      });
+
+      it('setViewMode("list") from calendar scrolls back to today', () => {
+        const goToTodaySpy = jest.spyOn(component, 'goToToday').mockImplementation(() => {});
+        component.viewMode.set('calendar');
+
+        component.setViewMode('list');
+
+        expect(component.viewMode()).toBe('list');
+        expect(goToTodaySpy).toHaveBeenCalledWith('auto');
+      });
+
+      it('toggleViewMode: list → calendar does not call goToToday', () => {
+        const goToTodaySpy = jest.spyOn(component, 'goToToday').mockImplementation(() => {});
+        component.viewMode.set('list');
+
+        component.toggleViewMode();
+
+        expect(component.viewMode()).toBe('calendar');
+        expect(goToTodaySpy).not.toHaveBeenCalled();
+      });
+
+      it('setViewMode("list") while already on list does not re-scroll to today', () => {
+        const goToTodaySpy = jest.spyOn(component, 'goToToday').mockImplementation(() => {});
+        component.viewMode.set('list');
+
+        component.setViewMode('list');
+
+        expect(goToTodaySpy).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('formatAllowanceAmount', () => {
+      it('formats an integer as an integer string with no currency symbol', () => {
+        expect(component.formatAllowanceAmount(10)).toBe('10');
+      });
+
+      it('floors a fractional amount and emits no decimals', () => {
+        expect(component.formatAllowanceAmount(10.5)).toBe('10');
+      });
+
+      it('returns "0" for zero', () => {
+        expect(component.formatAllowanceAmount(0)).toBe('0');
+      });
+
+      it('returns "0" for negative or non-finite values', () => {
+        expect(component.formatAllowanceAmount(-3)).toBe('0');
+        expect(component.formatAllowanceAmount(Number.NaN)).toBe('0');
+      });
+    });
+
+    describe('allowance form layout', () => {
+      it('allowance name input has min-w-0 so the remove button stays visible on narrow screens', () => {
+        const authStateSignal = signal({ mode: 'guest' });
+        component.authService = {
+          ...(component.authService as any),
+          state: authStateSignal,
+          isGuest: () => true,
+        } as any;
+        fixture.detectChanges();
+        component.openNewShiftForm();
+        component.addAllowance();
+        fixture.detectChanges();
+
+        const nameInput: HTMLInputElement | null = (
+          fixture.nativeElement as HTMLElement
+        ).querySelector('[data-cy="allowance-name-input"]');
+
+        expect(nameInput).not.toBeNull();
+        expect(nameInput!.classList.contains('min-w-0')).toBe(true);
       });
     });
 
