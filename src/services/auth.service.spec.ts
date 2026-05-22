@@ -3,7 +3,11 @@ import * as fbAuth from 'firebase/auth';
 
 import { AuthService } from './auth.service';
 
-const flushMicrotasks = () => new Promise(resolve => setTimeout(resolve, 5));
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 25));
+};
 
 describe('AuthService', () => {
   beforeEach(() => {

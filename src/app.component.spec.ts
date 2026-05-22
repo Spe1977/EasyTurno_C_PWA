@@ -2148,6 +2148,37 @@ describe('AppComponent - Integration Tests', () => {
 
           expect(component.listVisibleCount()).toBe(100);
         });
+
+        it('should retry scrolling to the first upcoming shift if the target row is not rendered yet', () => {
+          jest.useFakeTimers();
+          try {
+            jest.setSystemTime(new Date('2026-05-22T10:00:00.000Z'));
+            shiftService.deleteAllShifts();
+            shiftService.addShift({
+              title: 'Upcoming Shift',
+              start: '2026-05-25T07:00:00.000Z',
+              end: '2026-05-25T15:00:00.000Z',
+              color: 'sky',
+              isRecurring: false,
+            });
+            const scrollIntoView = jest.fn();
+            const getElementByIdSpy = jest
+              .spyOn(document, 'getElementById')
+              .mockReturnValueOnce(null)
+              .mockReturnValueOnce({ scrollIntoView } as unknown as HTMLElement);
+
+            component.goToToday('auto');
+            jest.runOnlyPendingTimers();
+            jest.runOnlyPendingTimers();
+
+            expect(getElementByIdSpy).toHaveBeenCalledWith(
+              expect.stringMatching(/^shift-[0-9a-f-]/)
+            );
+            expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+          } finally {
+            jest.useRealTimers();
+          }
+        });
       });
     });
   });

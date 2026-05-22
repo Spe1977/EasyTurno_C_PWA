@@ -395,6 +395,11 @@ export class ShiftService {
       return;
     }
 
+    if (updatedShift.isRecurring && updatedShift.repetition) {
+      this.convertManualShiftToSeries(updatedShift);
+      return;
+    }
+
     // Manual shift: replace fields on the ManualShift document.
     const now = new Date().toISOString();
     void this.userDataService.mutate(
@@ -426,6 +431,51 @@ export class ShiftService {
           updatedAt: now,
         } as ManualShift,
       }
+    );
+  }
+
+  private convertManualShiftToSeries(updatedShift: Shift): void {
+    const manual = this.state().manualShifts.find(m => m.id === updatedShift.id);
+    if (!manual || !updatedShift.repetition) return;
+
+    void this.notificationService.cancelShiftNotifications(updatedShift.id);
+
+    const now = new Date().toISOString();
+    const deletedManual: ManualShift = { ...manual, deletedAt: now, updatedAt: now };
+    const series: ShiftSeries = {
+      id: updatedShift.seriesId || updatedShift.id,
+      title: updatedShift.title,
+      start: updatedShift.start,
+      end: updatedShift.end,
+      color: updatedShift.color,
+      repetition: updatedShift.repetition,
+      notes: updatedShift.notes,
+      overtimeHours: updatedShift.overtimeHours,
+      allowances: updatedShift.allowances,
+      timezone: updatedShift.timezone,
+      createdAt: manual.createdAt,
+      updatedAt: now,
+    };
+
+    void this.userDataService.mutate(
+      s => ({
+        ...s,
+        manualShifts: s.manualShifts.map(m => (m.id === manual.id ? deletedManual : m)),
+        shiftSeries: [...s.shiftSeries, series],
+      }),
+      {
+        type: 'batch',
+        manuals: [deletedManual],
+        series: [series],
+      }
+    );
+
+    const settings = this.notificationService.getSettings();
+    const upcomingShifts = this.shifts()
+      .filter(s => s.seriesId === series.id)
+      .slice(0, this.MAX_NOTIFICATION_PREVIEW);
+    upcomingShifts.forEach(
+      shift => void this.notificationService.scheduleShiftNotification(shift, settings)
     );
   }
 

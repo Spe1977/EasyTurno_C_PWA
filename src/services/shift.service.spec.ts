@@ -1,8 +1,11 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { ShiftService } from './shift.service';
 import { ToastService } from './toast.service';
 import { CryptoService } from './crypto.service';
 import { NotificationService } from './notification.service';
+import { AuthService } from './auth.service';
+import { FirestoreUserDataService } from './firestore-user-data.service';
 
 describe('ShiftService', () => {
   let service: ShiftService;
@@ -90,6 +93,50 @@ describe('ShiftService', () => {
       expect(shifts[0].title).toBe('Test Shift');
       expect(shifts[0].id).toBeTruthy();
       expect(shifts[0].seriesId).toBe(shifts[0].id);
+    });
+
+    it('should write newly created manual shifts to Firestore when authenticated', async () => {
+      TestBed.resetTestingModule();
+      const firestoreMock = {
+        state: signal({
+          schemaVersion: 2,
+          shiftSeries: [],
+          manualShifts: [],
+          shiftOverrides: [],
+        }),
+        activeDeviceCount: signal(1),
+        upsertManualShift: jest.fn().mockResolvedValue(undefined),
+        upsertShiftSeries: jest.fn().mockResolvedValue(undefined),
+        upsertShiftOverride: jest.fn().mockResolvedValue(undefined),
+        applyBatch: jest.fn().mockResolvedValue(undefined),
+      };
+      TestBed.configureTestingModule({
+        providers: [
+          ShiftService,
+          ToastService,
+          { provide: CryptoService, useValue: cryptoService },
+          {
+            provide: AuthService,
+            useValue: { state: () => ({ mode: 'authenticated', uid: 'uid-auth' }) },
+          },
+          { provide: FirestoreUserDataService, useValue: firestoreMock },
+        ],
+      });
+      const authenticatedService = TestBed.inject(ShiftService);
+
+      authenticatedService.addShift({
+        title: 'Cloud Manual',
+        start: '2026-05-25T07:00:00.000Z',
+        end: '2026-05-25T15:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+      await flushAsyncWork();
+
+      expect(firestoreMock.upsertManualShift).toHaveBeenCalledWith(
+        'uid-auth',
+        expect.objectContaining({ title: 'Cloud Manual' })
+      );
     });
 
     it('should add recurring shifts with daily frequency', () => {
@@ -286,6 +333,45 @@ describe('ShiftService', () => {
 
       const updatedShifts = service.shifts();
       expect(updatedShifts[0].title).toBe('Updated Title');
+    });
+
+    it('should convert a single shift into a recurring series without leaving a duplicate manual shift', () => {
+      service.addShift({
+        title: 'Single Shift',
+        start: '2026-05-25T07:00:00.000Z',
+        end: '2026-05-25T15:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+
+      const original = service.shifts()[0];
+
+      service.updateShift({
+        ...original,
+        title: 'Recurring Shift',
+        isRecurring: true,
+        repetition: { frequency: 'days', interval: 1 },
+      });
+
+      const state = (service as any).state();
+      expect(state.manualShifts).toHaveLength(1);
+      expect(state.manualShifts[0]).toMatchObject({
+        id: original.id,
+        deletedAt: expect.any(String),
+      });
+      expect(state.shiftSeries).toHaveLength(1);
+      expect(state.shiftSeries[0]).toMatchObject({
+        title: 'Recurring Shift',
+        start: original.start,
+        end: original.end,
+        repetition: { frequency: 'days', interval: 1 },
+      });
+
+      const visibleShifts = service.shifts();
+      expect(visibleShifts.length).toBeGreaterThan(1);
+      expect(visibleShifts.filter(shift => shift.start === original.start)).toHaveLength(1);
+      expect(visibleShifts.every(shift => shift.isRecurring)).toBe(true);
+      expect(visibleShifts.every(shift => shift.seriesId === state.shiftSeries[0].id)).toBe(true);
     });
   });
 

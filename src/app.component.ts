@@ -390,10 +390,21 @@ export class AppComponent {
     const targetId = list[targetIndex]?.id;
     if (!targetId) return;
 
+    this.scrollToShiftWhenReady(targetId, behavior);
+  }
+
+  private scrollToShiftWhenReady(targetId: string, behavior: ScrollBehavior, attempt = 0): void {
+    const maxAttempts = 5;
     // Wait one tick so Angular renders the newly visible rows before scrolling.
     setTimeout(() => {
       const el = this.document.getElementById(`shift-${targetId}`);
-      el?.scrollIntoView({ behavior, block: 'start' });
+      if (el) {
+        el.scrollIntoView({ behavior, block: 'start' });
+        return;
+      }
+      if (attempt < maxAttempts) {
+        this.scrollToShiftWhenReady(targetId, behavior, attempt + 1);
+      }
     }, 0);
   }
 

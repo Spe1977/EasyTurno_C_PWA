@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal } from '@angular/core';
 import { ManualShift, ShiftDataState, ShiftOverride, ShiftSeries } from '../shift.model';
 import { AuthService } from './auth.service';
 import { FirestoreUserDataService } from './firestore-user-data.service';
@@ -18,6 +18,15 @@ export class UserDataService {
   private readonly _state = signal<ShiftDataState>(EMPTY_SHIFT_DATA_STATE);
   readonly state = this._state.asReadonly();
   readonly activeDeviceCount = this.firestore.activeDeviceCount;
+
+  constructor() {
+    effect(() => {
+      const auth = this.auth.state();
+      if (auth.mode === 'authenticated' && auth.uid) {
+        this._state.set(this.firestore.state());
+      }
+    });
+  }
 
   setState(next: ShiftDataState): void {
     this._state.set(next);

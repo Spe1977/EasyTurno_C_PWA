@@ -12,6 +12,7 @@ describe('UserDataService', () => {
     state: any;
   };
   let firestoreMock: {
+    state: any;
     activeDeviceCount: any;
     upsertManualShift: jest.Mock;
     upsertShiftSeries: jest.Mock;
@@ -28,6 +29,7 @@ describe('UserDataService', () => {
     };
 
     firestoreMock = {
+      state: signal(EMPTY_SHIFT_DATA_STATE),
       activeDeviceCount: signal(1),
       upsertManualShift: jest.fn().mockResolvedValue(undefined),
       upsertShiftSeries: jest.fn().mockResolvedValue(undefined),
@@ -100,6 +102,30 @@ describe('UserDataService', () => {
     const snapshot = service.state;
     service.update(s => ({ ...s, manualShifts: [] }));
     expect(snapshot()).toBe(service.state());
+  });
+
+  it('mirrors Firestore state while authenticated so ShiftService can materialize cloud shifts', () => {
+    authMock.state.set({ mode: 'authenticated', uid: 'uid-abc' });
+    const service = TestBed.inject(UserDataService);
+    const remoteManual: ManualShift = {
+      id: 'remote-manual',
+      title: 'Remote Shift',
+      start: '2026-05-25T07:00:00.000Z',
+      end: '2026-05-25T15:00:00.000Z',
+      color: 'sky',
+      createdAt: '2026-05-22T00:00:00.000Z',
+      updatedAt: '2026-05-22T00:00:00.000Z',
+    };
+
+    firestoreMock.state.set({
+      schemaVersion: 2,
+      shiftSeries: [],
+      manualShifts: [remoteManual],
+      shiftOverrides: [],
+    });
+    TestBed.flushEffects();
+
+    expect(service.state().manualShifts).toEqual([remoteManual]);
   });
 
   describe('mutate', () => {

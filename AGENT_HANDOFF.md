@@ -384,6 +384,77 @@ Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
 Agent: Codex
+Date/time: 2026-05-22T15:37:21+02:00
+Task: Verify whether missing Firestore shift collections are caused by local write code or by deployed/stale client behavior after Firebase Console showed only `devices`.
+Status: done
+Files changed:
+- `src/services/shift.service.spec.ts` (modified) — added regression test proving `ShiftService.addShift()` calls `FirestoreUserDataService.upsertManualShift()` when `AuthService.state()` is authenticated.
+- `AGENT_HANDOFF.md` (modified) — added this handoff.
+Tests red:
+- None for this diagnostic regression; the current code path already calls the Firestore writer in the tested authenticated case.
+Tests green:
+- `npm test -- src/services/shift.service.spec.ts --runInBand` → 99 tests passed.
+- `npm run lint` → clean.
+- `npm test -- --runInBand` → 25 suites, 653 tests passed.
+Open concerns:
+- Firebase Console showing only `devices` means the Android/installed PWA session has not written shifts to Firestore. Since the current local code does call the writer for authenticated shifts, next checks should focus on deployed build version, service-worker/PWA cache freshness, and runtime console errors (`Firestore mutation failed`) on the actual device/browser used to create shifts.
+- No commit made, per repo policy.
+Next agent starts from:
+- Have the user create a new shift from the current local dev build after restarting `npm run dev`, then check whether `manualShifts` appears under the same UID. If it does, deploy/update the PWA and clear/update the installed Android web app cache; if it does not, capture browser console logs around shift creation.
+Do not touch:
+- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+
+Agent: Codex
+Date/time: 2026-05-22T15:07:26+02:00
+Task: Investigate authenticated login where Firebase Auth succeeds but cloud-created shifts are not visible, then fix the Firestore read path.
+Status: done
+Files changed:
+- `src/services/user-data.service.ts` (modified) — added an authenticated-mode bridge that mirrors `FirestoreUserDataService.state()` into `UserDataService.state`, the state actually consumed by `ShiftService.shifts()`.
+- `src/services/user-data.service.spec.ts` (modified) — added regression test proving authenticated Firestore snapshot state reaches `UserDataService` so cloud shifts can materialize.
+- `AGENT_HANDOFF.md` (modified) — added this handoff.
+Tests red:
+- `npm test -- src/services/user-data.service.spec.ts --runInBand` initially failed on the new Firestore mirror test because `UserDataService.state().manualShifts` stayed empty after a remote snapshot.
+Tests green:
+- `npm test -- src/services/user-data.service.spec.ts --runInBand` → 13 tests passed.
+- `npm run lint` → clean.
+- `npm test -- --runInBand` → 25 suites, 652 tests passed.
+- `npm run build` → OK, initial total 1.33 MB raw / 308.06 kB estimated transfer.
+Open concerns:
+- Browser console `identitytoolkit ... signInWithPassword ... 400` can still appear for failed login attempts; Chrome logs the rejected Auth REST request even when the app handles the Firebase error. The missing-shifts issue was separate and caused by the Firestore snapshot not being bridged into the app state.
+- No commit made, per repo policy.
+Next agent starts from:
+- Re-test login in incognito against the same account and verify Firestore documents under `users/{uid}/manualShifts` or `shiftSeries` now appear in the app after snapshots arrive.
+Do not touch:
+- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+
+Agent: Codex
+Date/time: 2026-05-22T14:56:03+02:00
+Task: Fix two app bugs: cold-start list landing should reliably show today/upcoming shift; editing a single shift into a recurring shift should create the recurring series and absorb the original manual shift.
+Status: done
+Files changed:
+- `src/app.component.ts` (modified) — `goToToday()` now retries the target-row scroll for a few ticks if the shift row is not in the DOM yet, covering cold-start render timing while still targeting the first shift whose end is today-or-future.
+- `src/app.component.spec.ts` (modified) — added regression test for retrying scroll to the first upcoming shift when the first lookup returns `null`.
+- `src/services/shift.service.ts` (modified) — `updateShift()` now detects manual shifts changed to recurring, soft-deletes the original manual shift, creates a `ShiftSeries` from the edited data, batches the local/cloud mutation, cancels the old notification, and schedules upcoming recurring notifications.
+- `src/services/shift.service.spec.ts` (modified) — added regression test for manual shift absorption into a recurring series with no duplicate visible occurrence.
+- `AGENT_HANDOFF.md` (modified) — added this handoff.
+Tests red:
+- `npm test -- src/services/shift.service.spec.ts --runInBand` initially failed on the new manual-to-series conversion test because the original manual shift was not soft-deleted and no series was created.
+- `npm test -- src/app.component.spec.ts --runInBand` initially failed on the new scroll retry test because `goToToday()` did not retry after the target row was absent on the first tick.
+Tests green:
+- `npm test -- src/services/shift.service.spec.ts --runInBand` → 98 tests passed.
+- `npm test -- src/app.component.spec.ts --runInBand` → 132 tests passed.
+- `npm run lint` → clean.
+- `npm test -- --runInBand` → 25 suites, 651 tests passed.
+- `npm run build` → OK, initial total 1.33 MB raw / 308.19 kB estimated transfer.
+Open concerns:
+- No commit made, per repo policy.
+- The cold-start fix hardens DOM timing for the existing list-scroll behavior; it does not change the app into a date-filtered/search-date mode.
+Next agent starts from:
+- Continue production/security remediation roadmap or run browser smoke on a device if the user wants visual confirmation of the cold-start landing behavior.
+Do not touch:
+- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+
+Agent: Codex
 Date/time: 2026-05-21T15:32:03+02:00
 Task: Fix registration password requirements panel so it appears as soon as the user interacts with the password field.
 Status: done; not committed.
