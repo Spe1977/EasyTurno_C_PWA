@@ -58,21 +58,24 @@ export class FirestoreUserDataService {
   async upsertManualShift(uid: string, shift: ManualShift): Promise<void> {
     const db = this.firebase.firestore;
     const batch = writeBatch(db);
-    batch.set(doc(db, `users/${uid}/manualShifts/${shift.id}`), shift);
+    batch.set(doc(db, `users/${uid}/manualShifts/${shift.id}`), this.withoutUndefined(shift));
     await batch.commit();
   }
 
   async upsertShiftSeries(uid: string, series: ShiftSeries): Promise<void> {
     const db = this.firebase.firestore;
     const batch = writeBatch(db);
-    batch.set(doc(db, `users/${uid}/shiftSeries/${series.id}`), series);
+    batch.set(doc(db, `users/${uid}/shiftSeries/${series.id}`), this.withoutUndefined(series));
     await batch.commit();
   }
 
   async upsertShiftOverride(uid: string, override: ShiftOverride): Promise<void> {
     const db = this.firebase.firestore;
     const batch = writeBatch(db);
-    batch.set(doc(db, `users/${uid}/shiftOverrides/${override.id}`), override);
+    batch.set(
+      doc(db, `users/${uid}/shiftOverrides/${override.id}`),
+      this.withoutUndefined(override)
+    );
     await batch.commit();
   }
 
@@ -82,9 +85,15 @@ export class FirestoreUserDataService {
   ): Promise<void> {
     const db = this.firebase.firestore;
     const batch = writeBatch(db);
-    data.manuals?.forEach(m => batch.set(doc(db, `users/${uid}/manualShifts/${m.id}`), m));
-    data.series?.forEach(s => batch.set(doc(db, `users/${uid}/shiftSeries/${s.id}`), s));
-    data.overrides?.forEach(o => batch.set(doc(db, `users/${uid}/shiftOverrides/${o.id}`), o));
+    data.manuals?.forEach(m =>
+      batch.set(doc(db, `users/${uid}/manualShifts/${m.id}`), this.withoutUndefined(m))
+    );
+    data.series?.forEach(s =>
+      batch.set(doc(db, `users/${uid}/shiftSeries/${s.id}`), this.withoutUndefined(s))
+    );
+    data.overrides?.forEach(o =>
+      batch.set(doc(db, `users/${uid}/shiftOverrides/${o.id}`), this.withoutUndefined(o))
+    );
     await batch.commit();
   }
 
@@ -119,5 +128,19 @@ export class FirestoreUserDataService {
 
   private mapDocs<T>(snapshot: QuerySnapshot): T[] {
     return snapshot.docs.map(document => document.data() as T);
+  }
+
+  private withoutUndefined<T>(value: T): T {
+    if (Array.isArray(value)) {
+      return value.filter(item => item !== undefined).map(item => this.withoutUndefined(item)) as T;
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([, item]) => item !== undefined)
+          .map(([key, item]) => [key, this.withoutUndefined(item)])
+      ) as T;
+    }
+    return value;
   }
 }

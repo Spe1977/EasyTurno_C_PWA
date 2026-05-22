@@ -166,6 +166,41 @@ describe('FirestoreUserDataService', () => {
     expect(batch.commit).toHaveBeenCalled();
   });
 
+  it('omits undefined optional fields before writing manual shifts', async () => {
+    const batch = {
+      set: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      commit: jest.fn().mockResolvedValue(undefined),
+    };
+    (firestore.writeBatch as jest.Mock).mockReturnValue(batch);
+
+    const service = TestBed.inject(FirestoreUserDataService);
+    await service.upsertManualShift('uid-1', {
+      id: 'manual-undefined',
+      title: 'Manual',
+      start: '2026-01-01T08:00:00.000Z',
+      end: '2026-01-01T16:00:00.000Z',
+      color: 'indigo',
+      notes: undefined,
+      overtimeHours: undefined,
+      allowances: undefined,
+      timezone: undefined,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    expect(batch.set).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.not.objectContaining({
+        notes: undefined,
+        overtimeHours: undefined,
+        allowances: undefined,
+        timezone: undefined,
+      })
+    );
+  });
+
   it('writes shift series', async () => {
     const batch = {
       set: jest.fn(),
