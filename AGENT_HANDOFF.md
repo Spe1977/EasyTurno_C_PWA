@@ -136,6 +136,23 @@ Do not touch:
 ## Current Handoff
 
 Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-25T00:15:00+02:00
+Task: Create `update.md` — a maintenance/update schedule documenting every dependency/framework/native group to re-check every 30/60 days, with cadence table, exact commands, and a check log. User-requested, doc-only.
+Status: done (not committed — no commit permission this turn).
+Files changed: `update.md` (new); `AGENT_HANDOFF.md` (this block).
+Versions captured as baseline in `update.md` from `package.json` + `android/`: Angular `^21.2.5`, TypeScript `~5.9.3`, Zone.js `^0.15.1`, RxJS `^7.8.2`, Vite `^7.1.9`, Tailwind `^4.2.2`, Jest `^30.2.0`, Playwright `^1.58.2`, Cypress `^15.3.0`, firebase `^12.13.0`, firebase-tools `^15.18.0`, Capacitor `^8.x`; Android: Gradle 8.14.3 / AGP 8.13.0 / google-services 4.4.4 / compile+target SDK 36 / minSdk 24; Node engines `^20.19 || ^22.12 || >=24` (local Node 24 / npm 11). Documented the accepted `firebase-tools→uuid<11.1.1` advisory (cross-ref `firebase.md`).
+Tests red: none.
+Tests green: none run — doc-only change, no source/build touched.
+Open concerns:
+- `.git` was not present at the repo root this turn (`git rev-parse` failed); could not run `git status`. The worktree itself is intact. Did NOT attempt any git recovery/cleanup. Flag to the user if commit/push is wanted.
+Next agent starts from:
+- `update.md` is the new maintenance schedule; keep its "Registro dei check" table current after each real update cycle. Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
+Do not touch:
+- Do not commit/push without explicit user permission. Do not clean `web9.png` (local-only, ignored).
+
+---
+
+Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-24T22:00:00+02:00
 Task: Fix mobile-web layout bug (user-reported) — on the website opened in a phone browser, the Lista/Calendario toggle bar + reload button were hidden behind the sticky "EasyTurno" header on initial load; they appeared only after scrolling the page down, and once revealed stayed visible.
 Status: done; committed and pushed to `origin/main` this turn (user-authorized "commit e push con merge sul main").
@@ -147,7 +164,7 @@ Verification: `npm run build` exit 0 (1.34 MB raw / 310.38 kB transfer); generat
 Tests red: none.
 Tests green: `ng build`; Playwright smoke 2/2.
 Open concerns:
-- Final behavioral confirmation requires a real phone browser (open the deployed site, check the Lista/Calendario/reload bar is visible at first load without scrolling). Build + CSS + smoke are strong proxies, not a mobile-viewport behavioral test.
+- RESOLVED: user confirmed on 2026-05-25 that the deployed site works correctly on their phone browser (toggle/reload bar visible at first load, no scrolling needed). The fix is behaviorally verified end-to-end.
 - Push to `main` triggers the Cloudflare Pages production deploy — needed to test on the phone.
 Next agent starts from:
 - Working tree clean except `web9.png` (ignored). Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
@@ -173,21 +190,6 @@ Do not touch:
 - Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
 
 ---
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T20:10:00+02:00
-Task: Delete the 8 stray screenshot PNGs from the GitHub repo + add a `.gitignore` rule (user-authorized; queued by the prior handoff). Also commit the pending `AGENT_HANDOFF.md` changes in the same push (user chose "Include handoff update").
-Status: done; committed and pushed to `origin/main` this turn (user-authorized).
-Files changed: deleted `web.png`, `web2.png`, `web3.png`, `web4.png`, `web5.png`, `web6.png`, `web7.png`, `web8.png`; `.gitignore` (added `web*.png` rule); `AGENT_HANDOFF.md` (this block + marked the screenshot tech-debt item DONE; also carried in the prior uncommitted "## Maintenance / Tech Debt" notes).
-Tests red: none.
-Tests green: none run — change is repo-hygiene only (no app/build/source code touched).
-Open concerns:
-- Push to `main` triggers the Cloudflare Pages production deploy. These are non-code asset deletions, so no functional impact expected.
-- `web9.png` remains on disk (local-only, never on GitHub) and is now covered by the `web*.png` ignore rule — left untouched per prior handoffs.
-Next agent starts from:
-- Working tree clean except `web9.png` (ignored). Remaining open items are optional tech-debt (Husky-deprecation cleanup, Playwright-in-pre-push CI parity) — do NOT do unprompted. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
-Do not touch:
-- Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
 
 ## Older Handoffs (summarized)
 
