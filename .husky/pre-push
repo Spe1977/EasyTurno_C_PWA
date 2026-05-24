@@ -18,4 +18,20 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Run Playwright e2e for CI parity (catches DOM-structure regressions that
+# Jest can't, e.g. the shift-title-row wrapper that broke recurring e2e selectors).
+# Quick docs-only pushes can skip just this step: SKIP_PW=1 git push
+# (Jest + build above still run; this only skips the ~4 min Playwright suite).
+if [ "$SKIP_PW" = "1" ]; then
+  echo "⏭️  SKIP_PW=1 set — skipping Playwright e2e (Jest + build still ran)."
+else
+  echo "🎭 Running Playwright e2e tests..."
+  npm run test:pw
+
+  if [ $? -ne 0 ]; then
+    echo "❌ Playwright tests failed. Push aborted."
+    exit 1
+  fi
+fi
+
 echo "✅ All checks passed! Proceeding with push..."

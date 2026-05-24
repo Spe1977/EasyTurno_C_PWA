@@ -1,6 +1,3 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Check if we switched branches (not just checked out a file)
 # $3 is 1 if checking out a branch, 0 if checking out paths
 if [ "$3" = "1" ]; then

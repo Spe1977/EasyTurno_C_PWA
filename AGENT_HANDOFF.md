@@ -56,13 +56,8 @@ Not scheduled; do not act on these without the user explicitly authorizing the w
 
 Not scheduled; do not act on these without the user explicitly authorizing the work.
 
-- **Husky deprecation (will fail in husky v10)**: noted on 2026-05-24. The git commit/push runs show `husky - DEPRECATED`, asking to remove these two lines from `.husky/pre-commit`:
-  ```sh
-  #!/usr/bin/env sh
-  . "$(dirname -- "$0")/_/husky.sh"
-  ```
-  They WILL FAIL in husky v10.0.0. The hook works today; this is pre-emptive. When addressed, check every file under `.husky/` for the same deprecated preamble, not just `pre-commit`.
-- **CI parity for Playwright (e2e) locally**: noted on 2026-05-24. The pre-push hook runs build + Jest, but NOT Playwright — Playwright is CI-only. This is exactly why the `shift-title-row` DOM regression reached CI red instead of being caught pre-push (fixed in commit `89ebd7d`). Consider adding Playwright (or a focused subset) to the pre-push hook or a documented local pre-push step, weighing the ~4 min runtime cost against earlier detection of DOM-structure regressions in e2e selectors.
+- **Husky deprecation (will fail in husky v10)** — ✅ DONE (2026-05-24 by Claude Code, user-authorized). Removed the deprecated 2-line preamble (`#!/usr/bin/env sh` + `. "$(dirname -- "$0")/_/husky.sh"`) from all user hooks that had it: `.husky/pre-commit`, `.husky/post-checkout`, `.husky/post-merge` (`.husky/pre-push` already lacked it). husky is v9.1.7; hooks now match the v9/v10 format and the `husky - DEPRECATED` warning is gone.
+- **CI parity for Playwright (e2e) locally** — ✅ DONE (2026-05-24 by Claude Code, user-authorized). Added the full Playwright suite (`npm run test:pw`, 17 tests) to `.husky/pre-push` after the existing Jest + build steps. It runs by default; quick docs-only pushes can skip just that step with `SKIP_PW=1 git push` (Jest + build still run). Chosen over a smoke-only subset because the regression that motivated this (`shift-title-row`) lives in `app-flows.spec.ts`, not `smoke.spec.ts`, and over a mandatory-only hook because a scoped skip avoids pushing people toward `git push --no-verify` (which bypasses everything).
 - **Remove stray screenshot PNGs committed to GitHub** — ✅ DONE (2026-05-24 by Claude Code, user-authorized). `git rm`'d all 8 (`web.png`, `web2.png`–`web8.png`) and added a `web*.png` rule to `.gitignore`. `web9.png` remains on disk (local-only, never on GitHub) and is now ignored too.
 
 ## Files To Preserve
@@ -141,6 +136,24 @@ Do not touch:
 ## Current Handoff
 
 Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T20:30:00+02:00
+Task: Tech-debt items 1 & 2 (user-authorized): (1) remove the deprecated husky preamble from all user hooks; (2) add Playwright to the pre-push hook for CI parity (option chosen by the user: full suite, skippable via `SKIP_PW=1`).
+Status: done; committed and pushed to `origin/main` this turn (user-authorized "Commit + push su main").
+Files changed: `.husky/pre-commit`, `.husky/post-checkout`, `.husky/post-merge` (removed the deprecated `#!/usr/bin/env sh` + `. "$(dirname -- "$0")/_/husky.sh"` 2-line preamble; `.husky/pre-push` already lacked it); `.husky/pre-push` (added `npm run test:pw` after Jest + build, gated by `if [ "$SKIP_PW" = "1" ]` to allow skipping just the e2e step); `AGENT_HANDOFF.md` (this block + marked both tech-debt items DONE).
+Verification: no deprecated preamble or shebang remains in any user hook (grep); `sh -n` syntax-OK on all 4 hooks. End-to-end proof from this push: the new `pre-commit` ran with NO `husky - DEPRECATED` warning, and the new `pre-push` ran Jest + build + the full 17-test Playwright suite green before the push was allowed.
+Tests red: none.
+Tests green: full Jest suite + `ng build` + Playwright 17/17 (all exercised live by the commit/push hooks this turn).
+Open concerns:
+- Every push now runs the ~4 min Playwright suite by default. For quick docs/handoff-only pushes use `SKIP_PW=1 git push` (Jest + build still run; only e2e is skipped). Prefer this over `git push --no-verify`, which bypasses ALL checks.
+- Push to `main` triggers the Cloudflare Pages production deploy. This turn touched only git hooks (no app/build/source code), so no functional/runtime impact on the deployed app.
+Next agent starts from:
+- Working tree clean except `web9.png` (ignored). No queued tech-debt items remain. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
+Do not touch:
+- Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
+
+---
+
+Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-24T20:10:00+02:00
 Task: Delete the 8 stray screenshot PNGs from the GitHub repo + add a `.gitignore` rule (user-authorized; queued by the prior handoff). Also commit the pending `AGENT_HANDOFF.md` changes in the same push (user chose "Include handoff update").
 Status: done; committed and pushed to `origin/main` this turn (user-authorized).
@@ -173,23 +186,6 @@ Next agent starts from:
 Do not touch:
 - Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
 
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T19:00:00+02:00
-Task: Commit and push to `origin/main` all completed uncommitted work, after the user explicitly authorized commit+push this turn.
-Status: done; committed and pushed to `origin/main`.
-Scope committed (all previously uncommitted, all documented in the blocks below): device-limit redesign (Claude), security-remediation closeout docs (Claude), reload/update app button (Codex), recurring-series list indicator (Codex).
-Excluded from commit: `web9.png` (untracked, unknown origin — left untouched per prior handoffs).
-Pre-commit verification (this turn): full Jest suite 686/686 green; `npm run lint` clean; `npm run build` OK (1.34 MB raw / 310.26 kB estimated transfer).
-Open concerns:
-- Push to `main` triggers the Cloudflare Pages production deploy — these changes are now live-bound.
-- No authenticated browser (Playwright) smoke for the device list (renders only when logged in); covered by component/unit tests. Worth a manual login check on the deployed build.
-Next agent starts from:
-- Working tree clean except `web9.png`. Remaining roadmap item is #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
-Do not touch:
-- Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -205,3 +201,5 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Codex — reload/update app button:** `SwUpdateService.reloadOrActivateUpdate()` (activate waiting SW update if any, else reload) wired to an icon-only button in the view-toggle bar (3-col grid, centered left on mobile); it/en `reloadUpdateAppAria`; 175 focused tests + guest Playwright smoke green.
 - **2026-05-24, Claude Code — device-limit redesign (priority #2):** max 3 installations + unlimited web sessions; third platform enum (`native`/`pwa-installed`/`web`) via `detectPlatform()`; sticky platform upgrade (`native > pwa-installed > web`); 90-day auto-cleanup of stale device docs; manual device removal in Settings; `installedDevices()` list (web excluded) + count note; it/en copy. Jest 686/686, lint, build green. Committed in `1c2d8f2`.
 - **2026-05-24, Claude Code — Playwright recurring-test fix:** the `shift-title-row` wrapper (recurring indicator) added a DOM level that broke `getByText(title).locator('../..')` in the two recurring e2e tests (30s click timeouts in CI); replaced with `app-shift-list-item` host-element scoping + `.filter({ hasText })`. Reproduced red locally, then full Playwright suite 17/17 green. Committed in `89ebd7d`.
+- **2026-05-24, Claude Code — commit/push of completed work:** committed + pushed all then-uncommitted work (device-limit redesign, security-remediation closeout docs, reload button, recurring indicator) to `origin/main`; Jest 686/686 + lint + build green; `web9.png` excluded. Commit `1c2d8f2`.
+- **2026-05-24, Claude Code — screenshot PNG cleanup:** `git rm`'d the 8 stray `web*.png` (web.png, web2–8) from GitHub + added a `web*.png` `.gitignore` rule; `web9.png` left on disk (local-only). Commit `8fa3f81`.
