@@ -43,3 +43,6 @@ test-results
 keystore.properties
 android/keystore.properties
 google-services.json
+
+# Local-only screenshots (not used by the app/build)
+web*.png

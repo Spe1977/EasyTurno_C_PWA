@@ -52,6 +52,19 @@ Not scheduled; do not act on these without the user explicitly authorizing the w
 
 - **Custom domain `easyturno.com`**: noted on 2026-05-22. If the domain turns out to be available, register it and point it at the existing Cloudflare Pages project `easyturno` (today live at `easyturno.pages.dev`). Goal is to ship a real marketing/landing site at the apex domain alongside the PWA. Implications to plan for at that time: (a) Cloudflare Pages custom-domain setup + DNS records, (b) add the new domain to Firebase Auth authorized domains (currently `easyturno.pages.dev`), (c) update the PWA manifest `start_url`/`scope` and CSP `connect-src` if needed, (d) HSTS / canonical redirects from `.pages.dev` to the apex, (e) email/landing copy in `it` + `en`. Keep `easyturno.pages.dev` working in parallel during the cutover.
 
+## Maintenance / Tech Debt
+
+Not scheduled; do not act on these without the user explicitly authorizing the work.
+
+- **Husky deprecation (will fail in husky v10)**: noted on 2026-05-24. The git commit/push runs show `husky - DEPRECATED`, asking to remove these two lines from `.husky/pre-commit`:
+  ```sh
+  #!/usr/bin/env sh
+  . "$(dirname -- "$0")/_/husky.sh"
+  ```
+  They WILL FAIL in husky v10.0.0. The hook works today; this is pre-emptive. When addressed, check every file under `.husky/` for the same deprecated preamble, not just `pre-commit`.
+- **CI parity for Playwright (e2e) locally**: noted on 2026-05-24. The pre-push hook runs build + Jest, but NOT Playwright — Playwright is CI-only. This is exactly why the `shift-title-row` DOM regression reached CI red instead of being caught pre-push (fixed in commit `89ebd7d`). Consider adding Playwright (or a focused subset) to the pre-push hook or a documented local pre-push step, weighing the ~4 min runtime cost against earlier detection of DOM-structure regressions in e2e selectors.
+- **Remove stray screenshot PNGs committed to GitHub** — ✅ DONE (2026-05-24 by Claude Code, user-authorized). `git rm`'d all 8 (`web.png`, `web2.png`–`web8.png`) and added a `web*.png` rule to `.gitignore`. `web9.png` remains on disk (local-only, never on GitHub) and is now ignored too.
+
 ## Files To Preserve
 
 Do not delete or reset these files unless the user explicitly asks:
@@ -128,6 +141,23 @@ Do not touch:
 ## Current Handoff
 
 Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T20:10:00+02:00
+Task: Delete the 8 stray screenshot PNGs from the GitHub repo + add a `.gitignore` rule (user-authorized; queued by the prior handoff). Also commit the pending `AGENT_HANDOFF.md` changes in the same push (user chose "Include handoff update").
+Status: done; committed and pushed to `origin/main` this turn (user-authorized).
+Files changed: deleted `web.png`, `web2.png`, `web3.png`, `web4.png`, `web5.png`, `web6.png`, `web7.png`, `web8.png`; `.gitignore` (added `web*.png` rule); `AGENT_HANDOFF.md` (this block + marked the screenshot tech-debt item DONE; also carried in the prior uncommitted "## Maintenance / Tech Debt" notes).
+Tests red: none.
+Tests green: none run — change is repo-hygiene only (no app/build/source code touched).
+Open concerns:
+- Push to `main` triggers the Cloudflare Pages production deploy. These are non-code asset deletions, so no functional impact expected.
+- `web9.png` remains on disk (local-only, never on GitHub) and is now covered by the `web*.png` ignore rule — left untouched per prior handoffs.
+Next agent starts from:
+- Working tree clean except `web9.png` (ignored). Remaining open items are optional tech-debt (Husky-deprecation cleanup, Playwright-in-pre-push CI parity) — do NOT do unprompted. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
+Do not touch:
+- Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
+
+---
+
+Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-24T19:30:00+02:00
 Task: Fix the 2 Playwright tests that went red in GitHub CI after the recurring-series indicator landed.
 Status: done; root cause found, fixed, verified locally; committed and pushed to `origin/main` (user-authorized).
@@ -160,34 +190,6 @@ Next agent starts from:
 Do not touch:
 - Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
 
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T18:45:00+02:00
-Task: Implement priority #2 — Device-limit redesign ("max 3 installations"), after the user authorized the work this turn.
-Status: done; not committed (no explicit commit permission this turn).
-Files changed (all uncommitted):
-- `src/services/device.service.ts` (+ `.spec.ts`) — `SOFT_DEVICE_LIMIT` `4 → 3`; added `detectPlatform()` (`native`/`pwa-installed`/`web`) and exported `DevicePlatform` + `DeviceRecord` types.
-- `src/services/firestore-user-data.service.ts` (+ `.spec.ts`) — devices snapshot now stored as `DeviceRecord[]`; `activeDeviceCount`/`webSessionCount` are `computed` over it (installed = `platform !== 'web'`); `registerDevice(uid, deviceId, platform, fcmToken?)` reads existing doc, applies sticky precedence (`native > pwa-installed > web`), and prunes other docs with `lastActive` > 90 days (never the current device) in the same batch; added `removeDevice(uid, deviceId)`.
-- `src/services/sync.service.ts` (+ `.spec.ts`) — passes `deviceService.detectPlatform()` into `registerDevice`.
-- `src/services/user-data.service.ts` (+ `.spec.ts`) — bridges `devices`, `installedDeviceCount`, `webSessionCount`; added `removeDevice(deviceId)` (no-op unless authenticated).
-- `src/app.component.ts` — `currentDeviceId`, `installedDevices` (computed: `platform !== 'web'`), `devicePendingRemoval`, `devicePlatformLabelKey`, `formatDeviceLastActive`, `promptRemoveDevice`/`cancelRemoveDevice`/`confirmRemoveDevice`.
-- `src/app.component.html` — authenticated Settings "Linked devices" section: count `X/3`, explanatory copy, web-sessions count note, per-device row (platform badge, "this device", last-active) with inline trash → Remove/Cancel confirm. The list iterates `installedDevices()` so web sessions are never listed (only counted).
-- `src/app.component.spec.ts` — rewrote "Device Limit Warning" tests to drive `_devices` (off at 3 installs, on at 4, web sessions excluded), plus remove-flow + platform-label-key coverage.
-- `src/assets/i18n/{it,en}.json` — reworded `deviceLimitExceededBody`; new keys `devicesSectionTitle`, `devicesLimitExplanation`, `devicesWebSessionsNote`, `deviceThisDevice`, `deviceLastActive`, `deviceRemoveAria`, `deviceRemoveConfirm`, `deviceRemoved`, `devicePlatform{Native,Installed,Web}`.
-- `AGENT_HANDOFF.md` — marked priority #2 ✅ COMPLETE; this handoff; rolled the oldest detailed block into the summary.
-Tests red (then green): `device.service.spec` soft-limit (was 4) + new `detectPlatform`; `firestore-user-data.service.spec` `registerDevice is not a function`/new signature; `user-data.service.spec` device-bridge; `app.component.spec` `_activeDeviceCount` removed; `sync.service.spec` `detectPlatform is not a function`.
-Tests green: full Jest suite 686/686 (after the follow-up below); `npm run lint` clean; `npx prettier --check` on all touched files clean; `npm run build` OK (1.34 MB raw / ~310 kB transfer).
-Follow-up (same turn, user request): shortened `devicesLimitExplanation` copy (it/en) to "Il limite dei 3 dispositivi si riferisce solo all'installazione di app Android e della PWA sul dispositivo. Gestisci i dispositivi collegati dal box qui sotto." / EN equivalent; the device list now shows installations only (`installedDevices()`), web sessions are excluded from the list but the `devicesWebSessionsNote` count line is kept (user chose "keep as count"). Added an `app.component.spec` test asserting the list excludes web devices.
-Open concerns:
-- No authenticated browser (Playwright) smoke — the device list only renders when logged in, so it is covered by component DOM/unit tests, not a live UI pass. Worth a manual check on a real login before release.
-- `firebase.md` Phase 6/7 logs still mention the historical soft-limit "4"; left as history (not rewritten). The live tracker is item #2 above.
-- Codex's prior uncommitted work (recurring-series indicator, reload/update button) and `web9.png` left untouched.
-Next agent starts from:
-- Priority #2 done. Remaining roadmap items are #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
-Do not touch:
-- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -201,3 +203,5 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Codex — cold PWA reopen fix:** initial auto-scroll waits for Auth app-mode + Firestore `snapshotsReady` (new signal); `SyncStatus.synced` routed through it. Committed/pushed with user authorization.
 - **2026-05-24, Codex — recurring-series list indicator:** repeat-style icon in Lista rows when `shift.isRecurring` (15px from title, high-contrast light/dark, it/en aria); calendar unchanged.
 - **2026-05-24, Codex — reload/update app button:** `SwUpdateService.reloadOrActivateUpdate()` (activate waiting SW update if any, else reload) wired to an icon-only button in the view-toggle bar (3-col grid, centered left on mobile); it/en `reloadUpdateAppAria`; 175 focused tests + guest Playwright smoke green.
+- **2026-05-24, Claude Code — device-limit redesign (priority #2):** max 3 installations + unlimited web sessions; third platform enum (`native`/`pwa-installed`/`web`) via `detectPlatform()`; sticky platform upgrade (`native > pwa-installed > web`); 90-day auto-cleanup of stale device docs; manual device removal in Settings; `installedDevices()` list (web excluded) + count note; it/en copy. Jest 686/686, lint, build green. Committed in `1c2d8f2`.
+- **2026-05-24, Claude Code — Playwright recurring-test fix:** the `shift-title-row` wrapper (recurring indicator) added a DOM level that broke `getByText(title).locator('../..')` in the two recurring e2e tests (30s click timeouts in CI); replaced with `app-shift-list-item` host-element scoping + `.filter({ hasText })`. Reproduced red locally, then full Playwright suite 17/17 green. Committed in `89ebd7d`.
