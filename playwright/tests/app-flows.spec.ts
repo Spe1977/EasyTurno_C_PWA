@@ -215,9 +215,9 @@ test('edits only one recurring occurrence when confirmed', async ({ page }) => {
   expect(await recurringTaskTitles.count()).toBeGreaterThan(1);
 
   await page
-    .getByText('Recurring Task')
+    .locator('app-shift-list-item')
+    .filter({ hasText: 'Recurring Task' })
     .first()
-    .locator('../..')
     .locator('[data-cy="edit-shift-btn"]')
     .click();
   await expect(page.locator('[data-cy="shift-title-input"]')).toBeVisible();
@@ -251,9 +251,9 @@ test('deletes an entire recurring series when confirmed', async ({ page }) => {
   expect(await seriesTitles.count()).toBeGreaterThan(1);
 
   await page
-    .getByText('Series to Delete')
+    .locator('app-shift-list-item')
+    .filter({ hasText: 'Series to Delete' })
     .first()
-    .locator('../..')
     .locator('[data-cy="delete-shift-btn"]')
     .click();
 

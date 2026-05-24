@@ -128,6 +128,24 @@ Do not touch:
 ## Current Handoff
 
 Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T19:30:00+02:00
+Task: Fix the 2 Playwright tests that went red in GitHub CI after the recurring-series indicator landed.
+Status: done; root cause found, fixed, verified locally; committed and pushed to `origin/main` (user-authorized).
+Root cause: the recurring-series indicator added an always-present wrapper `<div data-cy="shift-title-row">` around the title `<p>`, inserting one extra DOM nesting level. The two recurring e2e tests (`edits only one recurring occurrence`, `deletes an entire recurring series`) located the action buttons via `getByText(title).locator('../..')` — a hardcoded "up 2 levels" traversal that now lands on the content `<div>` (which does NOT contain the action buttons) instead of the card root → `locator.click` 30s timeout. Slipped through because Jest (686/686) doesn't use that DOM traversal and the pre-push hook runs build+Jest, not Playwright (Playwright is CI-only).
+Fix (test-only, no production code change): in `playwright/tests/app-flows.spec.ts` replaced the brittle `getByText(title).first().locator('../..')` with `page.locator('app-shift-list-item').filter({ hasText: title }).first()` for both the edit and delete recurring tests. `app-shift-list-item` is the component host element — a stable per-row container independent of internal nesting depth; the `.filter({ hasText })` idiom is already used elsewhere in this spec.
+Verification: reproduced both failures locally (identical 30s timeout) BEFORE the fix; after the fix the 2 recurring tests pass; full Playwright suite 17/17 green (`npx playwright test`).
+Files changed: `playwright/tests/app-flows.spec.ts`; `AGENT_HANDOFF.md`.
+Open concerns:
+- Other tests in this spec click the single edit/delete button directly (only one shift present), so they were unaffected; only the two multi-instance recurring tests needed per-row scoping. The brittle `../..` pattern is now removed from the spec (grep-verified: 0 remaining).
+- Consider adding Playwright to the pre-push hook (or a CI-parity local step) so DOM-structure regressions surface before push, not in CI. Not done this turn (out of scope).
+Next agent starts from:
+- CI should now be green. Remaining roadmap item is #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
+Do not touch:
+- Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
+
+---
+
+Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-24T19:00:00+02:00
 Task: Commit and push to `origin/main` all completed uncommitted work, after the user explicitly authorized commit+push this turn.
 Status: done; committed and pushed to `origin/main`.
@@ -170,31 +188,6 @@ Next agent starts from:
 Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T17:30:00+02:00
-Task: Close out the "Security remediation" item — verify state and document, after the user authorized priority #1.
-Status: done; documentation-only, no code/behavior change; not committed (no explicit commit permission this turn).
-Files changed:
-- `firebase.md` (modified) — flipped the security-remediation roadmap from `- [ ]` to `- [x]` (completata 2026-05-24); each of the 4 fixes annotated with its file/line evidence; added a "Rischio residuo accettato" paragraph documenting the firebase-tools/uuid transitive advisory and why it stays open.
-- `docs/superpowers/plans/2026-05-21-security-findings-remediation.md` (modified) — added a "Status: COMPLETE (verified 2026-05-24)" banner with per-task verified evidence and the risk-accepted residual; original task checklists retained below as historical detail.
-- `AGENT_HANDOFF.md` (modified) — marked "Next App Changes" item #1 (Security remediation) as ✅ COMPLETE with the residual-risk note; recorded this handoff; rolled the oldest detailed handoff block into the summarized section.
-Verification (no tests written — documentation-only change):
-- Verified Task 1: `src/services/push-notification.service.ts:33` logs `'Push registration success'`, raw `token.value` not logged, `this._token.set(token.value)` intact.
-- Verified Task 2: `android/app/src/main/AndroidManifest.xml:4` → `android:allowBackup="false"`.
-- Verified Task 3: `package.json` has `firebase-tools@^15.18.0` (installed 15.18.0 = latest on npm), `@capacitor/assets` absent. `npm audit --audit-level=low` → 6 moderate, all `firebase-tools → gaxios → uuid <11.1.1` (GHSA-w5hq-g745-h8pq).
-- Verified Task 4: `android/app/src/main/res/xml/file_paths.xml` keeps only `cache-path`; broad `external-path path="."` removed.
-Tests red: none.
-Tests green: none run (no behavior change). Prior suite state from the 2026-05-24 reload-button handoff still stands (175 focused / full suite green there).
-Open concerns:
-- The 6 moderate npm-audit advisories remain open by design (dev-only firebase-tools transitive chain, no runtime exposure, no non-breaking fix available). Documented as risk-accepted in `firebase.md` and the plan. Revisit if upstream firebase-tools drops `uuid<11.1.1`.
-- Codex's prior uncommitted code changes (recurring-series indicator, reload/update button) and `web9.png` remain intentionally untouched.
-Next agent starts from:
-- Next user-authorized app item is the device-limit redesign (priority #2). Do NOT start it without explicit user authorization.
-Do not touch:
-- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -202,7 +195,8 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-20, Antigravity + Codex — Phase 6 (Android/native):** Android release signing, Firebase SDK in `build.gradle`, `google-services.json` + SHA-1, FCM `PushNotificationService` + `registerDevice` token/platform fields + `SyncService` token sync, device soft-limit warning + i18n.
 - **2026-05-20, Antigravity + Codex — Phase 7:** Premium Statistics drawer redesign in `app.component.html` (presets, asymmetric grid, allowance wallet, empty state); README emulator/Android prereqs; Playwright `bootEmptyApp()` guest-mode entry + v2-key decryption-error E2E; coverage + Prettier cleanup.
 - **2026-05-21, Antigravity + Codex — polish + coverage:** mobile header (stacked online/offline indicator, removed sync badge); coverage hardened to ≥95% (final 98.45%S / 95.19%B) per `docs/superpowers/plans/2026-05-21-test-coverage-hardening-95.md`; auth UX fix (password-requirements panel opens on focus/input).
-- **2026-05-21, Codex — security cycle:** codex-security scan (3 findings) → remediation roadmap in `firebase.md` + plan → implemented (FCM log redacted, `allowBackup="false"`, `firebase-tools@^15.18.0`, `@capacitor/assets` removed, `file_paths.xml` narrowed). Commit `8d27879` (`feat: add auth sync pwa and android release prep`) pushed; Cloudflare Pages production live at `https://easyturno.pages.dev`. (Closeout/risk-acceptance done 2026-05-24 — see detailed block above.)
+- **2026-05-21, Codex — security cycle:** codex-security scan (3 findings) → remediation roadmap in `firebase.md` + plan → implemented (FCM log redacted, `allowBackup="false"`, `firebase-tools@^15.18.0`, `@capacitor/assets` removed, `file_paths.xml` narrowed). Commit `8d27879` (`feat: add auth sync pwa and android release prep`) pushed; Cloudflare Pages production live at `https://easyturno.pages.dev`.
+- **2026-05-24, Claude Code — security-remediation closeout (docs-only):** verified all 4 fixes in the worktree (FCM log redacted, `allowBackup="false"`, `firebase-tools@^15.18.0` / `@capacitor/assets` removed, `file_paths.xml` narrowed) and documented them in `firebase.md` + the plan; the 6 moderate `firebase-tools→uuid<11.1.1` advisories are risk-accepted (dev-only, no runtime exposure, no non-breaking fix). Committed in `1c2d8f2`.
 - **2026-05-22, Codex + Claude Code — sync read/write + bug fixes:** `UserDataService` mirrors `FirestoreUserDataService.state()` when authenticated so cloud shifts reach `ShiftService.shifts()` (commit `82565ea`, user-verified in prod); cold-start `goToToday()` retry; single→recurring edit soft-deletes manual shift + creates `ShiftSeries` atomically; Calendar→List returns to today; allowances as integer counts + remove button visible on mobile.
 - **2026-05-24, Codex — cold PWA reopen fix:** initial auto-scroll waits for Auth app-mode + Firestore `snapshotsReady` (new signal); `SyncStatus.synced` routed through it. Committed/pushed with user authorization.
 - **2026-05-24, Codex — recurring-series list indicator:** repeat-style icon in Lista rows when `shift.isRecurring` (15px from title, high-contrast light/dark, it/en aria); calendar unchanged.
