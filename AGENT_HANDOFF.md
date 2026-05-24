@@ -136,6 +136,27 @@ Do not touch:
 ## Current Handoff
 
 Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T22:00:00+02:00
+Task: Fix mobile-web layout bug (user-reported) — on the website opened in a phone browser, the Lista/Calendario toggle bar + reload button were hidden behind the sticky "EasyTurno" header on initial load; they appeared only after scrolling the page down, and once revealed stayed visible.
+Status: done; committed and pushed to `origin/main` this turn (user-authorized "commit e push con merge sul main").
+Root cause: the app shell container used `h-screen` (= `100vh`). On mobile browsers `100vh` equals the viewport height with the URL bar HIDDEN (the larger value), but at load the URL bar is shown, so the shell is taller than the visible area → the page itself scrolls and the toggle bar (sticky inside `<main>`) starts behind the sticky header. After the first scroll the browser collapses its URL bar, the viewport grows to match `100vh`, everything fits and stays — matching the user's report (mobile + stays visible once revealed).
+Fix: `src/app.component.html` — replaced `h-screen` with `h-dvh` (dynamic viewport height) on the authenticated app shell (line ~28) and the loading-splash container (line ~3), so the layout always matches the actually-visible viewport. Matches the convention already used by `auth-screen.component.ts` / `email-verification-screen.component.ts` (`min-h-[100dvh]`). Also added a convention note in `CLAUDE.md` (Development Notes): use `h-dvh`/`min-h-[100dvh]`, never `h-screen`/`100vh`, for full-height containers.
+Testing decision (user followed the recommendation): NO behavioral test added — the `100vh`-vs-dynamic-viewport discrepancy is not reproducible in any test env (jsdom has no layout; headless Chromium has no retractable URL bar, so `vh`/`dvh`/`svh`/`lvh` collapse to the same value). `toBeVisible()` also doesn't check viewport occlusion. A class-name guard was judged low-value; the CLAUDE.md convention note is the chosen guard instead.
+Files changed: `src/app.component.html`; `CLAUDE.md`; `AGENT_HANDOFF.md` (this block).
+Verification: `npm run build` exit 0 (1.34 MB raw / 310.38 kB transfer); generated `dist/.../styles*.css` contains `100dvh` and no longer contains any `100vh` (the two `h-screen` were the only occurrences). Playwright smoke 2/2 green (`view-toggle` still visible at boot). No spec asserts on `h-screen`/viewport height.
+Tests red: none.
+Tests green: `ng build`; Playwright smoke 2/2.
+Open concerns:
+- Final behavioral confirmation requires a real phone browser (open the deployed site, check the Lista/Calendario/reload bar is visible at first load without scrolling). Build + CSS + smoke are strong proxies, not a mobile-viewport behavioral test.
+- Push to `main` triggers the Cloudflare Pages production deploy — needed to test on the phone.
+Next agent starts from:
+- Working tree clean except `web9.png` (ignored). Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
+Do not touch:
+- Do not clean `web9.png` (local-only, ignored). Do not commit/push without explicit user permission.
+
+---
+
+Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-24T20:30:00+02:00
 Task: Tech-debt items 1 & 2 (user-authorized): (1) remove the deprecated husky preamble from all user hooks; (2) add Playwright to the pre-push hook for CI parity (option chosen by the user: full suite, skippable via `SKIP_PW=1`).
 Status: done; committed and pushed to `origin/main` this turn (user-authorized "Commit + push su main").
@@ -167,24 +188,6 @@ Next agent starts from:
 - Working tree clean except `web9.png` (ignored). Remaining open items are optional tech-debt (Husky-deprecation cleanup, Playwright-in-pre-push CI parity) — do NOT do unprompted. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
 Do not touch:
 - Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
-
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T19:30:00+02:00
-Task: Fix the 2 Playwright tests that went red in GitHub CI after the recurring-series indicator landed.
-Status: done; root cause found, fixed, verified locally; committed and pushed to `origin/main` (user-authorized).
-Root cause: the recurring-series indicator added an always-present wrapper `<div data-cy="shift-title-row">` around the title `<p>`, inserting one extra DOM nesting level. The two recurring e2e tests (`edits only one recurring occurrence`, `deletes an entire recurring series`) located the action buttons via `getByText(title).locator('../..')` — a hardcoded "up 2 levels" traversal that now lands on the content `<div>` (which does NOT contain the action buttons) instead of the card root → `locator.click` 30s timeout. Slipped through because Jest (686/686) doesn't use that DOM traversal and the pre-push hook runs build+Jest, not Playwright (Playwright is CI-only).
-Fix (test-only, no production code change): in `playwright/tests/app-flows.spec.ts` replaced the brittle `getByText(title).first().locator('../..')` with `page.locator('app-shift-list-item').filter({ hasText: title }).first()` for both the edit and delete recurring tests. `app-shift-list-item` is the component host element — a stable per-row container independent of internal nesting depth; the `.filter({ hasText })` idiom is already used elsewhere in this spec.
-Verification: reproduced both failures locally (identical 30s timeout) BEFORE the fix; after the fix the 2 recurring tests pass; full Playwright suite 17/17 green (`npx playwright test`).
-Files changed: `playwright/tests/app-flows.spec.ts`; `AGENT_HANDOFF.md`.
-Open concerns:
-- Other tests in this spec click the single edit/delete button directly (only one shift present), so they were unaffected; only the two multi-instance recurring tests needed per-row scoping. The brittle `../..` pattern is now removed from the spec (grep-verified: 0 remaining).
-- Consider adding Playwright to the pre-push hook (or a CI-parity local step) so DOM-structure regressions surface before push, not in CI. Not done this turn (out of scope).
-Next agent starts from:
-- CI should now be green. Remaining roadmap item is #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
-Do not touch:
-- Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
 
 ## Older Handoffs (summarized)
 

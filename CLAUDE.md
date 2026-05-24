@@ -212,6 +212,7 @@ The app generates individual shift instances for recurring patterns rather than 
 - Tailwind safelist configuration for dynamic color classes
 - CryptoService uses Web Crypto API (mocked in Jest tests for compatibility)
 - WCAG 2.1 AA compliant for keyboard navigation and screen readers
+- Full-height containers use `h-dvh` / `min-h-[100dvh]` (dynamic viewport height), never `h-screen` / `100vh`: on mobile browsers `100vh` is the URL-bar-hidden height, so it overflows the visible area at load and pushes sticky bars (e.g. the Lista/Calendario toggle) behind the header. This is NOT reproducible in headless Jest/Playwright (no dynamic browser chrome → `vh`/`dvh` collapse); verify on a real phone browser.
 
 ### Important Patterns & Conventions
 

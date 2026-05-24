@@ -1,6 +1,6 @@
 @switch (authService.state().mode) {
   @case ('loading') {
-    <div class="flex h-screen items-center justify-center bg-slate-100 dark:bg-slate-900">
+    <div class="flex h-dvh items-center justify-center bg-slate-100 dark:bg-slate-900">
       <div
         class="flex h-14 w-14 animate-pulse items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg"
         aria-hidden="true"
@@ -25,7 +25,7 @@
   }
   @default {
     <div
-      class="flex h-screen flex-col bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200"
+      class="flex h-dvh flex-col bg-slate-50 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200"
     >
       <!-- Update Banner -->
       @if (swUpdateService.updateAvailable()) {
