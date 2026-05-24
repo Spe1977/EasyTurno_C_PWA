@@ -42,6 +42,16 @@ Files likely impacted when implemented:
 - `src/assets/i18n/{it,en}.json` — new keys for the device list, limit explanation, and remove confirmation.
 - Tests in `src/services/device.service.spec.ts`, `firestore-user-data.service.spec.ts`, `user-data.service.spec.ts`, `app.component.spec.ts`.
 
+## Known Bugs
+
+No active known bugs in this section after the 2026-05-24 Codex fix for cold PWA reopen scroll timing.
+
+## Future Ideas
+
+Not scheduled; do not act on these without the user explicitly authorizing the work.
+
+- **Custom domain `easyturno.com`**: noted on 2026-05-22. If the domain turns out to be available, register it and point it at the existing Cloudflare Pages project `easyturno` (today live at `easyturno.pages.dev`). Goal is to ship a real marketing/landing site at the apex domain alongside the PWA. Implications to plan for at that time: (a) Cloudflare Pages custom-domain setup + DNS records, (b) add the new domain to Firebase Auth authorized domains (currently `easyturno.pages.dev`), (c) update the PWA manifest `start_url`/`scope` and CSP `connect-src` if needed, (d) HSTS / canonical redirects from `.pages.dev` to the apex, (e) email/landing copy in `it` + `en`. Keep `easyturno.pages.dev` working in parallel during the cutover.
+
 ## Files To Preserve
 
 Do not delete or reset these files unless the user explicitly asks:
@@ -117,6 +127,35 @@ Do not touch:
 
 ## Current Handoff
 
+Agent: Codex
+Date/time: 2026-05-24T15:05:47+02:00
+Task: Fix reported bug — cold PWA reopen with Firestore sync could land the list at the old visible-window start instead of today.
+Status: done; commit/push authorized by user on 2026-05-24.
+Files changed:
+- `src/app.component.ts` (modified) — initial list auto-scroll now waits until Auth is actually in app mode: guest can scroll from local data, authenticated sessions wait until sync status is no longer `connecting`. This prevents the one-shot `initialScrollDone` latch from firing while Auth is still `loading` on stale local shifts.
+- `src/app.component.spec.ts` (modified) — added regression coverage proving the initial scroll does not run while Auth is `loading`, still does not run while authenticated sync is `connecting`, then runs once with `goToToday('auto')` when synced remote data is available.
+- `src/services/firestore-user-data.service.ts` (modified) — added `snapshotsReady` readonly signal. It resets on `start()`/`stop()` and becomes true only after the first `shiftSeries`, `manualShifts`, `shiftOverrides`, and `devices` snapshot callbacks have all emitted.
+- `src/services/firestore-user-data.service.spec.ts` (modified) — added readiness regression test for first-snapshot tracking and stop reset.
+- `src/services/sync.service.ts` (modified) — `SyncStatus` now reports `synced` from `firestoreStore.snapshotsReady()` instead of setting `remoteReady` immediately after `start()`.
+- `src/services/sync.service.spec.ts` (modified) — updated synced-state test to use initial Firestore snapshot readiness.
+- `AGENT_HANDOFF.md` (modified) — recorded this handoff and marked the cold PWA reopen bug as resolved.
+Tests red (then made green):
+- `npm test -- src/services/firestore-user-data.service.spec.ts --runInBand -t "snapshots as ready"` → red: `service.snapshotsReady is not a function`.
+- `npm test -- src/services/sync.service.spec.ts --runInBand -t "reports synced"` → red: received `connecting` instead of `synced` after the test switched to snapshot readiness.
+- `npm test -- src/app.component.spec.ts --runInBand -t "waits for authenticated sync readiness"` → red: `goToToday('auto')` was called while Auth was still `loading`.
+Tests green:
+- `npm test -- src/services/firestore-user-data.service.spec.ts src/services/sync.service.spec.ts src/app.component.spec.ts --runInBand` → 3 suites, 168 tests passed.
+- `npm test -- --runInBand` → 25 suites, 667 tests passed.
+- `npm run lint` → clean.
+- `npm run build` → OK; initial total 1.33 MB raw / 308.32 kB estimated transfer.
+Open concerns:
+- No browser/PWA manual smoke was run in this turn. The unit regression covers the latch timing; a real installed-PWA close/reopen test on the deployed build is still useful before release.
+- `web9.png` remains untracked and intentionally untouched.
+Next agent starts from:
+- Optional installed-PWA smoke on production/deployed build: close the installed PWA fully, reopen authenticated, confirm the list lands near today after Firestore data is loaded. Then commit/push only when the user authorizes.
+Do not touch:
+- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+
 Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-22T16:55:00+02:00
 Task: Two small UX fixes — (1) allowances are integer counts displayed without currency symbols in statistics; (2) the remove "X" button on an allowance row stays visible on narrow mobile screens.
@@ -170,42 +209,10 @@ Next agent starts from:
 Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
-Agent: Codex
-Date/time: 2026-05-22T16:03:36+02:00
-Task: Record production verification for Firestore shift persistence after deploying the `undefined` field sanitization fix.
-Status: done
-Files changed:
-- `AGENT_HANDOFF.md` (modified) — added this production verification handoff.
-Git / Deploy:
-- Commit already pushed: `82565ea1295ddb2eaa315dfab48b4571df2c658b` (`Fix Firestore shift writes`).
-- Cloudflare Pages production deploy for project `easyturno` was triggered from `main` for commit `82565ea`.
-Production verification:
-- User confirmed a newly created shift now creates `manualShifts` in Firestore under the authenticated UID.
-- User confirmed the shift remains visible after refreshing the browser page.
-Root cause closed:
-- Firestore rejected shift documents containing optional fields with `undefined` values.
-- `FirestoreUserDataService` now strips `undefined` recursively before writes for manual shifts, series, overrides, and batch writes.
-Tests red:
-- Regression test in `src/services/firestore-user-data.service.spec.ts` initially failed because `batch.set()` received `notes`, `overtimeHours`, `allowances`, and `timezone` as `undefined`.
-Tests green:
-- `npm test -- src/services/firestore-user-data.service.spec.ts --runInBand` → 15 tests passed.
-- `npm run lint` → clean.
-- `npm run format:check` → clean.
-- `npm test -- --runInBand` → 25 suites, 654 tests passed.
-- `npm run build` → OK.
-- Pre-push hook: `npm test -- --coverage --watchAll=false` → 25 suites, 654 tests passed.
-- Pre-push hook: `npm run build` → OK.
-Open concerns:
-- Existing old shifts that were only local before the fix are not automatically migrated to Firestore.
-- `web9.png` remains untracked and was intentionally not committed.
-Next agent starts from:
-- Continue with any remaining release validation, Android/PWA update checks, or old local-data migration/backup flow if requested.
-Do not touch:
-- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
+- 2026-05-22T16:03:36+02:00, Codex — recorded production verification for pushed commit `82565ea` (`Fix Firestore shift writes`); user confirmed new shifts create `manualShifts` in Firestore and persist after refresh; full suite/build/pre-push checks were green.
 
 - 2026-05-18 — Claude Code (Opus 4.7) — Task 4: added `FirestoreUserDataService` with `onSnapshot` listeners on `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` and enabled `persistentLocalCache` in `FirebaseAppService`. 18 suites / 457 tests green.
 - 2026-05-20T01:00 — Antigravity (Gemini 2.0) — Task 6: implemented Firestore cloud writes (`upsertManualShift`, `upsertShiftSeries`, `upsertShiftOverride`, `applyBatch`) via `writeBatch`; `UserDataService.mutate` now auth-aware; `ShiftService` soft-deletes manual shifts and series. 20 suites / 468 tests.

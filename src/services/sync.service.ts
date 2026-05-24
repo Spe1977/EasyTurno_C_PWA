@@ -18,7 +18,6 @@ export class SyncService {
   private readonly firestoreStore = inject(FirestoreUserDataService);
   private readonly deviceService = inject(DeviceService);
   private readonly pushNotificationService = inject(PushNotificationService);
-  private readonly remoteReady = signal(false);
   private readonly syncError = signal<string | null>(null);
 
   readonly status = computed<SyncStatus>(() => {
@@ -27,7 +26,7 @@ export class SyncService {
     if (auth.mode !== 'authenticated' || !auth.uid) return { mode: 'local', labelKey: 'syncLocal' };
     if (this.syncError()) return { mode: 'error', labelKey: 'syncError', error: this.syncError()! };
     if (!navigator.onLine) return { mode: 'offline', labelKey: 'syncOffline' };
-    return this.remoteReady()
+    return this.firestoreStore.snapshotsReady()
       ? { mode: 'synced', labelKey: 'syncSynced' }
       : { mode: 'connecting', labelKey: 'syncConnecting' };
   });
@@ -37,13 +36,10 @@ export class SyncService {
       const auth = this.auth.state();
       const fcmToken = this.pushNotificationService.token();
       if (auth.mode === 'authenticated' && auth.uid) {
-        this.remoteReady.set(false);
         this.firestoreStore.start(auth.uid);
         void this.firestoreStore.registerDevice(auth.uid, this.deviceService.deviceId(), fcmToken);
-        this.remoteReady.set(true);
       } else {
         this.firestoreStore.stop();
-        this.remoteReady.set(false);
       }
     });
   }

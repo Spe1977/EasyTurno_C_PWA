@@ -6,6 +6,8 @@ import { ToastService } from './services/toast.service';
 import { NotificationService } from './services/notification.service';
 import { CryptoService } from './services/crypto.service';
 import { FirestoreUserDataService } from './services/firestore-user-data.service';
+import { AuthService } from './services/auth.service';
+import { SyncService } from './services/sync.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 import { Shift, ShiftColor } from './shift.model';
@@ -2222,6 +2224,94 @@ describe('AppComponent - Integration Tests', () => {
       });
 
       describe('goToToday Pagination Cutoff', () => {
+        it('waits for authenticated sync readiness before completing the initial list scroll', async () => {
+          await TestBed.resetTestingModule();
+
+          const authState = signal<any>({ mode: 'loading' });
+          const syncStatus = signal<any>({ mode: 'local', labelKey: 'syncLocal' });
+          const shifts = signal<Shift[]>([]);
+          const mockCryptoService = {
+            encrypt: jest.fn().mockImplementation(async (data: string) => data),
+            decrypt: jest.fn().mockImplementation(async (data: string) => data),
+            isEncrypted: jest.fn().mockReturnValue(false),
+            encryptBackupWithPassword: jest.fn(),
+            decryptBackupWithPassword: jest.fn(),
+            isPasswordProtectedBackupPayload: jest.fn().mockReturnValue(false),
+            secureStorageAvailable: signal(true),
+          };
+          const mockShiftService = {
+            shifts,
+            decryptionError: signal(false),
+          };
+
+          await TestBed.configureTestingModule({
+            imports: [AppComponent],
+            providers: [
+              TranslationService,
+              ToastService,
+              NotificationService,
+              DatePipe,
+              { provide: ShiftService, useValue: mockShiftService },
+              {
+                provide: AuthService,
+                useValue: {
+                  state: authState,
+                  isGuest: () => authState().mode === 'guest',
+                  isAuthenticated: () => authState().mode === 'authenticated',
+                  hasPasswordProvider: () => false,
+                  exitGuestMode: jest.fn(),
+                  signOut: jest.fn(),
+                  deleteAccount: jest.fn(),
+                },
+              },
+              { provide: SyncService, useValue: { status: syncStatus } },
+              { provide: CryptoService, useValue: mockCryptoService },
+            ],
+          }).compileComponents();
+
+          const customFixture = TestBed.createComponent(AppComponent);
+          const customComponent = customFixture.componentInstance;
+          const goToTodaySpy = jest
+            .spyOn(customComponent, 'goToToday')
+            .mockImplementation(() => {});
+
+          shifts.set([
+            {
+              id: 'local-stale',
+              title: 'Local stale',
+              start: '2026-05-01T08:00:00.000Z',
+              end: '2026-05-01T16:00:00.000Z',
+              color: 'sky',
+              isRecurring: false,
+            },
+          ]);
+          TestBed.flushEffects();
+
+          expect(goToTodaySpy).not.toHaveBeenCalled();
+
+          authState.set({ mode: 'authenticated', uid: 'uid-1', emailVerified: true });
+          syncStatus.set({ mode: 'connecting', labelKey: 'syncConnecting' });
+          TestBed.flushEffects();
+
+          expect(goToTodaySpy).not.toHaveBeenCalled();
+
+          shifts.set([
+            {
+              id: 'remote-current',
+              title: 'Remote current',
+              start: '2026-05-22T08:00:00.000Z',
+              end: '2026-05-22T16:00:00.000Z',
+              color: 'emerald',
+              isRecurring: false,
+            },
+          ]);
+          syncStatus.set({ mode: 'synced', labelKey: 'syncSynced' });
+          TestBed.flushEffects();
+
+          expect(goToTodaySpy).toHaveBeenCalledTimes(1);
+          expect(goToTodaySpy).toHaveBeenCalledWith('auto');
+        });
+
         it('should dynamically scale up listVisibleCount when the target index is beyond listVisibleCount', () => {
           shiftService.deleteAllShifts();
 

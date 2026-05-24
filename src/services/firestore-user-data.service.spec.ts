@@ -97,6 +97,35 @@ describe('FirestoreUserDataService', () => {
     expect(state.schemaVersion).toBe(2);
   });
 
+  it('reports snapshots as ready only after all initial listeners have emitted', () => {
+    const callbacks: Array<
+      (snapshot: { docs: Array<{ data: () => unknown }>; size?: number }) => void
+    > = [];
+    (firestore.onSnapshot as jest.Mock).mockImplementation((_query, cb) => {
+      callbacks.push(cb);
+      return jest.fn();
+    });
+
+    const service = TestBed.inject(FirestoreUserDataService);
+    service.start('uid-ready');
+
+    expect(service.snapshotsReady()).toBe(false);
+
+    callbacks[0]({ docs: [] });
+    callbacks[1]({ docs: [] });
+    callbacks[2]({ docs: [] });
+
+    expect(service.snapshotsReady()).toBe(false);
+
+    callbacks[3]({ docs: [], size: 1 });
+
+    expect(service.snapshotsReady()).toBe(true);
+
+    service.stop();
+
+    expect(service.snapshotsReady()).toBe(false);
+  });
+
   it('updates active device count when snapshot callback fires for devices', () => {
     const callbacks: Array<(snapshot: { size: number }) => void> = [];
     (firestore.onSnapshot as jest.Mock).mockImplementation((_query, cb) => {

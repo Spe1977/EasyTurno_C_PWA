@@ -246,6 +246,7 @@ export class AppComponent {
     let initialScrollDone = false;
     effect(() => {
       if (initialScrollDone) return;
+      if (!this.isReadyForInitialListScroll()) return;
       if (this.shiftService.shifts().length === 0) return;
       if (this.viewMode() !== 'list') return;
       if (this.searchDate()) return;
@@ -301,6 +302,13 @@ export class AppComponent {
     }
 
     this.checkUrlForActions();
+  }
+
+  private isReadyForInitialListScroll(): boolean {
+    const auth = this.authService.state();
+    if (auth.mode === 'guest') return true;
+    if (auth.mode !== 'authenticated') return false;
+    return this.syncService.status().mode !== 'connecting';
   }
 
   private checkUrlForActions() {

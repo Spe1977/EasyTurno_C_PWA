@@ -21,7 +21,15 @@ export class FirestoreUserDataService {
   readonly state = this._state.asReadonly();
   private readonly _activeDeviceCount = signal<number>(0);
   readonly activeDeviceCount = this._activeDeviceCount.asReadonly();
+  private readonly _snapshotsReady = signal(false);
+  readonly snapshotsReady = this._snapshotsReady.asReadonly();
   private unsubscribers: Unsubscribe[] = [];
+  private initialSnapshotsSeen = {
+    shiftSeries: false,
+    manualShifts: false,
+    shiftOverrides: false,
+    devices: false,
+  };
 
   start(uid: string): void {
     this.stop();
@@ -31,19 +39,23 @@ export class FirestoreUserDataService {
         this.patch({
           shiftSeries: this.mapDocs<ShiftSeries>(snapshot),
         });
+        this.markInitialSnapshotSeen('shiftSeries');
       }),
       onSnapshot(collection(db, `users/${uid}/manualShifts`), snapshot => {
         this.patch({
           manualShifts: this.mapDocs<ManualShift>(snapshot),
         });
+        this.markInitialSnapshotSeen('manualShifts');
       }),
       onSnapshot(collection(db, `users/${uid}/shiftOverrides`), snapshot => {
         this.patch({
           shiftOverrides: this.mapDocs<ShiftOverride>(snapshot),
         });
+        this.markInitialSnapshotSeen('shiftOverrides');
       }),
       onSnapshot(collection(db, `users/${uid}/devices`), snapshot => {
         this._activeDeviceCount.set(snapshot.size);
+        this.markInitialSnapshotSeen('devices');
       }),
     ];
   }
@@ -53,6 +65,13 @@ export class FirestoreUserDataService {
     this.unsubscribers = [];
     this._state.set(EMPTY_SHIFT_DATA_STATE);
     this._activeDeviceCount.set(0);
+    this._snapshotsReady.set(false);
+    this.initialSnapshotsSeen = {
+      shiftSeries: false,
+      manualShifts: false,
+      shiftOverrides: false,
+      devices: false,
+    };
   }
 
   async upsertManualShift(uid: string, shift: ManualShift): Promise<void> {
@@ -124,6 +143,15 @@ export class FirestoreUserDataService {
 
   private patch(patch: Partial<ShiftDataState>): void {
     this._state.update(state => ({ ...state, ...patch }));
+  }
+
+  private markInitialSnapshotSeen(
+    key: 'shiftSeries' | 'manualShifts' | 'shiftOverrides' | 'devices'
+  ): void {
+    this.initialSnapshotsSeen[key] = true;
+    if (Object.values(this.initialSnapshotsSeen).every(Boolean)) {
+      this._snapshotsReady.set(true);
+    }
   }
 
   private mapDocs<T>(snapshot: QuerySnapshot): T[] {

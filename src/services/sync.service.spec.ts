@@ -13,6 +13,7 @@ describe('SyncService', () => {
     firestoreStoreMock = {
       start: jest.fn(),
       stop: jest.fn(),
+      snapshotsReady: signal(false),
     };
   });
 
@@ -105,7 +106,8 @@ describe('SyncService', () => {
     });
   });
 
-  it('reports synced when remoteReady is true', () => {
+  it('reports synced when initial Firestore snapshots are ready', () => {
+    firestoreStoreMock.snapshotsReady.set(true);
     TestBed.configureTestingModule({
       providers: [
         {
@@ -117,7 +119,6 @@ describe('SyncService', () => {
     });
 
     const service = TestBed.inject(SyncService);
-    (service as any).remoteReady.set(true);
     expect(service.status()).toMatchObject({ mode: 'synced', labelKey: 'syncSynced' });
   });
 
