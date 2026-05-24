@@ -13,34 +13,34 @@ This repository is worked on by multiple CLI agents: Codex, Claude Code, and som
 - Completed current-plan task: Task 2, `ShiftDataState` persistence behind `ShiftService` (storage key migrated to `easyturno_user_data_v2`; legacy `easyturno_shifts` still read for backward-compat migration).
 - Completed current-plan task: Task 3, `UserDataService` extracted as the local store boundary. `ShiftService` now reads `state` through `userDataService.state` (readonly signal) and routes all mutations through `userDataService.setState(...)` / `userDataService.update(...)`.
 - Completed current-plan task: Task 4, `FirestoreUserDataService` added with realtime listeners on `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` via `onSnapshot`, exposes loaded `ShiftDataState` as readonly signal, Firestore `persistentLocalCache` enabled in `FirebaseAppService`. Not yet wired into `UserDataService`/`ShiftService` (deferred to Task 6 per plan).
-- Next implementation task: Task 5, add `SyncService` exposing `SyncStatus` (`local|connecting|synced|offline|error`) computed from `AuthService.state` and remote-snapshot readiness, plus header badge with i18n keys (`syncLocal`/`syncConnecting`/`syncSynced`/`syncOffline`/`syncError`).
+- Completed current app change: reload/update app button in the view-toggle bar, with service-worker update activation when an update is waiting and normal reload otherwise.
 
-## Pending Decisions — Device Limit Redesign
+## Next App Changes — Ordered Priority
 
-Discussed with the user on 2026-05-22 but **NOT to be implemented yet**. Next agent picking this up: do not start without the user explicitly authorizing the work.
+Do not implement any item in this section without the user explicitly authorizing the work.
 
-Today (`src/services/device.service.ts:4`) the soft limit is `SOFT_DEVICE_LIMIT = 4` and the count includes every browser session — each unique `localStorage` instance burns a slot. The user wants a model that matches intuition: "dispositivo" = telefono/tablet su cui ho installato l'app.
+1. **Security remediation** — ✅ COMPLETE (verified 2026-05-24 by Claude Code; implementation was done by Codex on 2026-05-21). All four fixes are in the worktree: FCM token log redacted (`push-notification.service.ts:33`), `android:allowBackup="false"`, `firebase-tools@^15.18.0` + `@capacitor/assets` removed, `file_paths.xml` narrowed to `cache-path`. **One residual advisory is risk-accepted and documented** in `firebase.md` and `docs/superpowers/plans/2026-05-21-security-findings-remediation.md`: 6 `moderate` npm-audit advisories transitive inside firebase-tools (`uuid<11.1.1`, GHSA-w5hq-g745-h8pq) — firebase-tools 15.18.0 is the latest, the only fix is a breaking `--force` downgrade, and the CLI is dev/release-only with no runtime exposure in the shipped PWA/APK. No further action unless upstream ships a firebase-tools without `uuid<11.1.1`.
 
-Agreed model:
+2. **Device limit redesign** — ✅ COMPLETE (implemented 2026-05-24 by Claude Code, after the user authorized priority #2; agreed model from 2026-05-22). Not committed (no commit permission this turn).
 
-- Hard model: **max 3 installations** (PWA installed on home screen + future native Android), **unlimited web sessions** (visiting `easyturno.pages.dev` from any browser does not count).
-- Add a third `platform` value: `'native'` (Capacitor), `'pwa-installed'` (detected via `window.matchMedia('(display-mode: standalone)').matches` or `navigator.standalone` on iOS), `'web'` (everything else).
-- **Sticky upgrade**: once a `deviceId` is observed in standalone mode at least once, its Firestore doc stays `pwa-installed` forever — never downgrade back to `web` even if the user later opens it from a browser tab. Installation is a permanent identity for that `localStorage`/`deviceId`, until uninstall.
-- **Limit counting**: only `platform !== 'web'` counts toward the limit. Constant moves from `4` to `3`.
-- **Auto-cleanup**: on registration, delete `devices` docs with `lastActive > 90 days`. Applies to every platform. A device that re-logs in at day 100 simply re-registers and takes a fresh slot (or triggers the soft warning if all 3 are taken).
-- **Manual removal in Settings**: list every active `device` doc with its platform/lastActive, with a remove button per row. This is the immediate escape hatch — uninstall+reinstall would otherwise keep the orphan slot for up to 90 days.
-- **Soft limit**: exceeding 3 shows a warning, does not block. Sync is multi-device-robust by design.
-- **User-facing communication is part of the deliverable**: a short paragraph (it/en) inside the Settings device list explaining (a) what counts toward the limit, (b) what does not (browser web access), (c) how to free a slot via manual removal. Without this onboarding text the limit is opaque.
+The "max 3 installations" model was implemented in full:
 
-Files likely impacted when implemented:
+- Hard model: **max 3 installations** (PWA on home screen + native Android), **unlimited web sessions** (a browser tab on `easyturno.pages.dev` does not count).
+- Third `platform` enum: `'native'` (Capacitor), `'pwa-installed'` (standalone display-mode / iOS `navigator.standalone`), `'web'`. `DeviceService.detectPlatform()` returns the currently-observed value.
+- **Sticky upgrade**: `FirestoreUserDataService.registerDevice` reads the existing doc and never lowers a stored `native`/`pwa-installed` back to `web` (precedence `native > pwa-installed > web`).
+- **Limit counting**: `activeDeviceCount` (= installed count) now counts only `platform !== 'web'`; `SOFT_DEVICE_LIMIT` is `3`. `webSessionCount` exposed separately.
+- **Auto-cleanup**: `registerDevice` prunes, in the same batch, other `devices` docs whose `lastActive` is older than 90 days; never deletes the current device.
+- **Manual removal in Settings**: authenticated Settings drawer lists every device (platform badge, "this device" marker, localized last-active) with a per-row trash button + inline Remove/Cancel confirm → `UserDataService.removeDevice(deviceId)` → `FirestoreUserDataService.removeDevice`.
+- **Soft limit**: still a non-blocking warning when installed > 3.
+- **User-facing copy**: it/en explanatory paragraph in the device list (what counts, what doesn't, how to free a slot) + reworded `deviceLimitExceededBody`.
 
-- `src/services/device.service.ts` — constant `4 → 3`; platform detection helper.
-- `src/services/firestore-user-data.service.ts` — `registerDevice` writes the new `platform` enum, sticky-upgrade logic, and inline cleanup of stale docs; `activeDeviceCount` signal exposes only `platform !== 'web'`.
-- `src/services/user-data.service.ts` — readonly bridge for the new split counts (`installedDeviceCount`, `webSessionCount`).
-- `src/app.component.ts` — `deviceLimitExceeded` already wired; add separate display for installed vs web.
-- `src/app.component.html` — Settings drawer device list + per-row remove button + explanatory copy.
-- `src/assets/i18n/{it,en}.json` — new keys for the device list, limit explanation, and remove confirmation.
-- Tests in `src/services/device.service.spec.ts`, `firestore-user-data.service.spec.ts`, `user-data.service.spec.ts`, `app.component.spec.ts`.
+Files changed (all uncommitted): `device.service.ts` (+spec), `firestore-user-data.service.ts` (+spec), `user-data.service.ts` (+spec), `sync.service.ts` (+spec — now passes `detectPlatform()` into `registerDevice`), `app.component.ts`/`.html`/`.spec.ts`, `src/assets/i18n/{it,en}.json`. `firestore.rules` unchanged (owner already has write/delete on `users/{uid}/**`). Verification: full Jest suite 685/685 green, lint clean, `ng build` OK (1.34 MB raw / 310.39 kB transfer). No authenticated browser smoke (device list only renders when logged in).
+
+3. **List recurring-series indicator** — completed by Codex on 2026-05-24. Added a repeat-style icon only in **Lista** rows when `shift.isRecurring === true`, near the shift title, with it/en accessibility label. Follow-up polish made it larger, exactly 15px from the title container, and higher contrast in both light and dark mode. Calendar view intentionally unchanged.
+
+4. **Reload/update app button** — completed by Codex on 2026-05-24. Added a small rotating-arrow button in the sticky view-toggle bar. It is positioned in the left grid column so, on mobile, it sits visually between the app's left edge and the "Lista" toggle; in Calendario it stays in the same bar and does not crowd calendar controls. Behavior uses `SwUpdateService.reloadOrActivateUpdate()`: activate the waiting service worker when `updateAvailable()` is true, otherwise reload the current app shell.
+
+5. **Custom domain `easyturno.com`** — future branding/deploy work; details under Future Ideas below.
 
 ## Known Bugs
 
@@ -127,115 +127,83 @@ Do not touch:
 
 ## Current Handoff
 
-Agent: Codex
-Date/time: 2026-05-24T15:05:47+02:00
-Task: Fix reported bug — cold PWA reopen with Firestore sync could land the list at the old visible-window start instead of today.
-Status: done; commit/push authorized by user on 2026-05-24.
-Files changed:
-- `src/app.component.ts` (modified) — initial list auto-scroll now waits until Auth is actually in app mode: guest can scroll from local data, authenticated sessions wait until sync status is no longer `connecting`. This prevents the one-shot `initialScrollDone` latch from firing while Auth is still `loading` on stale local shifts.
-- `src/app.component.spec.ts` (modified) — added regression coverage proving the initial scroll does not run while Auth is `loading`, still does not run while authenticated sync is `connecting`, then runs once with `goToToday('auto')` when synced remote data is available.
-- `src/services/firestore-user-data.service.ts` (modified) — added `snapshotsReady` readonly signal. It resets on `start()`/`stop()` and becomes true only after the first `shiftSeries`, `manualShifts`, `shiftOverrides`, and `devices` snapshot callbacks have all emitted.
-- `src/services/firestore-user-data.service.spec.ts` (modified) — added readiness regression test for first-snapshot tracking and stop reset.
-- `src/services/sync.service.ts` (modified) — `SyncStatus` now reports `synced` from `firestoreStore.snapshotsReady()` instead of setting `remoteReady` immediately after `start()`.
-- `src/services/sync.service.spec.ts` (modified) — updated synced-state test to use initial Firestore snapshot readiness.
-- `AGENT_HANDOFF.md` (modified) — recorded this handoff and marked the cold PWA reopen bug as resolved.
-Tests red (then made green):
-- `npm test -- src/services/firestore-user-data.service.spec.ts --runInBand -t "snapshots as ready"` → red: `service.snapshotsReady is not a function`.
-- `npm test -- src/services/sync.service.spec.ts --runInBand -t "reports synced"` → red: received `connecting` instead of `synced` after the test switched to snapshot readiness.
-- `npm test -- src/app.component.spec.ts --runInBand -t "waits for authenticated sync readiness"` → red: `goToToday('auto')` was called while Auth was still `loading`.
-Tests green:
-- `npm test -- src/services/firestore-user-data.service.spec.ts src/services/sync.service.spec.ts src/app.component.spec.ts --runInBand` → 3 suites, 168 tests passed.
-- `npm test -- --runInBand` → 25 suites, 667 tests passed.
-- `npm run lint` → clean.
-- `npm run build` → OK; initial total 1.33 MB raw / 308.32 kB estimated transfer.
+Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T19:00:00+02:00
+Task: Commit and push to `origin/main` all completed uncommitted work, after the user explicitly authorized commit+push this turn.
+Status: done; committed and pushed to `origin/main`.
+Scope committed (all previously uncommitted, all documented in the blocks below): device-limit redesign (Claude), security-remediation closeout docs (Claude), reload/update app button (Codex), recurring-series list indicator (Codex).
+Excluded from commit: `web9.png` (untracked, unknown origin — left untouched per prior handoffs).
+Pre-commit verification (this turn): full Jest suite 686/686 green; `npm run lint` clean; `npm run build` OK (1.34 MB raw / 310.26 kB estimated transfer).
 Open concerns:
-- No browser/PWA manual smoke was run in this turn. The unit regression covers the latch timing; a real installed-PWA close/reopen test on the deployed build is still useful before release.
-- `web9.png` remains untracked and intentionally untouched.
+- Push to `main` triggers the Cloudflare Pages production deploy — these changes are now live-bound.
+- No authenticated browser (Playwright) smoke for the device list (renders only when logged in); covered by component/unit tests. Worth a manual login check on the deployed build.
 Next agent starts from:
-- Optional installed-PWA smoke on production/deployed build: close the installed PWA fully, reopen authenticated, confirm the list lands near today after Firestore data is loaded. Then commit/push only when the user authorizes.
+- Working tree clean except `web9.png`. Remaining roadmap item is #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
+Do not touch:
+- Do not clean `web9.png` or other unrelated dirty files. Do not commit without explicit user permission.
+
+---
+
+Agent: Claude Code (Opus 4.7)
+Date/time: 2026-05-24T18:45:00+02:00
+Task: Implement priority #2 — Device-limit redesign ("max 3 installations"), after the user authorized the work this turn.
+Status: done; not committed (no explicit commit permission this turn).
+Files changed (all uncommitted):
+- `src/services/device.service.ts` (+ `.spec.ts`) — `SOFT_DEVICE_LIMIT` `4 → 3`; added `detectPlatform()` (`native`/`pwa-installed`/`web`) and exported `DevicePlatform` + `DeviceRecord` types.
+- `src/services/firestore-user-data.service.ts` (+ `.spec.ts`) — devices snapshot now stored as `DeviceRecord[]`; `activeDeviceCount`/`webSessionCount` are `computed` over it (installed = `platform !== 'web'`); `registerDevice(uid, deviceId, platform, fcmToken?)` reads existing doc, applies sticky precedence (`native > pwa-installed > web`), and prunes other docs with `lastActive` > 90 days (never the current device) in the same batch; added `removeDevice(uid, deviceId)`.
+- `src/services/sync.service.ts` (+ `.spec.ts`) — passes `deviceService.detectPlatform()` into `registerDevice`.
+- `src/services/user-data.service.ts` (+ `.spec.ts`) — bridges `devices`, `installedDeviceCount`, `webSessionCount`; added `removeDevice(deviceId)` (no-op unless authenticated).
+- `src/app.component.ts` — `currentDeviceId`, `installedDevices` (computed: `platform !== 'web'`), `devicePendingRemoval`, `devicePlatformLabelKey`, `formatDeviceLastActive`, `promptRemoveDevice`/`cancelRemoveDevice`/`confirmRemoveDevice`.
+- `src/app.component.html` — authenticated Settings "Linked devices" section: count `X/3`, explanatory copy, web-sessions count note, per-device row (platform badge, "this device", last-active) with inline trash → Remove/Cancel confirm. The list iterates `installedDevices()` so web sessions are never listed (only counted).
+- `src/app.component.spec.ts` — rewrote "Device Limit Warning" tests to drive `_devices` (off at 3 installs, on at 4, web sessions excluded), plus remove-flow + platform-label-key coverage.
+- `src/assets/i18n/{it,en}.json` — reworded `deviceLimitExceededBody`; new keys `devicesSectionTitle`, `devicesLimitExplanation`, `devicesWebSessionsNote`, `deviceThisDevice`, `deviceLastActive`, `deviceRemoveAria`, `deviceRemoveConfirm`, `deviceRemoved`, `devicePlatform{Native,Installed,Web}`.
+- `AGENT_HANDOFF.md` — marked priority #2 ✅ COMPLETE; this handoff; rolled the oldest detailed block into the summary.
+Tests red (then green): `device.service.spec` soft-limit (was 4) + new `detectPlatform`; `firestore-user-data.service.spec` `registerDevice is not a function`/new signature; `user-data.service.spec` device-bridge; `app.component.spec` `_activeDeviceCount` removed; `sync.service.spec` `detectPlatform is not a function`.
+Tests green: full Jest suite 686/686 (after the follow-up below); `npm run lint` clean; `npx prettier --check` on all touched files clean; `npm run build` OK (1.34 MB raw / ~310 kB transfer).
+Follow-up (same turn, user request): shortened `devicesLimitExplanation` copy (it/en) to "Il limite dei 3 dispositivi si riferisce solo all'installazione di app Android e della PWA sul dispositivo. Gestisci i dispositivi collegati dal box qui sotto." / EN equivalent; the device list now shows installations only (`installedDevices()`), web sessions are excluded from the list but the `devicesWebSessionsNote` count line is kept (user chose "keep as count"). Added an `app.component.spec` test asserting the list excludes web devices.
+Open concerns:
+- No authenticated browser (Playwright) smoke — the device list only renders when logged in, so it is covered by component DOM/unit tests, not a live UI pass. Worth a manual check on a real login before release.
+- `firebase.md` Phase 6/7 logs still mention the historical soft-limit "4"; left as history (not rewritten). The live tracker is item #2 above.
+- Codex's prior uncommitted work (recurring-series indicator, reload/update button) and `web9.png` left untouched.
+Next agent starts from:
+- Priority #2 done. Remaining roadmap items are #5 custom domain `easyturno.com` (future) — do not start without explicit user authorization.
 Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-22T16:55:00+02:00
-Task: Two small UX fixes — (1) allowances are integer counts displayed without currency symbols in statistics; (2) the remove "X" button on an allowance row stays visible on narrow mobile screens.
-Status: done; not committed (per repo policy).
-Files changed:
-- `src/app.component.ts` (modified) — `updateAllowanceAmount()` now floors the raw input value (`Math.floor`) so decimals can never be stored; added `formatAllowanceAmount(amount)` helper returning `String(Math.floor(amount))` (or `'0'` for non-finite/negative). No currency.
-- `src/app.component.html` (modified) —
-  - Allowance form row: added `min-w-0` to the name input so it can shrink; changed amount input from `w-28` to `w-20 shrink-0` and from `step="0.01"` to `step="1"` with `inputmode="numeric"`; added `shrink-0` to the remove button. The "X" is now always visible without horizontal scroll on narrow mobile widths.
-  - Statistics "Financial Portfolio" badge: replaced `€ {{ amount.toFixed(2) }}` with `{{ formatAllowanceAmount(amount) }}`. Green color theme kept (user-confirmed). The "$" SVG icon (currency-circle Heroicon) was swapped for a neutral hashtag-bars icon (`M5.25 8.25h15…`) so the section reads as a count portfolio rather than a money portfolio.
-- `src/app.component.spec.ts` (modified) — updated existing "should update allowance amount" test to expect integer storage; added 2 new tests for decimal flooring (`1.5 → 1`, `25.99 → 25`); added 4 unit tests for `formatAllowanceAmount` (integer, fractional flooring, zero, negative/NaN → "0"); added 1 DOM test that the rendered allowance name input has the `min-w-0` class (mocks `authService.state` to `{mode: 'guest'}` and opens the form via `openNewShiftForm()` since the whole template is gated by the auth `@switch`).
-- `AGENT_HANDOFF.md` (modified) — added this handoff and then compacted older blocks per `cli-collaboration` skill.
-Tests red (then made green):
-- `npm test -- src/app.component.spec.ts --runInBand -t "formatAllowanceAmount|allowance form layout|decimal allowance"` → red on 7/7 new tests: `formatAllowanceAmount is not a function`, decimal floors expecting integers, and DOM query for `[data-cy="allowance-name-input"]` returning `null`.
-- DOM test was further refined: the first iteration set `activeModal('form')` and called `addAllowance()` but the input was still null because the top-level template is gated by `authService.state().mode`. Fixed by mocking the auth state signal to `{mode: 'guest'}` before `detectChanges()`.
-Tests green:
-- `npm test -- src/app.component.spec.ts --runInBand -t "formatAllowanceAmount|allowance form layout|allowance amount as integer|decimal allowance"` → 8 tests passed.
-- `npm test -- --runInBand` → 25 suites, 665 tests passed (was 658 in the previous Claude handoff, delta = +7 new tests).
-- `npm run lint` → clean.
-- `npm run build` → OK; initial total 1.33 MB raw / 307.99 kB estimated transfer (unchanged).
-Open concerns:
-- The existing spec at line 814 (now `should update allowance amount as integer`) was tightened from accepting `25.50 → 25.5` to accepting only integers, because allowances are now an integer-count concept by product intent. No other call site depended on the old decimal behavior.
-- Existing stored shifts with decimal allowance amounts will be rendered through `formatAllowanceAmount`, which floors to integer at display time. Storage is not migrated; if a user edits a legacy decimal-amount allowance via the form, the next `updateAllowanceAmount` call will floor and persist as integer.
-- Translation files (`it.json`, `en.json`) were intentionally not touched: `allowancesByType` text is unchanged, and there is no €-specific i18n string in the affected path.
-- `web9.png` remains untracked and intentionally not committed.
-Next agent starts from:
-- Browser smoke (optional) on the deployed Pages URL to confirm: (a) calendar→list scrolls back to today, (b) allowance row "X" button is reachable on narrow mobile widths, (c) statistics show integer counts in the green badge with no €. Then commit/push when the user authorizes.
-Do not touch:
-- Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
+---
 
 Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-22T16:35:00+02:00
-Task: Fix bug — switching Calendar → List left the list at the start of an old recurring series instead of at today.
-Status: done; not committed (per repo policy).
+Date/time: 2026-05-24T17:30:00+02:00
+Task: Close out the "Security remediation" item — verify state and document, after the user authorized priority #1.
+Status: done; documentation-only, no code/behavior change; not committed (no explicit commit permission this turn).
 Files changed:
-- `src/app.component.ts` (modified) — `toggleViewMode()` and `setViewMode()` now call `this.goToToday('auto')` when the transition is `calendar → list`, in addition to the existing search/pagination reset. The initial cold-start effect with `initialScrollDone` was a one-shot, so subsequent returns to list never re-scrolled to today.
-- `src/app.component.spec.ts` (modified) — added 4 regression tests inside the `toggleViewMode / setViewMode` describe: (1) `toggleViewMode` calendar→list calls `goToToday('auto')`; (2) `setViewMode('list')` from calendar calls `goToToday('auto')`; (3) `toggleViewMode` list→calendar does NOT call `goToToday`; (4) `setViewMode('list')` while already on list does NOT call `goToToday`.
-- `AGENT_HANDOFF.md` (modified) — added this handoff.
-Tests red (then made green):
-- `npm test -- src/app.component.spec.ts --runInBand -t "toggleViewMode / setViewMode"` → red on the two new "scrolls back to today" tests because `goToTodaySpy` had 0 calls (root cause: neither `toggleViewMode()` nor `setViewMode()` invoked `goToToday()` on calendar→list).
-Tests green:
-- `npm test -- src/app.component.spec.ts --runInBand -t "toggleViewMode / setViewMode"` → 9 tests passed (5 pre-existing + 4 new).
-- `npm test -- --runInBand` → 25 suites, 658 tests passed (was 654, delta = +4 new tests).
-- `npm run lint` → clean.
-- `npm run build` → OK; initial total 1.33 MB raw / 307.99 kB estimated transfer (unchanged).
+- `firebase.md` (modified) — flipped the security-remediation roadmap from `- [ ]` to `- [x]` (completata 2026-05-24); each of the 4 fixes annotated with its file/line evidence; added a "Rischio residuo accettato" paragraph documenting the firebase-tools/uuid transitive advisory and why it stays open.
+- `docs/superpowers/plans/2026-05-21-security-findings-remediation.md` (modified) — added a "Status: COMPLETE (verified 2026-05-24)" banner with per-task verified evidence and the risk-accepted residual; original task checklists retained below as historical detail.
+- `AGENT_HANDOFF.md` (modified) — marked "Next App Changes" item #1 (Security remediation) as ✅ COMPLETE with the residual-risk note; recorded this handoff; rolled the oldest detailed handoff block into the summarized section.
+Verification (no tests written — documentation-only change):
+- Verified Task 1: `src/services/push-notification.service.ts:33` logs `'Push registration success'`, raw `token.value` not logged, `this._token.set(token.value)` intact.
+- Verified Task 2: `android/app/src/main/AndroidManifest.xml:4` → `android:allowBackup="false"`.
+- Verified Task 3: `package.json` has `firebase-tools@^15.18.0` (installed 15.18.0 = latest on npm), `@capacitor/assets` absent. `npm audit --audit-level=low` → 6 moderate, all `firebase-tools → gaxios → uuid <11.1.1` (GHSA-w5hq-g745-h8pq).
+- Verified Task 4: `android/app/src/main/res/xml/file_paths.xml` keeps only `cache-path`; broad `external-path path="."` removed.
+Tests red: none.
+Tests green: none run (no behavior change). Prior suite state from the 2026-05-24 reload-button handoff still stands (175 focused / full suite green there).
 Open concerns:
-- Existing `goToToday()` has its own retry loop for DOM timing, so calling it right after `viewMode.set('list')` is safe even if the list rows haven't rendered yet.
-- No production behavior change beyond the calendar→list scroll; list→calendar, list→list, and calendar→calendar paths are unchanged and explicitly covered by the negative tests.
-- `web9.png` remains untracked and intentionally not committed.
+- The 6 moderate npm-audit advisories remain open by design (dev-only firebase-tools transitive chain, no runtime exposure, no non-breaking fix available). Documented as risk-accepted in `firebase.md` and the plan. Revisit if upstream firebase-tools drops `uuid<11.1.1`.
+- Codex's prior uncommitted code changes (recurring-series indicator, reload/update button) and `web9.png` remain intentionally untouched.
 Next agent starts from:
-- Browser smoke (optional) on the deployed Pages URL to confirm the calendar→list scroll lands on today, then commit/push when the user authorizes.
+- Next user-authorized app item is the device-limit redesign (priority #2). Do NOT start it without explicit user authorization.
 Do not touch:
 - Do not clean unrelated dirty worktree files. Do not commit without explicit user permission.
 
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
-- 2026-05-22T16:03:36+02:00, Codex — recorded production verification for pushed commit `82565ea` (`Fix Firestore shift writes`); user confirmed new shifts create `manualShifts` in Firestore and persist after refresh; full suite/build/pre-push checks were green.
-
-- 2026-05-18 — Claude Code (Opus 4.7) — Task 4: added `FirestoreUserDataService` with `onSnapshot` listeners on `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` and enabled `persistentLocalCache` in `FirebaseAppService`. 18 suites / 457 tests green.
-- 2026-05-20T01:00 — Antigravity (Gemini 2.0) — Task 6: implemented Firestore cloud writes (`upsertManualShift`, `upsertShiftSeries`, `upsertShiftOverride`, `applyBatch`) via `writeBatch`; `UserDataService.mutate` now auth-aware; `ShiftService` soft-deletes manual shifts and series. 20 suites / 468 tests.
-- 2026-05-20T01:30 — Antigravity (Gemini 3.5) — Tasks 8–10: `firestore.rules`, `firebase.json` emulator config, schema-v2 backup compat with legacy auto-conversion, `deleteUserDataTree` wired into `auth.deleteAccount`, emulator smoke spec. 22 suites / 472 tests.
-- 2026-05-20T01:35 — Antigravity (Gemini 3.5) — Task 12 hardening: Auth UI tests, generator edge cases (leap years, DST → UTC-based `advanceDate`), Firestore batch coverage. 21 suites / 489 tests.
-- 2026-05-20T01:45 — Antigravity (Gemini 3.5) — Phase 6.3: FCM `PushNotificationService` + `firestore-user-data.registerDevice` token/platform fields + `SyncService` token sync. 24 suites / 509 tests.
-- 2026-05-20T02:15 — Antigravity (Gemini 3.5) — Phase 6 completion: Android signing, Firebase SDK in `build.gradle`, `google-services.json` with SHA-1, device-limit UI warning + i18n.
-- 2026-05-20T17:05 — Antigravity (Gemini 3.5) — Phase 7 cleanup: fixed 4th-listener (devices) test, lint cleanup in push service, README updates for emulator + Android prereqs.
-- 2026-05-20T17:15 — Antigravity (Gemini 2.0) — Phase 7: Premium Statistics drawer redesign in `app.component.html` (quick presets, asymmetric metric grid, allowance wallet, high-fidelity empty state).
-- 2026-05-20T17:39 — Codex — coverage hardening: statistics helpers, device soft-limit warning, `firebase-app.service.spec`. 24 suites / 521 tests; coverage 90.54% statements / 79.60% branch.
-- 2026-05-20T17:25 — Antigravity (Gemini 3.5) — gap-filling tests for `email-verification-screen` and full `UserDataService.mutate`. 23 suites / 512 tests.
-- 2026-05-20T17:59 — Codex — full debug: Playwright `bootEmptyApp()` now enters guest mode via auth screen; decryption-error E2E corrupts the v2 storage key instead of legacy. 17/17 Playwright + 24/521 Jest green.
-- 2026-05-20T18:03 — Codex — Prettier-only formatting on the 9 `src/` files previously red on `format:check`. No behavior change.
-- 2026-05-21T09:03 — Antigravity (Gemini 3.5) — header polish on mobile: online/offline indicator stacked under "EasyTurno", obsolete right-side sync badge removed.
-- 2026-05-21T09:20 — Antigravity (Gemini 3.5) — wrote `docs/superpowers/plans/2026-05-21-test-coverage-hardening-95.md` (95% coverage target).
-- 2026-05-21T09:30 — Antigravity (Gemini 3.5) — hardening for `AppComponent`, `SwUpdateService`, `CalendarService`, `CryptoService`, `FirestoreUserDataService`, `ShiftService`; fixed `getApps` mock leak. 25 suites / 582 tests; coverage 95.71% statements / 87.59% branch.
-- 2026-05-21T10:03 — Codex — pushed branch coverage to ≥95%: tightened `sw-update`, AppComponent guards, calendar, email-verification, auth, crypto, notification, occurrence, shift, translation, user-data, sync.service Prettier fix. 25/646 green; coverage 98.45%S / 95.19%B.
-- 2026-05-21T10:12 — Codex — codex-security scan: 3 findings — Medium `android:allowBackup="true"`, Medium 13 `npm audit` vulns (`firebase-tools`, `@capacitor/assets`), Low FCM raw token logged. Report under `/tmp/codex-security-scans/EasyTurno_C_PWA/`.
-- 2026-05-21T10:21 — Codex — documented remediation roadmap in `docs/superpowers/plans/2026-05-21-security-findings-remediation.md` and `firebase.md`.
-- 2026-05-21T14:12 — Codex — implemented security roadmap: redacted FCM token log, `allowBackup="false"`, `firebase-tools@^15.18.0`, removed vulnerable `@capacitor/assets`, narrowed `file_paths.xml`. `npm audit` clean; Gradle `assembleDebug` OK.
-- 2026-05-21T14:30 — Codex — web/PWA verification + prep for commit/push. Confirmed Pages project `easyturno` connected to `main`; localhost SW disabled by design so PWA proof needs HTTPS Pages URL.
-- 2026-05-21T14:58 — Codex — commit `8d27879` (`feat: add auth sync pwa and android release prep`) pushed to `origin/main`; Cloudflare Pages production deploy success at `https://easyturno.pages.dev`. Manifest/SW/security headers verified via curl.
-- 2026-05-21T15:32 — Codex — fix auth UX: registration password requirements panel now opens on focus/input (not only on submit error). 25/649 green.
-- 2026-05-22T14:56 — Codex — two app bugs: (a) cold-start `goToToday()` now retries when the target row is not yet in the DOM; (b) editing a single manual shift into a recurring one now soft-deletes the original manual shift and creates a `ShiftSeries` atomically. 25/651 green.
-- 2026-05-22T15:07 — Codex — Firestore read path fix: `UserDataService` now mirrors `FirestoreUserDataService.state()` into its own state when authenticated, so cloud shifts reach `ShiftService.shifts()`. 25/652 green.
-- 2026-05-22T15:37 — Codex — diagnostic regression test proving `ShiftService.addShift()` calls `FirestoreUserDataService.upsertManualShift()` when authenticated; pointed at deployed/PWA cache as next investigation surface. 25/653 green.
+- **2026-05-18 → 05-20, Claude Code + Antigravity — Firestore sync build-out (Tasks 4–12):** `FirestoreUserDataService` realtime `onSnapshot` listeners + `persistentLocalCache`; cloud writes (`upsertManualShift`/`upsertShiftSeries`/`upsertShiftOverride`/`applyBatch` via `writeBatch`) with auth-aware `UserDataService.mutate` and soft-deletes; `firestore.rules`, `firebase.json` emulator + smoke spec; schema-v2 backup compat with legacy auto-conversion; `deleteUserDataTree` wired into account deletion; generator edge cases (leap years, DST → UTC-based `advanceDate`).
+- **2026-05-20, Antigravity + Codex — Phase 6 (Android/native):** Android release signing, Firebase SDK in `build.gradle`, `google-services.json` + SHA-1, FCM `PushNotificationService` + `registerDevice` token/platform fields + `SyncService` token sync, device soft-limit warning + i18n.
+- **2026-05-20, Antigravity + Codex — Phase 7:** Premium Statistics drawer redesign in `app.component.html` (presets, asymmetric grid, allowance wallet, empty state); README emulator/Android prereqs; Playwright `bootEmptyApp()` guest-mode entry + v2-key decryption-error E2E; coverage + Prettier cleanup.
+- **2026-05-21, Antigravity + Codex — polish + coverage:** mobile header (stacked online/offline indicator, removed sync badge); coverage hardened to ≥95% (final 98.45%S / 95.19%B) per `docs/superpowers/plans/2026-05-21-test-coverage-hardening-95.md`; auth UX fix (password-requirements panel opens on focus/input).
+- **2026-05-21, Codex — security cycle:** codex-security scan (3 findings) → remediation roadmap in `firebase.md` + plan → implemented (FCM log redacted, `allowBackup="false"`, `firebase-tools@^15.18.0`, `@capacitor/assets` removed, `file_paths.xml` narrowed). Commit `8d27879` (`feat: add auth sync pwa and android release prep`) pushed; Cloudflare Pages production live at `https://easyturno.pages.dev`. (Closeout/risk-acceptance done 2026-05-24 — see detailed block above.)
+- **2026-05-22, Codex + Claude Code — sync read/write + bug fixes:** `UserDataService` mirrors `FirestoreUserDataService.state()` when authenticated so cloud shifts reach `ShiftService.shifts()` (commit `82565ea`, user-verified in prod); cold-start `goToToday()` retry; single→recurring edit soft-deletes manual shift + creates `ShiftSeries` atomically; Calendar→List returns to today; allowances as integer counts + remove button visible on mobile.
+- **2026-05-24, Codex — cold PWA reopen fix:** initial auto-scroll waits for Auth app-mode + Firestore `snapshotsReady` (new signal); `SyncStatus.synced` routed through it. Committed/pushed with user authorization.
+- **2026-05-24, Codex — recurring-series list indicator:** repeat-style icon in Lista rows when `shift.isRecurring` (15px from title, high-contrast light/dark, it/en aria); calendar unchanged.
+- **2026-05-24, Codex — reload/update app button:** `SwUpdateService.reloadOrActivateUpdate()` (activate waiting SW update if any, else reload) wired to an icon-only button in the view-toggle bar (3-col grid, centered left on mobile); it/en `reloadUpdateAppAria`; 175 focused tests + guest Playwright smoke green.

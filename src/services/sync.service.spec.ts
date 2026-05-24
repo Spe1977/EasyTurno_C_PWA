@@ -46,7 +46,10 @@ describe('SyncService', () => {
 
   it('registers device and fcm token when user authenticates', () => {
     const authState = signal<any>({ mode: 'guest' });
-    const deviceServiceMock = { deviceId: jest.fn().mockReturnValue('dev-123') };
+    const deviceServiceMock = {
+      deviceId: jest.fn().mockReturnValue('dev-123'),
+      detectPlatform: jest.fn().mockReturnValue('pwa-installed'),
+    };
     const pushNotificationServiceMock = { token: signal('token-456') };
     firestoreStoreMock.registerDevice = jest.fn();
 
@@ -66,7 +69,13 @@ describe('SyncService', () => {
     TestBed.flushEffects();
 
     expect(deviceServiceMock.deviceId).toHaveBeenCalled();
-    expect(firestoreStoreMock.registerDevice).toHaveBeenCalledWith('uid-1', 'dev-123', 'token-456');
+    expect(deviceServiceMock.detectPlatform).toHaveBeenCalled();
+    expect(firestoreStoreMock.registerDevice).toHaveBeenCalledWith(
+      'uid-1',
+      'dev-123',
+      'pwa-installed',
+      'token-456'
+    );
   });
 
   it('reports offline mode when navigator.onLine is false', () => {

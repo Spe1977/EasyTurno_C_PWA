@@ -62,6 +62,15 @@ export class SwUpdateService {
     }
   }
 
+  reloadOrActivateUpdate(): void {
+    if (this.updateAvailable()) {
+      this.activateUpdate();
+      return;
+    }
+
+    this.reloadPage();
+  }
+
   cleanup(): void {
     if (this.updateCheckInterval !== null) {
       clearInterval(this.updateCheckInterval);

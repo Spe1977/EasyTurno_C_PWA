@@ -263,6 +263,34 @@ describe('SwUpdateService', () => {
     });
   });
 
+  describe('reloadOrActivateUpdate', () => {
+    it('activates the waiting service worker when an update is available', () => {
+      service.updateAvailable.set(true);
+      const activateSpy = jest.spyOn(service, 'activateUpdate').mockImplementation(() => {});
+      const reloadSpy = jest
+        .spyOn(service as unknown as { reloadPage: () => void }, 'reloadPage')
+        .mockImplementation(() => {});
+
+      service.reloadOrActivateUpdate();
+
+      expect(activateSpy).toHaveBeenCalledTimes(1);
+      expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('reloads the current app shell when no service-worker update is waiting', () => {
+      service.updateAvailable.set(false);
+      const activateSpy = jest.spyOn(service, 'activateUpdate').mockImplementation(() => {});
+      const reloadSpy = jest
+        .spyOn(service as unknown as { reloadPage: () => void }, 'reloadPage')
+        .mockImplementation(() => {});
+
+      service.reloadOrActivateUpdate();
+
+      expect(activateSpy).not.toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('updateAvailable signal', () => {
     it('should initialize updateAvailable to false', () => {
       expect(service.updateAvailable()).toBe(false);

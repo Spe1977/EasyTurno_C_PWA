@@ -2,15 +2,15 @@
 
 ## Stato di avanzamento
 
-- [ ] **Security remediation roadmap — vulnerabilità codex-security** (pianificata 2026-05-21)
+- [x] **Security remediation roadmap — vulnerabilità codex-security** (completata 2026-05-24)
   - Report scan: `/tmp/codex-security-scans/EasyTurno_C_PWA/b733367_20260521T100746+0200/report.md`.
   - Piano operativo: [`docs/superpowers/plans/2026-05-21-security-findings-remediation.md`](docs/superpowers/plans/2026-05-21-security-findings-remediation.md).
-  - Fix da applicare prima di produzione / Play Store:
-    1. rimuovere il log del token FCM raw da `src/services/push-notification.service.ts`;
-    2. disabilitare o restringere Android backup in `android/app/src/main/AndroidManifest.xml`;
-    3. aggiornare/rimuovere dipendenze tooling vulnerabili (`firebase-tools`, `@capacitor/assets` e transitive);
-    4. restringere `android/app/src/main/res/xml/file_paths.xml` se possibile, evitando `external-path path="."`.
-  - Verifica finale prevista: `npm run lint`, `npm test -- --runInBand`, `npm run build`, `npm audit --audit-level=low`, `npm run test:firebase` se cambia Firebase tooling, build Gradle Android se JDK 21 è disponibile.
+  - Fix applicati prima di produzione / Play Store:
+    1. ✅ log del token FCM raw rimosso da `src/services/push-notification.service.ts:33` (ora `console.info('Push registration success')`; `this._token.set(token.value)` preservato);
+    2. ✅ Android backup disabilitato in `android/app/src/main/AndroidManifest.xml:4` (`android:allowBackup="false"`);
+    3. ✅ dipendenze tooling: `firebase-tools@^15.18.0`, `@capacitor/assets` rimosso — vedi rischio residuo sotto;
+    4. ✅ `android/app/src/main/res/xml/file_paths.xml` ristretto: rimosso `external-path path="."`, resta solo `cache-path`.
+  - **Rischio residuo accettato (2026-05-24)**: `npm audit --audit-level=low` riporta 6 advisory `moderate` tutte transitive dentro `firebase-tools` (`firebase-tools → gaxios → uuid <11.1.1`, GHSA-w5hq-g745-h8pq). Motivo per cui resta aperta: `firebase-tools@15.18.0` è già l'ultima versione pubblicata su npm e continua a dipendere da quella catena; l'unico `npm audit fix --force` retrocede `firebase-tools` a `1.2.0` (breaking, vietato dal piano). **Nessuna esposizione a runtime**: `firebase-tools` è una CLI usata solo in sviluppo/rilascio, non viene mai inclusa nel bundle PWA né nell'APK consegnato agli utenti. Da rivalutare quando upstream pubblicherà una `firebase-tools` che droppa `uuid<11.1.1`.
 - [x] **Fase 5a — Finestra di visibilità lista** (completata 2026-05-17)
   - Costanti `PAST_MONTHS_VISIBLE = 12` e `FUTURE_MONTHS_VISIBLE = 24` in `app.component.ts`.
   - `generateList()` filtra per intersezione con `[today-12m, today+24m]`.

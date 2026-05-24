@@ -38,7 +38,33 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
         </p>
       </div>
       <div class="min-w-0 flex-grow border-l border-slate-200 pl-4 dark:border-slate-700">
-        <p data-cy="shift-title" class="truncate text-lg font-bold">{{ shift().title }}</p>
+        <div data-cy="shift-title-row" class="flex min-w-0 items-center gap-[15px]">
+          <p data-cy="shift-title" class="truncate text-lg font-bold">{{ shift().title }}</p>
+          @if (shift().isRecurring) {
+            <span
+              data-cy="recurring-series-indicator"
+              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 shadow-sm ring-1 ring-indigo-200/80 dark:bg-indigo-300 dark:text-indigo-950 dark:ring-indigo-100/40"
+              [attr.aria-label]="'recurringShiftIndicator' | translate"
+              [title]="'recurringShiftIndicator' | translate"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M17.25 6.75H8.75a4 4 0 0 0-4 4v.5m0 0 2-2m-2 2 2 2m-.5 4h8.5a4 4 0 0 0 4-4v-.5m0 0-2 2m2-2-2-2"
+                />
+              </svg>
+            </span>
+          }
+        </div>
         <p class="truncate text-slate-500 dark:text-slate-400">
           {{ shift().start | langDate: 'time' }} - {{ shift().end | langDate: 'time' }}
         </p>

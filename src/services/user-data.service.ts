@@ -17,7 +17,14 @@ export class UserDataService {
 
   private readonly _state = signal<ShiftDataState>(EMPTY_SHIFT_DATA_STATE);
   readonly state = this._state.asReadonly();
+
+  // Device-limit bridge (read-only views over the Firestore device registry).
+  /** Installations only (`platform !== 'web'`); drives the soft limit. */
   readonly activeDeviceCount = this.firestore.activeDeviceCount;
+  /** Alias of {@link activeDeviceCount}, named for the Settings device list. */
+  readonly installedDeviceCount = this.firestore.activeDeviceCount;
+  readonly webSessionCount = this.firestore.webSessionCount;
+  readonly devices = this.firestore.devices;
 
   constructor() {
     effect(() => {
@@ -30,6 +37,14 @@ export class UserDataService {
 
   setState(next: ShiftDataState): void {
     this._state.set(next);
+  }
+
+  /** Removes a device from the cloud registry, freeing one installation slot. */
+  async removeDevice(deviceId: string): Promise<void> {
+    const auth = this.auth.state();
+    if (auth.mode === 'authenticated' && auth.uid) {
+      await this.firestore.removeDevice(auth.uid, deviceId);
+    }
   }
 
   update(mutator: (state: ShiftDataState) => ShiftDataState): void {

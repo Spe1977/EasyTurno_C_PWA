@@ -3,6 +3,17 @@
 > Context: Codex security scan saved at `/tmp/codex-security-scans/EasyTurno_C_PWA/b733367_20260521T100746+0200/report.md`.
 > Goal: close the validated security findings before production / Play Store release without disturbing unrelated dirty worktree changes.
 
+## Status: COMPLETE (verified 2026-05-24, Claude Code)
+
+All four tasks are implemented in the worktree. Verified state:
+
+- **Task 1 (FCM token logging)** — ✅ `src/services/push-notification.service.ts:33` logs `'Push registration success'`, not `token.value`; `this._token.set(token.value)` preserved.
+- **Task 2 (Android backup)** — ✅ `android/app/src/main/AndroidManifest.xml:4` → `android:allowBackup="false"`.
+- **Task 3 (tooling advisories)** — ⚠️ `firebase-tools@^15.18.0`, `@capacitor/assets` removed. **Residual risk accepted**: `npm audit --audit-level=low` shows 6 `moderate` advisories, all transitive inside firebase-tools (`firebase-tools → gaxios → uuid <11.1.1`, GHSA-w5hq-g745-h8pq). `firebase-tools@15.18.0` is the latest on npm and still pulls that chain; the only `npm audit fix --force` downgrades firebase-tools to `1.2.0` (breaking, forbidden by this plan, line 24). firebase-tools is a dev/release-only CLI — **never bundled into the shipped PWA or APK**, so there is no runtime exposure. Re-evaluate when upstream publishes a firebase-tools that drops `uuid<11.1.1`.
+- **Task 4 (FileProvider paths)** — ✅ `android/app/src/main/res/xml/file_paths.xml` keeps only `cache-path`; broad `external-path path="."` removed.
+
+The task checklists below are retained as historical detail.
+
 ## Current Findings
 
 The scan found no critical or high runtime application vulnerability. Three reportable issues remain:

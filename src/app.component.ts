@@ -26,7 +26,7 @@ import { CalendarComponent } from './components/calendar.component';
 import { AuthScreenComponent } from './components/auth-screen.component';
 import { EmailVerificationScreenComponent } from './components/email-verification-screen.component';
 import { SyncService } from './services/sync.service';
-import { DeviceService } from './services/device.service';
+import { DeviceService, DeviceRecord } from './services/device.service';
 import { UserDataService } from './services/user-data.service';
 import { PushNotificationService } from './services/push-notification.service';
 
@@ -178,6 +178,54 @@ export class AppComponent {
   deviceLimitExceeded = computed(() =>
     this.deviceService.isSoftLimitExceeded(this.userDataService.activeDeviceCount())
   );
+  /** Stable id of the device currently running the app (to mark "this device"). */
+  currentDeviceId = this.deviceService.deviceId();
+  /**
+   * Devices shown in the Settings list: installations only (`platform !== 'web'`).
+   * Web sessions are excluded so the list stays short even when the user signs
+   * in from many browsers; their count is still surfaced separately.
+   */
+  installedDevices = computed(() =>
+    this.userDataService.devices().filter(device => device.platform !== 'web')
+  );
+  /** Device id awaiting an inline remove confirmation in the Settings list. */
+  devicePendingRemoval = signal<string | null>(null);
+
+  /** i18n key for a device row's platform badge. */
+  devicePlatformLabelKey(platform: DeviceRecord['platform']): string {
+    switch (platform) {
+      case 'native':
+        return 'devicePlatformNative';
+      case 'pwa-installed':
+        return 'devicePlatformInstalled';
+      default:
+        return 'devicePlatformWeb';
+    }
+  }
+
+  /** Localized last-active date for a device row, or '' when pending/unknown. */
+  formatDeviceLastActive(lastActive: number | null): string {
+    if (!lastActive) return '';
+    return new Date(lastActive).toLocaleDateString(this.translationService.language(), {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  promptRemoveDevice(deviceId: string): void {
+    this.devicePendingRemoval.set(deviceId);
+  }
+
+  cancelRemoveDevice(): void {
+    this.devicePendingRemoval.set(null);
+  }
+
+  async confirmRemoveDevice(deviceId: string): Promise<void> {
+    await this.userDataService.removeDevice(deviceId);
+    this.devicePendingRemoval.set(null);
+    this.toastService.success(this.translationService.translate('deviceRemoved'));
+  }
 
   // Methods
   constructor() {

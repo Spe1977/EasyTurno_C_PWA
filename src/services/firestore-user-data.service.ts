@@ -1,5 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
-import { Capacitor } from '@capacitor/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   collection,
   doc,
@@ -11,16 +10,34 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { ManualShift, ShiftDataState, ShiftOverride, ShiftSeries } from '../shift.model';
+import { DevicePlatform, DeviceRecord } from './device.service';
 import { FirebaseAppService } from './firebase-app.service';
 import { EMPTY_SHIFT_DATA_STATE } from './user-data.model';
+
+/** Devices untouched for longer than this are pruned on the next registration. */
+const STALE_DEVICE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Sticky precedence: a higher rank can never be overwritten by a lower one. */
+const PLATFORM_RANK: Record<DevicePlatform, number> = {
+  web: 0,
+  'pwa-installed': 1,
+  native: 2,
+};
 
 @Injectable({ providedIn: 'root' })
 export class FirestoreUserDataService {
   private readonly firebase = inject(FirebaseAppService);
   private readonly _state = signal<ShiftDataState>(EMPTY_SHIFT_DATA_STATE);
   readonly state = this._state.asReadonly();
-  private readonly _activeDeviceCount = signal<number>(0);
-  readonly activeDeviceCount = this._activeDeviceCount.asReadonly();
+  private readonly _devices = signal<DeviceRecord[]>([]);
+  readonly devices = this._devices.asReadonly();
+  /** Installations only (`platform !== 'web'`); web sessions are unlimited. */
+  readonly activeDeviceCount = computed(
+    () => this._devices().filter(device => device.platform !== 'web').length
+  );
+  readonly webSessionCount = computed(
+    () => this._devices().filter(device => device.platform === 'web').length
+  );
   private readonly _snapshotsReady = signal(false);
   readonly snapshotsReady = this._snapshotsReady.asReadonly();
   private unsubscribers: Unsubscribe[] = [];
@@ -54,7 +71,7 @@ export class FirestoreUserDataService {
         this.markInitialSnapshotSeen('shiftOverrides');
       }),
       onSnapshot(collection(db, `users/${uid}/devices`), snapshot => {
-        this._activeDeviceCount.set(snapshot.size);
+        this._devices.set(this.mapDeviceDocs(snapshot));
         this.markInitialSnapshotSeen('devices');
       }),
     ];
@@ -64,7 +81,7 @@ export class FirestoreUserDataService {
     this.unsubscribers.forEach(unsubscribe => unsubscribe());
     this.unsubscribers = [];
     this._state.set(EMPTY_SHIFT_DATA_STATE);
-    this._activeDeviceCount.set(0);
+    this._devices.set([]);
     this._snapshotsReady.set(false);
     this.initialSnapshotsSeen = {
       shiftSeries: false,
@@ -116,16 +133,50 @@ export class FirestoreUserDataService {
     await batch.commit();
   }
 
-  async registerDevice(uid: string, deviceId: string, fcmToken?: string | null): Promise<void> {
+  /**
+   * Registers (or refreshes) this device. The write applies a sticky platform
+   * upgrade — a device that was ever seen as `native`/`pwa-installed` is never
+   * downgraded back to `web` — and opportunistically prunes other devices that
+   * have been inactive for more than 90 days.
+   */
+  async registerDevice(
+    uid: string,
+    deviceId: string,
+    platform: DevicePlatform,
+    fcmToken?: string | null
+  ): Promise<void> {
     const db = this.firebase.firestore;
+    const snapshot = await getDocs(collection(db, `users/${uid}/devices`));
     const batch = writeBatch(db);
+    const now = Date.now();
+    let existingPlatform: DevicePlatform | undefined;
+
+    snapshot.docs.forEach(document => {
+      if (document.id === deviceId) {
+        existingPlatform = (document.data() as { platform?: DevicePlatform }).platform;
+        return; // Never prune the device we are registering.
+      }
+      const lastActive = this.toMillis((document.data() as { lastActive?: unknown }).lastActive);
+      if (lastActive !== null && now - lastActive > STALE_DEVICE_MS) {
+        batch.delete(document.ref);
+      }
+    });
+
     batch.set(doc(db, `users/${uid}/devices/${deviceId}`), {
       id: deviceId,
       lastActive: serverTimestamp(),
       userAgent: navigator.userAgent,
-      platform: Capacitor.isNativePlatform() ? 'android' : 'web',
+      platform: this.resolveStickyPlatform(platform, existingPlatform),
       ...(fcmToken ? { fcmToken } : {}),
     });
+    await batch.commit();
+  }
+
+  /** Manual escape hatch from Settings: free a slot by deleting one device. */
+  async removeDevice(uid: string, deviceId: string): Promise<void> {
+    const db = this.firebase.firestore;
+    const batch = writeBatch(db);
+    batch.delete(doc(db, `users/${uid}/devices/${deviceId}`));
     await batch.commit();
   }
 
@@ -156,6 +207,38 @@ export class FirestoreUserDataService {
 
   private mapDocs<T>(snapshot: QuerySnapshot): T[] {
     return snapshot.docs.map(document => document.data() as T);
+  }
+
+  private mapDeviceDocs(snapshot: QuerySnapshot): DeviceRecord[] {
+    return snapshot.docs.map(document => {
+      const data = document.data() as {
+        id?: string;
+        platform?: DevicePlatform;
+        lastActive?: unknown;
+        userAgent?: string;
+        fcmToken?: string;
+      };
+      return {
+        id: data.id ?? document.id,
+        platform: data.platform ?? 'web',
+        lastActive: this.toMillis(data.lastActive),
+        userAgent: data.userAgent,
+        fcmToken: data.fcmToken,
+      };
+    });
+  }
+
+  private resolveStickyPlatform(
+    detected: DevicePlatform,
+    existing?: DevicePlatform
+  ): DevicePlatform {
+    if (!existing) return detected;
+    return PLATFORM_RANK[detected] >= PLATFORM_RANK[existing] ? detected : existing;
+  }
+
+  private toMillis(value: unknown): number | null {
+    const candidate = value as { toMillis?: () => number } | null | undefined;
+    return typeof candidate?.toMillis === 'function' ? candidate.toMillis() : null;
   }
 
   private withoutUndefined<T>(value: T): T {

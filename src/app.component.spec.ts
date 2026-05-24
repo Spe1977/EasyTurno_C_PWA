@@ -8,6 +8,7 @@ import { CryptoService } from './services/crypto.service';
 import { FirestoreUserDataService } from './services/firestore-user-data.service';
 import { AuthService } from './services/auth.service';
 import { SyncService } from './services/sync.service';
+import { SwUpdateService } from './services/sw-update.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 import { Shift, ShiftColor } from './shift.model';
@@ -1096,20 +1097,67 @@ describe('AppComponent - Integration Tests', () => {
   });
 
   describe('Device Limit Warning', () => {
-    it('should turn on only when active devices exceed the soft limit', () => {
+    const installed = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `dev-${i}`,
+        platform: 'pwa-installed' as const,
+        lastActive: null,
+      }));
+    const setDevices = (devices: unknown[]) =>
       (
-        firestoreUserDataService as unknown as {
-          _activeDeviceCount: { set: (value: number) => void };
-        }
-      )._activeDeviceCount.set(4);
+        firestoreUserDataService as unknown as { _devices: { set: (value: unknown[]) => void } }
+      )._devices.set(devices);
+
+    it('stays off at three installations and turns on at four', () => {
+      setDevices(installed(3));
       expect(component.deviceLimitExceeded()).toBe(false);
 
-      (
-        firestoreUserDataService as unknown as {
-          _activeDeviceCount: { set: (value: number) => void };
-        }
-      )._activeDeviceCount.set(5);
+      setDevices(installed(4));
       expect(component.deviceLimitExceeded()).toBe(true);
+    });
+
+    it('does not count web sessions toward the limit', () => {
+      setDevices([
+        ...installed(3),
+        { id: 'web-1', platform: 'web', lastActive: null },
+        { id: 'web-2', platform: 'web', lastActive: null },
+      ]);
+      expect(component.userDataService.installedDeviceCount()).toBe(3);
+      expect(component.userDataService.webSessionCount()).toBe(2);
+      expect(component.deviceLimitExceeded()).toBe(false);
+    });
+
+    it('removes a device through the user-data service and clears the pending state', async () => {
+      const removeSpy = jest
+        .spyOn(component.userDataService, 'removeDevice')
+        .mockResolvedValue(undefined);
+
+      component.promptRemoveDevice('dev-1');
+      expect(component.devicePendingRemoval()).toBe('dev-1');
+
+      component.cancelRemoveDevice();
+      expect(component.devicePendingRemoval()).toBeNull();
+
+      component.promptRemoveDevice('dev-1');
+      await component.confirmRemoveDevice('dev-1');
+
+      expect(removeSpy).toHaveBeenCalledWith('dev-1');
+      expect(component.devicePendingRemoval()).toBeNull();
+    });
+
+    it('lists only installed devices, excluding web sessions', () => {
+      setDevices([
+        { id: 'app-1', platform: 'native', lastActive: null },
+        { id: 'app-2', platform: 'pwa-installed', lastActive: null },
+        { id: 'web-1', platform: 'web', lastActive: null },
+      ]);
+      expect(component.installedDevices().map(d => d.id)).toEqual(['app-1', 'app-2']);
+    });
+
+    it('maps each platform to its translation key', () => {
+      expect(component.devicePlatformLabelKey('native')).toBe('devicePlatformNative');
+      expect(component.devicePlatformLabelKey('pwa-installed')).toBe('devicePlatformInstalled');
+      expect(component.devicePlatformLabelKey('web')).toBe('devicePlatformWeb');
     });
   });
 
@@ -1904,6 +1952,58 @@ describe('AppComponent - Integration Tests', () => {
     });
 
     describe('toggleViewMode / setViewMode', () => {
+      it('renders a reload/update button immediately before the view toggle', () => {
+        const authStateSignal = signal({ mode: 'guest' });
+        component.authService = {
+          ...(component.authService as any),
+          state: authStateSignal,
+          isAuthenticated: () => false,
+          isGuest: () => true,
+        } as any;
+
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        const reloadButton = host.querySelector('[data-cy="reload-update-app"]');
+        const viewToggle = host.querySelector('[data-cy="view-toggle"]');
+        const listButton = host.querySelector('[data-cy="view-list"]');
+
+        expect(reloadButton).not.toBeNull();
+        expect(viewToggle).not.toBeNull();
+        expect(listButton).not.toBeNull();
+        expect(
+          reloadButton!.compareDocumentPosition(viewToggle!) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+        expect(
+          reloadButton!.compareDocumentPosition(listButton!) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+        expect(reloadButton!.getAttribute('aria-label')).toBe(
+          translationService.translate('reloadUpdateAppAria')
+        );
+      });
+
+      it('uses the service-worker update/reload path when the reload button is clicked', () => {
+        const authStateSignal = signal({ mode: 'guest' });
+        component.authService = {
+          ...(component.authService as any),
+          state: authStateSignal,
+          isAuthenticated: () => false,
+          isGuest: () => true,
+        } as any;
+        const reloadSpy = jest
+          .spyOn(TestBed.inject(SwUpdateService), 'reloadOrActivateUpdate')
+          .mockImplementation(() => {});
+
+        fixture.detectChanges();
+
+        const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+          '[data-cy="reload-update-app"]'
+        );
+        button?.click();
+
+        expect(reloadSpy).toHaveBeenCalledTimes(1);
+      });
+
       it('toggleViewMode: list → calendar preserves search and pagination', () => {
         const searchDate = new Date('2025-10-15T00:00:00');
         component.searchDate.set(searchDate);

@@ -1,8 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import * as firestore from 'firebase/firestore';
-import { Capacitor } from '@capacitor/core';
 import { FirestoreUserDataService } from './firestore-user-data.service';
 import { EMPTY_SHIFT_DATA_STATE } from './user-data.model';
+
+/** Firestore Timestamp-like value with a `toMillis()` accessor. */
+function ts(ms: number) {
+  return { toMillis: () => ms };
+}
+
+/** Builds a QueryDocumentSnapshot-like object for the devices collection. */
+function deviceDoc(id: string, data: Record<string, unknown>, ref: unknown = `ref-${id}`) {
+  return { id, ref, data: () => ({ id, ...data }) };
+}
 
 describe('FirestoreUserDataService', () => {
   beforeEach(() => {
@@ -126,8 +135,8 @@ describe('FirestoreUserDataService', () => {
     expect(service.snapshotsReady()).toBe(false);
   });
 
-  it('updates active device count when snapshot callback fires for devices', () => {
-    const callbacks: Array<(snapshot: { size: number }) => void> = [];
+  it('derives installed-device and web-session counts from the devices snapshot', () => {
+    const callbacks: Array<(snapshot: { docs: ReturnType<typeof deviceDoc>[] }) => void> = [];
     (firestore.onSnapshot as jest.Mock).mockImplementation((_query, cb) => {
       callbacks.push(cb);
       return jest.fn();
@@ -137,14 +146,24 @@ describe('FirestoreUserDataService', () => {
     service.start('uid-devices');
 
     expect(service.activeDeviceCount()).toBe(0);
+    expect(service.webSessionCount()).toBe(0);
 
-    // Trigger devices snapshot callback with 3 active devices
-    callbacks[3]({ size: 3 });
-    expect(service.activeDeviceCount()).toBe(3);
+    callbacks[3]({
+      docs: [
+        deviceDoc('a', { platform: 'native', lastActive: ts(1_000) }),
+        deviceDoc('b', { platform: 'pwa-installed' }),
+        deviceDoc('c', { platform: 'web' }),
+        deviceDoc('d', { platform: 'web' }),
+      ],
+    });
 
-    // Trigger devices snapshot callback with 5 active devices (above limit)
-    callbacks[3]({ size: 5 });
-    expect(service.activeDeviceCount()).toBe(5);
+    // Only installations (platform !== 'web') count toward the limit.
+    expect(service.activeDeviceCount()).toBe(2);
+    expect(service.webSessionCount()).toBe(2);
+    expect(service.devices().map(d => d.id)).toEqual(['a', 'b', 'c', 'd']);
+    // Timestamp values are normalised to epoch milliseconds for the UI.
+    expect(service.devices()[0].lastActive).toBe(1_000);
+    expect(service.devices()[1].lastActive).toBeNull();
   });
 
   it('tears down previous listeners when start is called twice in a row', () => {
@@ -278,7 +297,102 @@ describe('FirestoreUserDataService', () => {
     expect(batch.commit).toHaveBeenCalled();
   });
 
-  it('registers device with user agent and timestamp', async () => {
+  describe('registerDevice', () => {
+    let batch: {
+      set: jest.Mock;
+      update: jest.Mock;
+      delete: jest.Mock;
+      commit: jest.Mock;
+    };
+
+    beforeEach(() => {
+      batch = {
+        set: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        commit: jest.fn().mockResolvedValue(undefined),
+      };
+      (firestore.writeBatch as jest.Mock).mockReturnValue(batch);
+      (firestore.getDocs as jest.Mock).mockResolvedValue({ docs: [] });
+    });
+
+    it('writes the supplied platform, user agent and timestamp', async () => {
+      const service = TestBed.inject(FirestoreUserDataService);
+      await service.registerDevice('uid-1', 'device-123', 'pwa-installed', 'token-abc');
+
+      expect(firestore.doc).toHaveBeenCalledWith(
+        expect.anything(),
+        'users/uid-1/devices/device-123'
+      );
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), {
+        id: 'device-123',
+        lastActive: 'serverTimestamp',
+        userAgent: expect.any(String),
+        platform: 'pwa-installed',
+        fcmToken: 'token-abc',
+      });
+      expect(batch.commit).toHaveBeenCalled();
+    });
+
+    it('omits fcmToken when it is not provided', async () => {
+      const service = TestBed.inject(FirestoreUserDataService);
+      await service.registerDevice('uid-1', 'device-123', 'web');
+
+      expect(batch.set).toHaveBeenCalledWith(expect.anything(), {
+        id: 'device-123',
+        lastActive: 'serverTimestamp',
+        userAgent: expect.any(String),
+        platform: 'web',
+      });
+    });
+
+    it('never downgrades a sticky pwa-installed device back to web', async () => {
+      (firestore.getDocs as jest.Mock).mockResolvedValue({
+        docs: [deviceDoc('device-123', { platform: 'pwa-installed', lastActive: ts(Date.now()) })],
+      });
+      const service = TestBed.inject(FirestoreUserDataService);
+      await service.registerDevice('uid-1', 'device-123', 'web');
+
+      expect(batch.set).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ platform: 'pwa-installed' })
+      );
+    });
+
+    it('upgrades a web device to pwa-installed the first time it is seen standalone', async () => {
+      (firestore.getDocs as jest.Mock).mockResolvedValue({
+        docs: [deviceDoc('device-123', { platform: 'web', lastActive: ts(Date.now()) })],
+      });
+      const service = TestBed.inject(FirestoreUserDataService);
+      await service.registerDevice('uid-1', 'device-123', 'pwa-installed');
+
+      expect(batch.set).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ platform: 'pwa-installed' })
+      );
+    });
+
+    it('deletes devices inactive for over 90 days but keeps fresh ones and itself', async () => {
+      const now = Date.now();
+      const stale = now - 91 * 24 * 60 * 60 * 1000;
+      const fresh = now - 2 * 24 * 60 * 60 * 1000;
+      (firestore.getDocs as jest.Mock).mockResolvedValue({
+        docs: [
+          deviceDoc('device-123', { platform: 'web', lastActive: ts(stale) }, 'ref-self'),
+          deviceDoc('old', { platform: 'pwa-installed', lastActive: ts(stale) }, 'ref-old'),
+          deviceDoc('recent', { platform: 'native', lastActive: ts(fresh) }, 'ref-recent'),
+        ],
+      });
+      const service = TestBed.inject(FirestoreUserDataService);
+      await service.registerDevice('uid-1', 'device-123', 'web');
+
+      // Only the stale non-self device is removed; the current device is never deleted.
+      expect(batch.delete).toHaveBeenCalledTimes(1);
+      expect(batch.delete).toHaveBeenCalledWith('ref-old');
+    });
+  });
+
+  it('removes a device document on removeDevice', async () => {
     const batch = {
       set: jest.fn(),
       update: jest.fn(),
@@ -288,62 +402,11 @@ describe('FirestoreUserDataService', () => {
     (firestore.writeBatch as jest.Mock).mockReturnValue(batch);
 
     const service = TestBed.inject(FirestoreUserDataService);
-    await service.registerDevice('uid-1', 'device-123', 'token-abc');
+    await service.removeDevice('uid-1', 'device-123');
 
     expect(firestore.doc).toHaveBeenCalledWith(expect.anything(), 'users/uid-1/devices/device-123');
-    expect(batch.set).toHaveBeenCalledWith(expect.anything(), {
-      id: 'device-123',
-      lastActive: 'serverTimestamp',
-      userAgent: expect.any(String),
-      platform: 'web',
-      fcmToken: 'token-abc',
-    });
+    expect(batch.delete).toHaveBeenCalledWith({ path: 'users/uid-1/devices/device-123' });
     expect(batch.commit).toHaveBeenCalled();
-  });
-
-  it('registers device without fcmToken and defaults platform', async () => {
-    const batch = {
-      set: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      commit: jest.fn().mockResolvedValue(undefined),
-    };
-    (firestore.writeBatch as jest.Mock).mockReturnValue(batch);
-
-    const service = TestBed.inject(FirestoreUserDataService);
-    await service.registerDevice('uid-1', 'device-123');
-
-    expect(batch.set).toHaveBeenCalledWith(expect.anything(), {
-      id: 'device-123',
-      lastActive: 'serverTimestamp',
-      userAgent: expect.any(String),
-      platform: 'web',
-    });
-  });
-
-  it('registers device with native platform when Capacitor is native', async () => {
-    const batch = {
-      set: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-      commit: jest.fn().mockResolvedValue(undefined),
-    };
-    (firestore.writeBatch as jest.Mock).mockReturnValue(batch);
-
-    const isNativeSpy = jest.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
-
-    const service = TestBed.inject(FirestoreUserDataService);
-    await service.registerDevice('uid-1', 'device-123', 'token-abc');
-
-    expect(batch.set).toHaveBeenCalledWith(expect.anything(), {
-      id: 'device-123',
-      lastActive: 'serverTimestamp',
-      userAgent: expect.any(String),
-      platform: 'android',
-      fcmToken: 'token-abc',
-    });
-
-    isNativeSpy.mockRestore();
   });
 
   describe('Batch Operations and Deletion', () => {

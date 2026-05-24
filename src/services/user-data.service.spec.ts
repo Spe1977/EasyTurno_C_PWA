@@ -14,10 +14,13 @@ describe('UserDataService', () => {
   let firestoreMock: {
     state: any;
     activeDeviceCount: any;
+    webSessionCount: any;
+    devices: any;
     upsertManualShift: jest.Mock;
     upsertShiftSeries: jest.Mock;
     upsertShiftOverride: jest.Mock;
     applyBatch: jest.Mock;
+    removeDevice: jest.Mock;
   };
 
   beforeEach(() => {
@@ -31,10 +34,13 @@ describe('UserDataService', () => {
     firestoreMock = {
       state: signal(EMPTY_SHIFT_DATA_STATE),
       activeDeviceCount: signal(1),
+      webSessionCount: signal(2),
+      devices: signal([{ id: 'dev-1', platform: 'pwa-installed', lastActive: 123 }]),
       upsertManualShift: jest.fn().mockResolvedValue(undefined),
       upsertShiftSeries: jest.fn().mockResolvedValue(undefined),
       upsertShiftOverride: jest.fn().mockResolvedValue(undefined),
       applyBatch: jest.fn().mockResolvedValue(undefined),
+      removeDevice: jest.fn().mockResolvedValue(undefined),
     };
 
     TestBed.resetTestingModule();
@@ -126,6 +132,34 @@ describe('UserDataService', () => {
     TestBed.flushEffects();
 
     expect(service.state().manualShifts).toEqual([remoteManual]);
+  });
+
+  describe('device list bridge', () => {
+    it('exposes installed-device, web-session counts and the device list from Firestore', () => {
+      const service = TestBed.inject(UserDataService);
+      expect(service.installedDeviceCount()).toBe(1);
+      expect(service.webSessionCount()).toBe(2);
+      expect(service.devices()).toEqual([
+        { id: 'dev-1', platform: 'pwa-installed', lastActive: 123 },
+      ]);
+    });
+
+    it('removes a device through Firestore when authenticated', async () => {
+      authMock.state.set({ mode: 'authenticated', uid: 'uid-abc' });
+      const service = TestBed.inject(UserDataService);
+
+      await service.removeDevice('dev-1');
+
+      expect(firestoreMock.removeDevice).toHaveBeenCalledWith('uid-abc', 'dev-1');
+    });
+
+    it('does not call Firestore removeDevice in guest mode', async () => {
+      const service = TestBed.inject(UserDataService);
+
+      await service.removeDevice('dev-1');
+
+      expect(firestoreMock.removeDevice).not.toHaveBeenCalled();
+    });
   });
 
   describe('mutate', () => {

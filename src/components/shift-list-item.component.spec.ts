@@ -36,6 +36,39 @@ describe('ShiftListItemComponent', () => {
   });
 
   describe('Output emitters (T7)', () => {
+    it('shows a subtle recurring-series indicator for recurring shifts', () => {
+      fixture.componentRef.setInput('shift', { ...mockShift, isRecurring: true });
+      fixture.detectChanges();
+
+      const titleRow = fixture.nativeElement.querySelector(
+        '[data-cy="shift-title-row"]'
+      ) as HTMLElement | null;
+      const indicator = fixture.nativeElement.querySelector(
+        '[data-cy="recurring-series-indicator"]'
+      ) as HTMLElement | null;
+      const icon = indicator?.querySelector('svg') as SVGElement | null;
+
+      expect(titleRow?.classList.contains('gap-[15px]')).toBe(true);
+      expect(indicator).toBeTruthy();
+      expect(indicator?.getAttribute('aria-label')).toBe('Recurring shift');
+      expect(indicator?.classList.contains('h-7')).toBe(true);
+      expect(indicator?.classList.contains('w-7')).toBe(true);
+      expect(indicator?.classList.contains('bg-indigo-100')).toBe(true);
+      expect(indicator?.classList.contains('text-indigo-700')).toBe(true);
+      expect(indicator?.classList.contains('dark:bg-indigo-300')).toBe(true);
+      expect(indicator?.classList.contains('dark:text-indigo-950')).toBe(true);
+      expect(icon?.classList.contains('h-4')).toBe(true);
+      expect(icon?.classList.contains('w-4')).toBe(true);
+    });
+
+    it('does not show the recurring-series indicator for one-off shifts', () => {
+      const indicator = fixture.nativeElement.querySelector(
+        '[data-cy="recurring-series-indicator"]'
+      ) as HTMLElement | null;
+
+      expect(indicator).toBeNull();
+    });
+
     it('should emit `view` with the shift when the card container is clicked', () => {
       const viewSpy = jest.fn();
       component.view.subscribe(viewSpy);
