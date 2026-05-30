@@ -21,6 +21,7 @@ describe('UserDataService', () => {
     upsertShiftOverride: jest.Mock;
     applyBatch: jest.Mock;
     removeDevice: jest.Mock;
+    clearShiftData: jest.Mock;
   };
 
   beforeEach(() => {
@@ -41,6 +42,7 @@ describe('UserDataService', () => {
       upsertShiftOverride: jest.fn().mockResolvedValue(undefined),
       applyBatch: jest.fn().mockResolvedValue(undefined),
       removeDevice: jest.fn().mockResolvedValue(undefined),
+      clearShiftData: jest.fn().mockResolvedValue(undefined),
     };
 
     TestBed.resetTestingModule();
@@ -159,6 +161,46 @@ describe('UserDataService', () => {
       await service.removeDevice('dev-1');
 
       expect(firestoreMock.removeDevice).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('clearAll', () => {
+    const nonEmpty: ShiftDataState = {
+      schemaVersion: 2,
+      shiftSeries: [],
+      manualShifts: [
+        {
+          id: 'm-clear',
+          title: 'To be cleared',
+          start: '2026-03-01T08:00:00.000Z',
+          end: '2026-03-01T16:00:00.000Z',
+          color: 'sky',
+          createdAt: '2026-03-01T00:00:00.000Z',
+          updatedAt: '2026-03-01T00:00:00.000Z',
+        },
+      ],
+      shiftOverrides: [],
+    };
+
+    it('clears local state and deletes cloud shift data when authenticated', async () => {
+      authMock.state.set({ mode: 'authenticated', uid: 'uid-abc' });
+      const service = TestBed.inject(UserDataService);
+      service.setState(nonEmpty);
+
+      await service.clearAll();
+
+      expect(service.state()).toEqual(EMPTY_SHIFT_DATA_STATE);
+      expect(firestoreMock.clearShiftData).toHaveBeenCalledWith('uid-abc');
+    });
+
+    it('clears local state without touching Firestore in guest mode', async () => {
+      const service = TestBed.inject(UserDataService);
+      service.setState(nonEmpty);
+
+      await service.clearAll();
+
+      expect(service.state()).toEqual(EMPTY_SHIFT_DATA_STATE);
+      expect(firestoreMock.clearShiftData).not.toHaveBeenCalled();
     });
   });
 

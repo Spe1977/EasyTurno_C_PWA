@@ -442,6 +442,37 @@ describe('FirestoreUserDataService', () => {
       );
     });
 
+    it('deletes only the shift data collections in clearShiftData, leaving devices/profile/settings intact', async () => {
+      const service = TestBed.inject(FirestoreUserDataService);
+      (firestore.getDocs as jest.Mock).mockResolvedValue({
+        docs: [{ ref: 'ref-1' }, { ref: 'ref-2' }],
+      });
+
+      await service.clearShiftData('uid-1');
+
+      // 3 collections (shiftSeries, manualShifts, shiftOverrides) * 2 docs each = 6 deletes.
+      // No devices/profile/settings deletes so the account stays alive.
+      expect(batch.delete).toHaveBeenCalledTimes(6);
+      expect(batch.commit).toHaveBeenCalledTimes(1);
+      expect(firestore.getDocs).toHaveBeenCalledTimes(3);
+      expect(firestore.collection).toHaveBeenCalledWith(
+        expect.anything(),
+        'users/uid-1/shiftSeries'
+      );
+      expect(firestore.collection).toHaveBeenCalledWith(
+        expect.anything(),
+        'users/uid-1/manualShifts'
+      );
+      expect(firestore.collection).toHaveBeenCalledWith(
+        expect.anything(),
+        'users/uid-1/shiftOverrides'
+      );
+      expect(firestore.collection).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'users/uid-1/devices'
+      );
+    });
+
     it('deletes all user data collections and profile/settings in deleteUserDataTree', async () => {
       const service = TestBed.inject(FirestoreUserDataService);
       (firestore.getDocs as jest.Mock).mockResolvedValue({
