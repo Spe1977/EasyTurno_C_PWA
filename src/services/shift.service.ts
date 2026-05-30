@@ -696,7 +696,7 @@ export class ShiftService {
 
   deleteAllShifts(): void {
     void this.notificationService.cancelAllNotifications();
-    this.userDataService.setState(EMPTY_SHIFT_DATA_STATE);
+    void this.userDataService.clearAll();
   }
 
   exportBackupPayload(): string {

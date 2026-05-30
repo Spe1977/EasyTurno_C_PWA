@@ -180,6 +180,22 @@ export class FirestoreUserDataService {
     await batch.commit();
   }
 
+  /**
+   * Clears all shift data (series, manual shifts and overrides) for the user
+   * while leaving the device registry, profile and settings intact. Backs the
+   * "reset all data" action so the deletion propagates to the cloud and is not
+   * restored by the realtime listeners on the next reload.
+   */
+  async clearShiftData(uid: string): Promise<void> {
+    const db = this.firebase.firestore;
+    const batch = writeBatch(db);
+    for (const path of ['shiftSeries', 'manualShifts', 'shiftOverrides']) {
+      const snapshot = await getDocs(collection(db, `users/${uid}/${path}`));
+      snapshot.docs.forEach(document => batch.delete(document.ref));
+    }
+    await batch.commit();
+  }
+
   async deleteUserDataTree(uid: string): Promise<void> {
     const db = this.firebase.firestore;
     const batch = writeBatch(db);

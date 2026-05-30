@@ -39,6 +39,19 @@ export class UserDataService {
     this._state.set(next);
   }
 
+  /**
+   * Clears all shift data locally and, when authenticated, deletes it from
+   * Firestore as well. Without the cloud deletion the realtime listeners would
+   * restore the wiped shifts on the next reload.
+   */
+  async clearAll(): Promise<void> {
+    this._state.set(EMPTY_SHIFT_DATA_STATE);
+    const auth = this.auth.state();
+    if (auth.mode === 'authenticated' && auth.uid) {
+      await this.firestore.clearShiftData(auth.uid);
+    }
+  }
+
   /** Removes a device from the cloud registry, freeing one installation slot. */
   async removeDevice(deviceId: string): Promise<void> {
     const auth = this.auth.state();
