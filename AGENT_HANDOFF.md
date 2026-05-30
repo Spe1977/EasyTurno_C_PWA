@@ -135,6 +135,27 @@ Do not touch:
 
 ## Current Handoff
 
+Agent: Claude Code (Opus 4.8)
+Date/time: 2026-05-30T17:30:00+02:00
+Task: Fix user-reported bug — "RESETTA TUTTI I DATI" (reset all data) in Settings wiped shifts locally but, for users with an active (authenticated) account, all deleted shifts reappeared on reload because the reset never propagated to Firestore; the realtime `onSnapshot` listeners restored them.
+Status: done. Committed and pushed to `claude/firebase-data-reset-sync-fOJuQ` (this is a web session whose explicit task is to deliver the fix on that branch).
+Root cause: `ShiftService.deleteAllShifts()` only called `userDataService.setState(EMPTY_SHIFT_DATA_STATE)` — a local-only wipe. The Firestore docs under `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` were never deleted, so on the next reload `FirestoreUserDataService.start()` re-hydrated them and `UserDataService`'s effect mirrored them back to local state. `deleteUserDataTree` existed but was wired only into account deletion.
+Fix (3 source files):
+- `firestore-user-data.service.ts`: new `clearShiftData(uid)` — batch-deletes only the three shift collections (`shiftSeries`, `manualShifts`, `shiftOverrides`), deliberately leaving `devices`/`profile`/`settings` intact (unlike `deleteUserDataTree`, which is the full account-deletion nuke).
+- `user-data.service.ts`: new `clearAll()` — sets local state to EMPTY synchronously, then, when authenticated, awaits `firestore.clearShiftData(uid)`.
+- `shift.service.ts`: `deleteAllShifts()` now calls `void this.userDataService.clearAll()` instead of `setState(EMPTY...)`.
+No-resurrection reasoning: local wipe is synchronous; the `UserDataService` effect tracks `firestore.state()` (not local `_state`), so the local empty isn't overwritten until the cloud delete's snapshot fires empty too → consistent. Account-deletion path (`clearLocalAccountData`) is unaffected: it runs after `deleteAccount()` (which already calls `deleteUserDataTree` + `deleteUser`), so by then auth is no longer authenticated and `clearAll` issues no redundant cloud delete.
+Files changed: `src/services/firestore-user-data.service.ts` (+spec), `src/services/user-data.service.ts` (+spec), `src/services/shift.service.ts`, `AGENT_HANDOFF.md` (this block).
+Tests red: none.
+Tests green: full Jest suite 689/689 (was 686; +3 new: `clearShiftData` collection-scope test, `clearAll` authenticated + guest tests); `npm run lint` clean; `npm run build` OK.
+Open concerns:
+- Behavior verified by unit tests + build only; no authenticated browser/E2E run (Firestore deletion path requires a real logged-in session). Recommend a quick manual check on a real account: add shifts → reset → reload → confirm they stay gone.
+- The environment's `grep -n` line numbers were unreliable this session (shell output layer glitching); all edits were verified by re-reading file content, not by trusting line numbers.
+Next agent starts from: fix is on `claude/firebase-data-reset-sync-fOJuQ`. If the user wants it in production it must be merged to `main` (triggers Cloudflare Pages deploy).
+Do not touch: do not delete `web9.png` (local-only, ignored).
+
+---
+
 Agent: Claude Code (Opus 4.7)
 Date/time: 2026-05-25T00:15:00+02:00
 Task: Create `update.md` — a maintenance/update schedule documenting every dependency/framework/native group to re-check every 30/60 days, with cadence table, exact commands, and a check log. User-requested, doc-only.
