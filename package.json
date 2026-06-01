@@ -38,14 +38,14 @@
     "test:firebase": "firebase emulators:exec --project demo-easyturno --only auth,firestore \"npm test -- src/services/sync-emulator.spec.ts --runInBand\""
   },
   "dependencies": {
-    "@angular/build": "^21.2.11",
-    "@angular/cli": "^21.2.5",
-    "@angular/common": "^21.2.5",
-    "@angular/compiler": "^21.2.5",
-    "@angular/compiler-cli": "^21.2.5",
-    "@angular/core": "^21.2.5",
-    "@angular/forms": "^21.2.5",
-    "@angular/platform-browser": "^21.2.5",
+    "@angular/build": "^21.2.13",
+    "@angular/cli": "^21.2.13",
+    "@angular/common": "^21.2.15",
+    "@angular/compiler": "^21.2.15",
+    "@angular/compiler-cli": "^21.2.15",
+    "@angular/core": "^21.2.15",
+    "@angular/forms": "^21.2.15",
+    "@angular/platform-browser": "^21.2.15",
     "@capacitor/android": "^8.3.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.3.0",
@@ -61,7 +61,7 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@angular/platform-browser-dynamic": "^21.2.5",
+    "@angular/platform-browser-dynamic": "^21.2.15",
     "@cypress/angular": "^4.0.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
