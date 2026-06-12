@@ -86,7 +86,7 @@
     "tailwindcss": "^4.2.2",
     "ts-jest": "^29.4.4",
     "typescript": "~5.9.3",
-    "vite": "^7.1.9",
+    "vite": "^8.0.14",
     "zone.js": "^0.15.1"
   },
   "lint-staged": {
