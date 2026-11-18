@@ -23,8 +23,6 @@ updates:
         patterns:
           - "jest*"
           - "@jest/*"
-          - "cypress"
-          - "@cypress/*"
           - "@testing-library/*"
       linting:
         patterns:

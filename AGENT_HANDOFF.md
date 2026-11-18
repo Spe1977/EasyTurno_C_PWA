@@ -135,6 +135,33 @@ Do not touch:
 
 ## Current Handoff
 
+Agent: Gemini CLI (Antigravity Swarm)
+Date/time: 2026-11-18T14:25:00+01:00
+Task: Execute Fase 0 of `update.md` (Steps 0.1–0.4) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done; committed on branch `chore/pwa-update-plan` (user-authorized).
+Files changed:
+- Deleted (`git rm`): `cypress_output.txt`, `easyturno@0.0.0`, `prettier`, `screen2.png`, `cypress.config.ts`, `cypress/tsconfig.json`, `cypress/support/{commands,e2e}.ts`, `cypress/e2e/{advanced-features,calendar-view,offline-functionality,recurring-shifts,shift-management}.cy.ts`
+- Added: `playwright/tests/calendar-offline.spec.ts` (13 E2E tests covering calendar prev/next/today & forward/backward year transitions, >5 badge, real `context.setOffline(true)`/`false` with `easyturno_user_data_v2` persistence, validation, weekly series edit, allowances/stats, dark/light & EN<->IT toggles)
+- Modified: `tsconfig.json` (removed `allowJs`, `jsx`, `paths`; kept `disableTypeScriptVersionCheck: true`), `package.json` & `package-lock.json` (uninstalled `cypress`, `@cypress/angular`, `start-server-and-test` without `--legacy-peer-deps`; removed `cypress:*`/`dev:e2e`/`e2e` scripts; moved `@angular/{build,cli,compiler-cli}`, `@tailwindcss/postcss`, `@capacitor/{cli,android}` to `devDependencies`), `eslint.config.js`, `.gitignore`, `.github/dependabot.yml`, `update.md` (roadmap + checked off Fase 0 & logged execution row), `AGENT_HANDOFF.md` (this block).
+Tests red: none in the Fase 0 Gate; two environment/pre-existing notes:
+- `npm run test:pw` is still blocked in default config because `@playwright/test@1.60.0` expects `chromium_headless_shell-1223` while `~/.cache/ms-playwright` currently has `1255` (browser upgrade/install is scheduled in Fase 1 Step 1.2). All 30/30 Playwright tests (`smoke.spec.ts` 2 + `app-flows.spec.ts` 15 + `calendar-offline.spec.ts` 13) passed live when pointed at cached `chromium_headless_shell-1255`.
+- `npx tsc -p tsconfig.spec.json --noEmit` reports 213 pre-existing typing errors across 11 `*.spec.ts` files (verified identical before and after `tsconfig.json` cleanup).
+Tests green:
+- `npm run lint` (0 errors) & `npx eslint --no-ignore playwright/tests/calendar-offline.spec.ts` (0 errors, 0 warnings)
+- `npm run format:check` & `npx prettier --check playwright/tests/calendar-offline.spec.ts tsconfig.json eslint.config.js package.json`
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit`
+- `npm test -- --coverage --watchAll=false` (25/25 suites, 689/689 passed; 98.32% Stmts, 94.73% Branch, 96.83% Funcs, 99.18% Lines)
+- `npm run build` (3.631s; 1.34 MB raw / 310.52 kB transfer) + `npx jest scripts/check-csp.spec.ts` (19/19 passed)
+- `npm audit --omit=dev`: reduced from 62 vulnerabilities to 8 (`2 moderate`, `5 high`, `1 critical` — -87%; remaining Angular 21.2.x runtime + Firebase transitives slated for Fase 2).
+- Playwright E2E: 30/30 passed (23.0s against `ng serve` on `127.0.0.1:3100` using cached `chromium_headless_shell-1255`).
+Open concerns:
+- `npm run test:pw` default invocation needs `npm run test:pw:install` (or Fase 1 Step 1.2 Playwright upgrade + install) to match the Playwright browser revision on disk.
+- `README.md` / `README_IT.md` / `CLAUDE.md` still mention Cypress (intentionally left for Step 6.3 per `update.md`).
+Next agent starts from: Proceed to Fase 1 on `chore/pwa-update-plan` (`update.md` Step 1.1–1.2: lint/format/Jest/Playwright upgrades + `npm run test:pw:install`).
+Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
+
+---
+
 Agent: Claude Code (Opus 4.8)
 Date/time: 2026-05-30T17:30:00+02:00
 Task: Fix user-reported bug — "RESETTA TUTTI I DATI" (reset all data) in Settings wiped shifts locally but, for users with an active (authenticated) account, all deleted shifts reappeared on reload because the reset never propagated to Firestore; the realtime `onSnapshot` listeners restored them.
@@ -173,45 +200,6 @@ Do not touch:
 
 ---
 
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T22:00:00+02:00
-Task: Fix mobile-web layout bug (user-reported) — on the website opened in a phone browser, the Lista/Calendario toggle bar + reload button were hidden behind the sticky "EasyTurno" header on initial load; they appeared only after scrolling the page down, and once revealed stayed visible.
-Status: done; committed and pushed to `origin/main` this turn (user-authorized "commit e push con merge sul main").
-Root cause: the app shell container used `h-screen` (= `100vh`). On mobile browsers `100vh` equals the viewport height with the URL bar HIDDEN (the larger value), but at load the URL bar is shown, so the shell is taller than the visible area → the page itself scrolls and the toggle bar (sticky inside `<main>`) starts behind the sticky header. After the first scroll the browser collapses its URL bar, the viewport grows to match `100vh`, everything fits and stays — matching the user's report (mobile + stays visible once revealed).
-Fix: `src/app.component.html` — replaced `h-screen` with `h-dvh` (dynamic viewport height) on the authenticated app shell (line ~28) and the loading-splash container (line ~3), so the layout always matches the actually-visible viewport. Matches the convention already used by `auth-screen.component.ts` / `email-verification-screen.component.ts` (`min-h-[100dvh]`). Also added a convention note in `CLAUDE.md` (Development Notes): use `h-dvh`/`min-h-[100dvh]`, never `h-screen`/`100vh`, for full-height containers.
-Testing decision (user followed the recommendation): NO behavioral test added — the `100vh`-vs-dynamic-viewport discrepancy is not reproducible in any test env (jsdom has no layout; headless Chromium has no retractable URL bar, so `vh`/`dvh`/`svh`/`lvh` collapse to the same value). `toBeVisible()` also doesn't check viewport occlusion. A class-name guard was judged low-value; the CLAUDE.md convention note is the chosen guard instead.
-Files changed: `src/app.component.html`; `CLAUDE.md`; `AGENT_HANDOFF.md` (this block).
-Verification: `npm run build` exit 0 (1.34 MB raw / 310.38 kB transfer); generated `dist/.../styles*.css` contains `100dvh` and no longer contains any `100vh` (the two `h-screen` were the only occurrences). Playwright smoke 2/2 green (`view-toggle` still visible at boot). No spec asserts on `h-screen`/viewport height.
-Tests red: none.
-Tests green: `ng build`; Playwright smoke 2/2.
-Open concerns:
-- RESOLVED: user confirmed on 2026-05-25 that the deployed site works correctly on their phone browser (toggle/reload bar visible at first load, no scrolling needed). The fix is behaviorally verified end-to-end.
-- Push to `main` triggers the Cloudflare Pages production deploy — needed to test on the phone.
-Next agent starts from:
-- Working tree clean except `web9.png` (ignored). Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
-Do not touch:
-- Do not clean `web9.png` (local-only, ignored). Do not commit/push without explicit user permission.
-
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T20:30:00+02:00
-Task: Tech-debt items 1 & 2 (user-authorized): (1) remove the deprecated husky preamble from all user hooks; (2) add Playwright to the pre-push hook for CI parity (option chosen by the user: full suite, skippable via `SKIP_PW=1`).
-Status: done; committed and pushed to `origin/main` this turn (user-authorized "Commit + push su main").
-Files changed: `.husky/pre-commit`, `.husky/post-checkout`, `.husky/post-merge` (removed the deprecated `#!/usr/bin/env sh` + `. "$(dirname -- "$0")/_/husky.sh"` 2-line preamble; `.husky/pre-push` already lacked it); `.husky/pre-push` (added `npm run test:pw` after Jest + build, gated by `if [ "$SKIP_PW" = "1" ]` to allow skipping just the e2e step); `AGENT_HANDOFF.md` (this block + marked both tech-debt items DONE).
-Verification: no deprecated preamble or shebang remains in any user hook (grep); `sh -n` syntax-OK on all 4 hooks. End-to-end proof from this push: the new `pre-commit` ran with NO `husky - DEPRECATED` warning, and the new `pre-push` ran Jest + build + the full 17-test Playwright suite green before the push was allowed.
-Tests red: none.
-Tests green: full Jest suite + `ng build` + Playwright 17/17 (all exercised live by the commit/push hooks this turn).
-Open concerns:
-- Every push now runs the ~4 min Playwright suite by default. For quick docs/handoff-only pushes use `SKIP_PW=1 git push` (Jest + build still run; only e2e is skipped). Prefer this over `git push --no-verify`, which bypasses ALL checks.
-- Push to `main` triggers the Cloudflare Pages production deploy. This turn touched only git hooks (no app/build/source code), so no functional/runtime impact on the deployed app.
-Next agent starts from:
-- Working tree clean except `web9.png` (ignored). No queued tech-debt items remain. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
-Do not touch:
-- Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
-
----
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -229,3 +217,5 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Claude Code — Playwright recurring-test fix:** the `shift-title-row` wrapper (recurring indicator) added a DOM level that broke `getByText(title).locator('../..')` in the two recurring e2e tests (30s click timeouts in CI); replaced with `app-shift-list-item` host-element scoping + `.filter({ hasText })`. Reproduced red locally, then full Playwright suite 17/17 green. Committed in `89ebd7d`.
 - **2026-05-24, Claude Code — commit/push of completed work:** committed + pushed all then-uncommitted work (device-limit redesign, security-remediation closeout docs, reload button, recurring indicator) to `origin/main`; Jest 686/686 + lint + build green; `web9.png` excluded. Commit `1c2d8f2`.
 - **2026-05-24, Claude Code — screenshot PNG cleanup:** `git rm`'d the 8 stray `web*.png` (web.png, web2–8) from GitHub + added a `web*.png` `.gitignore` rule; `web9.png` left on disk (local-only). Commit `8fa3f81`.
+- **2026-05-24, Claude Code (Opus 4.7) — tech-debt hooks & CI parity:** removed deprecated husky v9 preamble from `.husky/{pre-commit,post-checkout,post-merge}` and added full Playwright suite (`SKIP_PW=1` opt-out) to `.husky/pre-push`; verified live via commit/push.
+- **2026-05-24, Claude Code (Opus 4.7) — mobile-web `h-dvh` viewport fix:** replaced `h-screen` with `h-dvh` in `src/app.component.html` so mobile sticky toggle/reload bar is visible on initial load; updated `CLAUDE.md`; user-verified in prod.
