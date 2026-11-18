@@ -1,12 +1,5 @@
 export type ShiftColor =
-  | 'sky'
-  | 'green'
-  | 'amber'
-  | 'rose'
-  | 'indigo'
-  | 'teal'
-  | 'fuchsia'
-  | 'slate';
+  'sky' | 'green' | 'amber' | 'rose' | 'indigo' | 'teal' | 'fuchsia' | 'slate';
 
 export interface Repetition {
   frequency: 'days' | 'weeks' | 'months' | 'years';

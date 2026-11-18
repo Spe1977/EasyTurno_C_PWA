@@ -110,22 +110,22 @@ npm run lint && npm run format:check && npm test -- --coverage --watchAll=false 
 Obiettivo: chiudere gli aggiornamenti a basso rischio prima del salto di major di Angular.
 
 ### Step 1.1 — Gruppo Linting & Formatting (assorbe PR `#40` e `#31`)
-- [ ] Aggiornare al latest compatibile:
-  - `eslint` (`10.4.0 → 10.15.0`) e `@eslint/js`
+- [x] Aggiornare al latest compatibile:
+  - `eslint` (`10.4.0 → 10.15.0`) e `@eslint/js` (`10.0.1`)
   - `@typescript-eslint/eslint-plugin` e `@typescript-eslint/parser` (`8.59.3 → 8.73.0`, sempre in coppia allineata)
-  - `prettier` (`3.8.3 → 3.10.1`), `eslint-plugin-prettier` (`5.5.5 → 5.5.7`), `eslint-config-prettier`, `prettier-plugin-tailwindcss` (`0.8.0 → 0.8.1`)
+  - `prettier` (`3.8.3 → 3.10.1`), `eslint-plugin-prettier` (`5.5.5 → 5.5.7`), `eslint-config-prettier` (`10.1.8`), `prettier-plugin-tailwindcss` (`0.8.0 → 0.8.1`)
   - `lint-staged` (`17.0.5 → 17.6.1`)
-- [ ] Eseguire `npm run lint` e `npm run format:check`; correggere eventuali nuove regole o formattazioni segnalate.
+- [x] Eseguire `npm run lint` e `npm run format:check`; correggere eventuali nuove regole o formattazioni segnalate (riformattati 4 file in `src/` per Prettier 3.10.1).
 
 ### Step 1.2 — Tipi Node, Jest e Playwright (assorbe PR `#36`, `#37`, `#18`)
-- [ ] Aggiornare `@types/node` dentro il range `^25.9.x` (o `26.x` allineato alla toolchain Node scelta).
-- [ ] Aggiornare in blocco lo stack Jest per Angular 21 (ultimo step prima di `jest-preset-angular@17`):
-  - `jest` (`30.4.2 → 30.5.2`), `jest-environment-jsdom` (`30.4.1 → 30.5.2`), `ts-jest` (`29.4.9 → 29.4.15`, chiude advisory `critical` su `ts-jest`).
-- [ ] Aggiornare `@playwright/test` (`1.60.0 → 1.65.1`) e scaricare il browser allineato:
+- [x] Aggiornare `@types/node` dentro il range `^25.9.x` (`^25.9.9`, allineato a `typescript ~5.9.3` e CI `Node 22.x`).
+- [x] Aggiornare in blocco lo stack Jest per Angular 21 (ultimo step prima di `jest-preset-angular@17`):
+  - `jest` (`30.4.2 → 30.5.2`), `jest-environment-jsdom` (`30.4.1 → 30.5.2`), `ts-jest` (`29.4.9 → 29.4.15`, chiude advisory `critical` su `ts-jest`), `jest-preset-angular` (`^16.2.0` per compatibilità Angular 21); rimosso `"overrides": { "handlebars": "4.7.9" }` da `package.json` perché `ts-jest@29.4.15` richiede `handlebars@^4.7.10`.
+- [x] Aggiornare `@playwright/test` (`1.60.0 → 1.65.1`) e scaricare il browser allineato (`npx playwright install chromium` su `chromium-1255`; `npm run test:pw:install` con `--with-deps` richiede `sudo` interattivo in ambiente locale):
   ```bash
   npm run test:pw:install
   ```
-- [ ] Eseguire l'intera suite Playwright per verificare che tutti i test E2E passino localmente.
+- [x] Eseguire l'intera suite Playwright per verificare che tutti i test E2E passino localmente (`npm run test:pw`: `30/30 passed`).
 
 **Gate Fase 1:**
 ```bash
@@ -325,7 +325,7 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 
 ### Rischi noti registrati dalla baseline precedente
 - **`firebase-tools` → `uuid <11.1.1` (GHSA-w5hq-g745-h8pq):** 6 advisory `moderate` transitive; CLI dev/release-only senza esposizione runtime nella PWA distribuita. Rivalutare man mano che `firebase-tools` aggiorna le proprie dipendenze.
-- **Override `handlebars: 4.7.9` in `package.json`:** verificare dopo l'upgrade a Angular 22 + rimozione Cypress se l'override è ancora necessario.
+- **Override `handlebars: 4.7.9` in `package.json`:** ✅ rimosso in Fase 1 Step 1.2 (solo `ts-jest` dipendeva da `handlebars`; `ts-jest@29.4.15` richiede `^4.7.10`, risolvendo 2 advisory `critical` + 1 `moderate`).
 
 ---
 
@@ -342,3 +342,4 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 |---|---|---|---|---|
 | 2026-11-18 | Baseline su `main@b4ce8d7` | Gemini (Antigravity) | baseline | Lint OK, Prettier OK, Jest 25/25 (687 pass, 2 skip pre-build; Branch 94.73%), `ng build` 1.34 MB raw / 310.52 kB transfer (`@angular/compiler` 1008.1 KiB), `audit --omit=dev` 62 vuln, Playwright Chromium 1223 da installare |
 | 2026-11-18 | Fase 0 (Step 0.1–0.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK, `tsc --noEmit` OK, Jest 25/25 (689/689 pass; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB, Playwright 30/30 (+13 test in `calendar-offline.spec.ts`, eseguiti su cached `chromium_headless_shell-1255`), `audit --omit=dev` 62 → 8 vuln (-87%) |
+| 2026-11-18 | Fase 1 (Step 1.1–1.2) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK (`npm run format` su 4 file `src/`), `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (689/689 pass in 5.85 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB (3.22 s), `npm run test:pw` 30/30 pass (29.8 s), `audit --omit=dev` 8 vuln, `audit` completo 138 → 131 vuln (`critical` 7 → 5, rimosso override `handlebars: 4.7.9`) |

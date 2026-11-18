@@ -23,11 +23,7 @@ import { FirebaseAppService } from './firebase-app.service';
 import { FirestoreUserDataService } from './firestore-user-data.service';
 
 export type AuthMode =
-  | 'loading'
-  | 'unauthenticated'
-  | 'guest'
-  | 'authenticated'
-  | 'email-not-verified';
+  'loading' | 'unauthenticated' | 'guest' | 'authenticated' | 'email-not-verified';
 
 export interface AuthState {
   mode: AuthMode;

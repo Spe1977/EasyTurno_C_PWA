@@ -793,27 +793,25 @@ export class ShiftService {
 
     const obj = item as Record<string, unknown>;
 
-    if (
-      !(
-        'id' in obj &&
-        typeof obj.id === 'string' &&
-        'title' in obj &&
-        typeof obj.title === 'string' &&
-        obj.title.length <= ShiftService.MAX_TITLE_LENGTH &&
-        'start' in obj &&
-        typeof obj.start === 'string' &&
-        this.isValidISODate(obj.start) &&
-        'end' in obj &&
-        typeof obj.end === 'string' &&
-        this.isValidISODate(obj.end) &&
-        'color' in obj &&
-        this.isValidColor(obj.color) &&
-        'isRecurring' in obj &&
-        typeof obj.isRecurring === 'boolean' &&
-        'seriesId' in obj &&
-        typeof obj.seriesId === 'string'
-      )
-    ) {
+    if (!(
+      'id' in obj &&
+      typeof obj.id === 'string' &&
+      'title' in obj &&
+      typeof obj.title === 'string' &&
+      obj.title.length <= ShiftService.MAX_TITLE_LENGTH &&
+      'start' in obj &&
+      typeof obj.start === 'string' &&
+      this.isValidISODate(obj.start) &&
+      'end' in obj &&
+      typeof obj.end === 'string' &&
+      this.isValidISODate(obj.end) &&
+      'color' in obj &&
+      this.isValidColor(obj.color) &&
+      'isRecurring' in obj &&
+      typeof obj.isRecurring === 'boolean' &&
+      'seriesId' in obj &&
+      typeof obj.seriesId === 'string'
+    )) {
       return false;
     }
 

@@ -136,6 +136,30 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI (Antigravity Swarm)
+Date/time: 2026-11-18T14:41:00+01:00
+Task: Execute Fase 1 of `update.md` (Steps 1.1–1.2) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done; committed on branch chore/pwa-update-plan (user-authorized).
+Files changed:
+- Modified: `package.json` & `package-lock.json` (updated without `--legacy-peer-deps`: `eslint@^10.15.0`, `@eslint/js@^10.0.1`, paired `@typescript-eslint/{eslint-plugin,parser}@^8.73.0`, `prettier@^3.10.1`, `eslint-plugin-prettier@^5.5.7`, `eslint-config-prettier@^10.1.8`, `prettier-plugin-tailwindcss@^0.8.1`, `lint-staged@^17.6.1`, `@types/node@^25.9.9`, `jest@^30.5.2`, `jest-environment-jsdom@^30.5.2`, `ts-jest@^29.4.15`, `jest-preset-angular@^16.2.0`, `@playwright/test@^1.65.1`; removed `"overrides": { "handlebars": "4.7.9" }` so `ts-jest@29.4.15` resolves `handlebars@4.7.10`)
+- Modified: `src/services/auth.service.ts`, `src/services/crypto.service.spec.ts`, `src/services/shift.service.ts`, `src/shift.model.ts` (reformatted via `npm run format` for Prettier 3.10.1)
+- Modified: `update.md` (checked off Steps 1.1–1.2, updated `handlebars` override note in Appendice A, added Fase 1 row in `Registro Avanzamento Esecuzioni`), `AGENT_HANDOFF.md` (this block + collapsed `2026-05-25` handoff into Older Handoffs).
+Tests red: none in the Fase 1 Gate (pre-existing `npx tsc -p tsconfig.spec.json --noEmit` spec typing warnings remain outside the Gate; `npm run test:pw:install` with `--with-deps` cannot run non-interactively because `sudo` requires a password, while `npx playwright install chromium` succeeded and aligned Chromium rev `1255`).
+Tests green:
+- `npm run lint` (0 errors) & `npm run format:check` ("All matched files use Prettier code style!")
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (0 errors)
+- `npm test -- --coverage --watchAll=false` (25/25 suites, 689/689 passed in 5.853 s; 98.32% Stmts / 94.73% Branch / 96.83% Funcs / 99.18% Lines)
+- `npm run build` (3.223 s; Initial total `1.34 MB` raw / `310.52 kB` transfer; Lazy chunk `web` `3.43 kB` / `925 bytes`) + `npx jest scripts/check-csp.spec.ts` (19/19 passed)
+- `npm run test:pw` (30/30 passed in 29.8 s against `127.0.0.1:3100`)
+- `npm audit --omit=dev`: 8 vulnerabilities (`2 moderate, 5 high, 1 critical`, unchanged from Fase 0; Angular 22 + Firebase 13 slated for Fase 2); full `npm audit`: reduced from 138 to 131 (`2 low, 37 moderate, 87 high, 5 critical` — 2 critical advisories closed via `handlebars@4.7.10`).
+Open concerns:
+- Local `npm run test:pw:install` (`--with-deps`) requires interactive `sudo`; CI (`ubuntu-latest`) runs it unattended and was kept unchanged in `package.json`.
+- `tsconfig.spec.json` still has pre-existing spec diagnostics (`tsc -p tsconfig.spec.json --noEmit`, tracked outside Fase 1).
+Next agent starts from: Proceed to Fase 2 on `chore/pwa-update-plan` (`update.md` Steps 2.1–2.4: Angular `22.2.x`, `typescript ~6.0.3`, `zone.js ~0.16.x`, `jest-preset-angular ^17.0.3`, Tailwind `4.3.x`, Firebase `13.4.0` + emulator verification, and removing `--legacy-peer-deps` from `.github/workflows/ci.yml` if clean).
+Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
+
+---
+
+Agent: Gemini CLI (Antigravity Swarm)
 Date/time: 2026-11-18T14:25:00+01:00
 Task: Execute Fase 0 of `update.md` (Steps 0.1–0.4) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
 Status: done; committed on branch `chore/pwa-update-plan` (user-authorized).
@@ -181,25 +205,6 @@ Open concerns:
 Next agent starts from: fix is on `claude/firebase-data-reset-sync-fOJuQ`. If the user wants it in production it must be merged to `main` (triggers Cloudflare Pages deploy).
 Do not touch: do not delete `web9.png` (local-only, ignored).
 
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-25T00:15:00+02:00
-Task: Create `update.md` — a maintenance/update schedule documenting every dependency/framework/native group to re-check every 30/60 days, with cadence table, exact commands, and a check log. User-requested, doc-only.
-Status: done (not committed — no commit permission this turn).
-Files changed: `update.md` (new); `AGENT_HANDOFF.md` (this block).
-Versions captured as baseline in `update.md` from `package.json` + `android/`: Angular `^21.2.5`, TypeScript `~5.9.3`, Zone.js `^0.15.1`, RxJS `^7.8.2`, Vite `^7.1.9`, Tailwind `^4.2.2`, Jest `^30.2.0`, Playwright `^1.58.2`, Cypress `^15.3.0`, firebase `^12.13.0`, firebase-tools `^15.18.0`, Capacitor `^8.x`; Android: Gradle 8.14.3 / AGP 8.13.0 / google-services 4.4.4 / compile+target SDK 36 / minSdk 24; Node engines `^20.19 || ^22.12 || >=24` (local Node 24 / npm 11). Documented the accepted `firebase-tools→uuid<11.1.1` advisory (cross-ref `firebase.md`).
-Tests red: none.
-Tests green: none run — doc-only change, no source/build touched.
-Open concerns:
-- `.git` was not present at the repo root this turn (`git rev-parse` failed); could not run `git status`. The worktree itself is intact. Did NOT attempt any git recovery/cleanup. Flag to the user if commit/push is wanted.
-Next agent starts from:
-- `update.md` is the new maintenance schedule; keep its "Registro dei check" table current after each real update cycle. Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
-Do not touch:
-- Do not commit/push without explicit user permission. Do not clean `web9.png` (local-only, ignored).
-
----
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -219,3 +224,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Claude Code — screenshot PNG cleanup:** `git rm`'d the 8 stray `web*.png` (web.png, web2–8) from GitHub + added a `web*.png` `.gitignore` rule; `web9.png` left on disk (local-only). Commit `8fa3f81`.
 - **2026-05-24, Claude Code (Opus 4.7) — tech-debt hooks & CI parity:** removed deprecated husky v9 preamble from `.husky/{pre-commit,post-checkout,post-merge}` and added full Playwright suite (`SKIP_PW=1` opt-out) to `.husky/pre-push`; verified live via commit/push.
 - **2026-05-24, Claude Code (Opus 4.7) — mobile-web `h-dvh` viewport fix:** replaced `h-screen` with `h-dvh` in `src/app.component.html` so mobile sticky toggle/reload bar is visible on initial load; updated `CLAUDE.md`; user-verified in prod.
+- **2026-05-25, Claude Code (Opus 4.7) — initial maintenance schedule (`update.md` doc-only):** created `update.md` 30/60-day check schedule capturing `package.json` + `android/` baseline versions and documenting accepted `firebase-tools→uuid<11.1.1` advisory.
