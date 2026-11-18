@@ -328,7 +328,7 @@
     <!-- Modals -->
     @if (activeModal() !== 'none') {
       <div
-        class="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black p-4 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       >
         <!-- Shift Form Modal -->
         @if (activeModal() === 'form') {
@@ -1406,7 +1406,7 @@
                   {{ 'statistics' | translate }}
                 </h3>
                 <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  Analisi e resoconto delle tue ore e indennità
+                  {{ 'statsSubtitle' | translate }}
                 </p>
               </div>
               <button
@@ -1514,7 +1514,12 @@
                       >
                       <span
                         class="rounded-full bg-indigo-100/50 px-2.5 py-0.5 text-xs font-semibold text-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-400"
-                        >turni</span
+                        >{{
+                          (statsData().totalShifts === 1
+                            ? 'statsShiftSingular'
+                            : 'statsShiftPlural'
+                          ) | translate
+                        }}</span
                       >
                     </div>
                     <div
@@ -1534,7 +1539,7 @@
                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                       </svg>
-                      Dati calcolati in locale con successo
+                      {{ 'statsCalculatedLocally' | translate }}
                     </div>
                   </div>
 
@@ -1553,7 +1558,7 @@
                         {{ statsData().totalHours.toFixed(1) }}
                         <span
                           class="text-xs font-semibold text-slate-400 uppercase dark:text-slate-500"
-                          >ore</span
+                          >{{ 'hours' | translate }}</span
                         >
                       </span>
                     </div>
@@ -1572,7 +1577,7 @@
                           +{{ statsData().totalOvertime.toFixed(1) }}
                           <span
                             class="text-xs font-semibold text-slate-400 uppercase dark:text-slate-500"
-                            >ore</span
+                            >{{ 'hours' | translate }}</span
                           >
                         </span>
                       </div>
@@ -1623,7 +1628,12 @@
                                 styles.labelBg
                               }} {{ styles.text }}"
                             >
-                              {{ count }} turni ({{ percentage.toFixed(0) }}%)
+                              {{ count }}
+                              {{
+                                (count === 1 ? 'statsShiftSingular' : 'statsShiftPlural')
+                                  | translate
+                              }}
+                              ({{ percentage.toFixed(0) }}%)
                             </span>
                           </div>
                           <!-- Proportional visual bar -->
@@ -1717,8 +1727,7 @@
                     {{ 'noData' | translate }}
                   </h4>
                   <p class="mx-auto mt-1.5 max-w-sm text-xs text-slate-400 dark:text-slate-500">
-                    Non ci sono turni pianificati in questo periodo. Usa i filtri temporali o
-                    seleziona un altro intervallo.
+                    {{ 'statsNoShiftsDescription' | translate }}
                   </p>
                 </div>
               }
@@ -1738,9 +1747,9 @@
           </div>
         }
       </div>
-
-      <!-- Toast Container -->
-      <app-toast-container></app-toast-container>
     }
   }
 }
+
+<!-- Toast Container -->
+<app-toast-container></app-toast-container>

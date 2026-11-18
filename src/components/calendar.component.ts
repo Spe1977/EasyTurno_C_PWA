@@ -182,7 +182,7 @@ import { Shift, ShiftColor } from '../shift.model';
               @for (shift of selectedDayShifts(); track shift.id) {
                 <div
                   class="cursor-pointer rounded-lg border-l-4 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:bg-gray-800"
-                  [style.borderLeftColor]="shift.color"
+                  [style.borderLeftColor]="getShiftIndicatorColor(shift)"
                   (click)="onShiftClick(shift)"
                   [attr.data-cy]="'calendar-shift-' + shift.id"
                 >
@@ -256,6 +256,9 @@ import { Shift, ShiftColor } from '../shift.model';
   ],
 })
 export class CalendarComponent {
+  private static readonly CSS_COLOR_REGEX =
+    /^(#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgb|rgba|hsl|hsla)\([^)]+\))$/i;
+
   private readonly COLOR_MAP: Record<ShiftColor, string> = {
     sky: '#0EA5E9',
     green: '#22C55E',
@@ -357,7 +360,23 @@ export class CalendarComponent {
   }
 
   getShiftIndicatorColor(shift: Shift): string {
-    return this.COLOR_MAP[shift.color] ?? shift.color;
+    const rawColor = shift?.color;
+    if (typeof rawColor !== 'string') {
+      return this.COLOR_MAP.slate;
+    }
+
+    const color = rawColor.trim();
+    // Guard against prototype keys (e.g. 'toString') before reading COLOR_MAP.
+    if (Object.hasOwn(this.COLOR_MAP, color)) {
+      return this.COLOR_MAP[color as ShiftColor];
+    }
+
+    if (CalendarComponent.CSS_COLOR_REGEX.test(color)) {
+      return color;
+    }
+
+    // Fall back to slate instead of forwarding unknown nominal tokens that CSS drops as transparent.
+    return this.COLOR_MAP.slate;
   }
 
   formatSelectedDate(): string {

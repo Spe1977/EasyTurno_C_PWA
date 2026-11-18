@@ -136,6 +136,37 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI (Antigravity Swarm)
+Date/time: 2026-11-18T16:03:25+01:00
+Task: Execute Fase 3 of `update.md` (Steps 3.1–3.4: toast container visibility outside modals, Tailwind v4 `bg-black/50` backdrop, Calendar `borderLeftColor` hex mapping, Statistics modal i18n keys + Fase 3 Gate) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done; committed on branch chore/pwa-update-plan (user-authorized).
+Files changed:
+- Modified: `src/app.component.html` (moved `<app-toast-container></app-toast-container>` out of `@if (activeModal() !== 'none')` and `@switch` to root level at line 1755; replaced `bg-opacity-50 ... bg-black` at line 331 with `bg-black/50`; wired Statistics modal copy and singular/plural shift units to `| translate`).
+- Modified: `src/app.component.spec.ts` (+9 TDD unit tests for toast visibility with closed modal / auth screen, `bg-black/50` backdrop, and EN Statistics modal translation + key parity).
+- Modified: `src/assets/i18n/it.json` & `src/assets/i18n/en.json` (+5 symmetric keys: `statsSubtitle`, `statsShiftSingular`, `statsShiftPlural`, `statsCalculatedLocally`, `statsNoShiftsDescription`; `212` leaf keys in exact parity).
+- Modified: `src/components/calendar.component.ts` (bound `[style.borderLeftColor]="getShiftIndicatorColor(shift)"` on selected-day shift card preserving `data-cy`, added `Object.hasOwn` guard, `CSS_COLOR_REGEX`, and `COLOR_MAP.slate` `#64748B` fallback).
+- Modified: `src/components/calendar.component.spec.ts` (+3 TDD unit tests for `'sky'` `borderLeftColor`, all 8 `ShiftColor` keys, and unknown/empty fallback).
+- Added: `playwright/tests/fase3-fixes.spec.ts` (+6 E2E tests covering Steps 3.1–3.4) & Modified: `playwright/tests/helpers.ts` (`createShift` optional `color` param).
+- Modified: `update.md` (checked off Steps 3.1–3.4, added Fase 3 row in `Registro Avanzamento Esecuzioni`), `AGENT_HANDOFF.md` (this block + collapsed `2026-11-18T14:25:00` Fase 0 handoff into Older Handoffs).
+Tests red:
+- Pre-fix TDD baseline: `calendar.component.spec.ts` (`3 failed, 53 passed, 56 total`), `app.component.spec.ts` (`8 failed, 151 passed, 159 total`), `playwright/tests/fase3-fixes.spec.ts` on unpatched HEAD (`6 failed`).
+- Outside Gate (pre-existing): `npm run test:firebase` not re-run (local host lacks Java runtime); `npx tsc -p tsconfig.spec.json --noEmit` pre-existing spec diagnostics unchanged.
+Tests green (verified on final code/test changes before updating `update.md`/`AGENT_HANDOFF.md`):
+- `npm run lint` (0 errors) & `npm run format:check` ("All matched files use Prettier code style!")
+- `npx eslint --no-ignore playwright/tests/fase3-fixes.spec.ts playwright/tests/helpers.ts` (0 errors) & `npx prettier --check` (clean)
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (0 errors)
+- `npm test -- --coverage --watchAll=false` (25/25 suites, 701/701 passed in 6.209 s; 98.32% Stmts / 94.75% Branch / 96.83% Funcs / 99.18% Lines)
+- `npm run build` (4.113 s; Initial total `1.65 MB` raw / `383.21 kB` transfer: `main` `1.58 MB` / `371.76 kB`, `styles` `65.25 kB` / `8.29 kB` including `.bg-black\/50`, `chunk` `8.69 kB` / `3.15 kB`; Lazy `web` `4.51 kB` / `1.14 kB`)
+- `npx jest scripts/check-csp.spec.ts` (19/19 passed in 0.819 s, 0 skipped)
+- `npm run test:pw` (36/36 passed in 49.6 s, including 6/6 in `playwright/tests/fase3-fixes.spec.ts`)
+Open concerns:
+- `src/` still has 3 legacy `flex-shrink-0` and 3 `flex-grow` utilities (verified still emitted by Tailwind `4.3.5` in `dist/styles-*.css`; 0 `*-opacity-*` classes remain).
+- `npm run test:firebase` still awaits an environment with JDK/Java; `Branch` coverage is `94.75%` (target `>=95%` in Step 6.2).
+Next agent starts from: Proceed to Fase 4 (`update.md` Steps 4.1–4.4: remove runtime `@angular/compiler` import in `index.tsx`, decompose `AppComponent`, `@defer` + lazy Firebase loading, bundle budgets & critical CSS).
+Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
+
+---
+
+Agent: Gemini CLI (Antigravity Swarm)
 Date/time: 2026-11-18T15:24:00+01:00
 Task: Execute Fase 2 of `update.md` (Steps 2.1–2.4: Angular 22.2.x, TS ~6.0.3, Tailwind 4.3.x, Firebase 13.4.0, Capacitor 8.x JS patches, clean `npm ci` without `--legacy-peer-deps`) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
 Status: done; committed on branch chore/pwa-update-plan (user-authorized; `npm run test:firebase` blocked locally due to missing Java runtime).
@@ -191,33 +222,6 @@ Open concerns:
 Next agent starts from: Proceed to Fase 2 on `chore/pwa-update-plan` (`update.md` Steps 2.1–2.4: Angular `22.2.x`, `typescript ~6.0.3`, `zone.js ~0.16.x`, `jest-preset-angular ^17.0.3`, Tailwind `4.3.x`, Firebase `13.4.0` + emulator verification, and removing `--legacy-peer-deps` from `.github/workflows/ci.yml` if clean).
 Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
 
----
-
-Agent: Gemini CLI (Antigravity Swarm)
-Date/time: 2026-11-18T14:25:00+01:00
-Task: Execute Fase 0 of `update.md` (Steps 0.1–0.4) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
-Status: done; committed on branch `chore/pwa-update-plan` (user-authorized).
-Files changed:
-- Deleted (`git rm`): `cypress_output.txt`, `easyturno@0.0.0`, `prettier`, `screen2.png`, `cypress.config.ts`, `cypress/tsconfig.json`, `cypress/support/{commands,e2e}.ts`, `cypress/e2e/{advanced-features,calendar-view,offline-functionality,recurring-shifts,shift-management}.cy.ts`
-- Added: `playwright/tests/calendar-offline.spec.ts` (13 E2E tests covering calendar prev/next/today & forward/backward year transitions, >5 badge, real `context.setOffline(true)`/`false` with `easyturno_user_data_v2` persistence, validation, weekly series edit, allowances/stats, dark/light & EN<->IT toggles)
-- Modified: `tsconfig.json` (removed `allowJs`, `jsx`, `paths`; kept `disableTypeScriptVersionCheck: true`), `package.json` & `package-lock.json` (uninstalled `cypress`, `@cypress/angular`, `start-server-and-test` without `--legacy-peer-deps`; removed `cypress:*`/`dev:e2e`/`e2e` scripts; moved `@angular/{build,cli,compiler-cli}`, `@tailwindcss/postcss`, `@capacitor/{cli,android}` to `devDependencies`), `eslint.config.js`, `.gitignore`, `.github/dependabot.yml`, `update.md` (roadmap + checked off Fase 0 & logged execution row), `AGENT_HANDOFF.md` (this block).
-Tests red: none in the Fase 0 Gate; two environment/pre-existing notes:
-- `npm run test:pw` is still blocked in default config because `@playwright/test@1.60.0` expects `chromium_headless_shell-1223` while `~/.cache/ms-playwright` currently has `1255` (browser upgrade/install is scheduled in Fase 1 Step 1.2). All 30/30 Playwright tests (`smoke.spec.ts` 2 + `app-flows.spec.ts` 15 + `calendar-offline.spec.ts` 13) passed live when pointed at cached `chromium_headless_shell-1255`.
-- `npx tsc -p tsconfig.spec.json --noEmit` reports 213 pre-existing typing errors across 11 `*.spec.ts` files (verified identical before and after `tsconfig.json` cleanup).
-Tests green:
-- `npm run lint` (0 errors) & `npx eslint --no-ignore playwright/tests/calendar-offline.spec.ts` (0 errors, 0 warnings)
-- `npm run format:check` & `npx prettier --check playwright/tests/calendar-offline.spec.ts tsconfig.json eslint.config.js package.json`
-- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit`
-- `npm test -- --coverage --watchAll=false` (25/25 suites, 689/689 passed; 98.32% Stmts, 94.73% Branch, 96.83% Funcs, 99.18% Lines)
-- `npm run build` (3.631s; 1.34 MB raw / 310.52 kB transfer) + `npx jest scripts/check-csp.spec.ts` (19/19 passed)
-- `npm audit --omit=dev`: reduced from 62 vulnerabilities to 8 (`2 moderate`, `5 high`, `1 critical` — -87%; remaining Angular 21.2.x runtime + Firebase transitives slated for Fase 2).
-- Playwright E2E: 30/30 passed (23.0s against `ng serve` on `127.0.0.1:3100` using cached `chromium_headless_shell-1255`).
-Open concerns:
-- `npm run test:pw` default invocation needs `npm run test:pw:install` (or Fase 1 Step 1.2 Playwright upgrade + install) to match the Playwright browser revision on disk.
-- `README.md` / `README_IT.md` / `CLAUDE.md` still mention Cypress (intentionally left for Step 6.3 per `update.md`).
-Next agent starts from: Proceed to Fase 1 on `chore/pwa-update-plan` (`update.md` Step 1.1–1.2: lint/format/Jest/Playwright upgrades + `npm run test:pw:install`).
-Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -239,3 +243,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Claude Code (Opus 4.7) — mobile-web `h-dvh` viewport fix:** replaced `h-screen` with `h-dvh` in `src/app.component.html` so mobile sticky toggle/reload bar is visible on initial load; updated `CLAUDE.md`; user-verified in prod.
 - **2026-05-25, Claude Code (Opus 4.7) — initial maintenance schedule (`update.md` doc-only):** created `update.md` 30/60-day check schedule capturing `package.json` + `android/` baseline versions and documenting accepted `firebase-tools→uuid<11.1.1` advisory.
 - **2026-05-30, Claude Code (Opus 4.8) — "reset all data" Firestore sync fix:** wired `ShiftService.deleteAllShifts()` → `UserDataService.clearAll()` → `FirestoreUserDataService.clearShiftData(uid)` so resetting shifts clears `shiftSeries`/`manualShifts`/`shiftOverrides` on Firestore while leaving `devices`/`profile`/`settings` intact; Jest 689/689, lint, build green (merged to `main` in `b4ce8d7`).
+- **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 0 (`update.md` Steps 0.1–0.4) on `chore/pwa-update-plan`:** removed stray root artifacts + Cypress (`cypress/` & deps), cleaned `tsconfig.json`, added `playwright/tests/calendar-offline.spec.ts` (+13 E2E tests), moved build/CLI/Android packages to `devDependencies` (`npm audit --omit=dev` 62 → 8 vuln); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green.

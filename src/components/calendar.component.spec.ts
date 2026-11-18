@@ -298,6 +298,106 @@ describe('CalendarComponent', () => {
 
       expect(indicatorColor).toBe('#123456');
     });
+
+    it('should fall back to slate hex color for missing, unknown, or prototype-key shift colors', () => {
+      const baseShift: Omit<Shift, 'color'> = {
+        id: 'fallback-color',
+        seriesId: 'fallback-color',
+        title: 'Fallback Color',
+        start: '2025-01-20T09:00:00',
+        end: '2025-01-20T17:00:00',
+        isRecurring: false,
+      };
+
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: '' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: undefined as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: 'unknown-token' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: 'toString' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+    });
+
+    it('should render borderLeftColor from COLOR_MAP for nominal shift color sky in selected-day details', () => {
+      const skyShift: Shift = {
+        id: 'sky-1',
+        seriesId: 'sky-1',
+        title: 'Sky Shift',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        color: 'sky',
+        isRecurring: false,
+      };
+
+      fixture.componentRef.setInput('shifts', [skyShift]);
+      component.onDayClick(new Date(2025, 0, 15));
+      fixture.detectChanges();
+
+      const shiftCard = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-cy="calendar-shift-sky-1"]'
+      ) as HTMLElement | null;
+
+      expect(shiftCard).not.toBeNull();
+      const borderLeftColor = shiftCard?.style.borderLeftColor.toLowerCase() ?? '';
+      expect(borderLeftColor).not.toBe('');
+      expect(borderLeftColor).not.toBe('sky');
+      expect(borderLeftColor).not.toBe('transparent');
+      expect(['#0ea5e9', 'rgb(14, 165, 233)']).toContain(borderLeftColor);
+    });
+
+    it('should map all semantic ShiftColor values to valid CSS borderLeftColor values in selected-day details', () => {
+      const colorExpectations: Array<{ token: Shift['color']; expected: string[] }> = [
+        { token: 'sky', expected: ['#0ea5e9', 'rgb(14, 165, 233)'] },
+        { token: 'green', expected: ['#22c55e', 'rgb(34, 197, 94)'] },
+        { token: 'amber', expected: ['#f59e0b', 'rgb(245, 158, 11)'] },
+        { token: 'rose', expected: ['#f43f5e', 'rgb(244, 63, 94)'] },
+        { token: 'indigo', expected: ['#6366f1', 'rgb(99, 102, 241)'] },
+        { token: 'teal', expected: ['#14b8a6', 'rgb(20, 184, 166)'] },
+        { token: 'fuchsia', expected: ['#d946ef', 'rgb(217, 70, 239)'] },
+        { token: 'slate', expected: ['#64748b', 'rgb(100, 116, 139)'] },
+      ];
+
+      const shifts: Shift[] = colorExpectations.map(({ token }, index) => ({
+        id: `color-${token}-${index}`,
+        seriesId: `color-${token}-${index}`,
+        title: `Shift ${token}`,
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        color: token,
+        isRecurring: false,
+      }));
+
+      fixture.componentRef.setInput('shifts', shifts);
+      component.onDayClick(new Date(2025, 0, 15));
+      fixture.detectChanges();
+
+      for (const [index, { token, expected }] of colorExpectations.entries()) {
+        const shiftCard = (fixture.nativeElement as HTMLElement).querySelector(
+          `[data-cy="calendar-shift-color-${token}-${index}"]`
+        ) as HTMLElement | null;
+
+        expect(shiftCard).not.toBeNull();
+        const borderLeftColor = shiftCard?.style.borderLeftColor.toLowerCase() ?? '';
+        expect(expected).toContain(borderLeftColor);
+      }
+    });
   });
 
   describe('Date Formatting', () => {

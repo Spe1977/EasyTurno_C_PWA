@@ -186,24 +186,24 @@ npm run lint && npm run format:check && npm test -- --coverage --watchAll=false 
 Obiettivo: risolvere difetti reali individuati nella lettura diretta del codice su `b4ce8d7` prima di rifattorizzare i componenti.
 
 ### Step 3.1 — Fix visibilità Toast fuori dai modali (`src/app.component.html`)
-- [ ] **Problema rilevato:** in `src/app.component.html:1743`, `<app-toast-container></app-toast-container>` è annidato **dentro** `@if (activeModal() !== 'none')` (chiuso a riga 1744). Quando non ci sono modali aperti (o subito dopo `activeModal.set('none')` al salvataggio/eliminazione/reset/ricerca), i toast non vengono renderizzati nel DOM.
-- [ ] **Fix (TDD):**
-  1. Aggiungere un test unit/E2E che verifichi il rendering del toast a modale chiuso (es. dopo `executeReset()` o ricerca fuori range).
-  2. Spostare `<app-toast-container></app-toast-container>` al livello radice del template `@default` (fuori da `@if (activeModal() !== 'none')`, e valutare la visibilità anche nelle schermate Auth se necessario).
+- [x] **Problema rilevato:** in `src/app.component.html:1743`, `<app-toast-container></app-toast-container>` è annidato **dentro** `@if (activeModal() !== 'none')` (chiuso a riga 1744). Quando non ci sono modali aperti (o subito dopo `activeModal.set('none')` al salvataggio/eliminazione/reset/ricerca), i toast non vengono renderizzati nel DOM.
+- [x] **Fix (TDD):**
+  1. Aggiunti unit test in `src/app.component.spec.ts` e E2E in `playwright/tests/fase3-fixes.spec.ts` che verificano il rendering del toast a modale chiuso (dopo ricerca fuori range e dopo `executeReset()`).
+  2. Spostato `<app-toast-container></app-toast-container>` al livello radice di `src/app.component.html` (fuori da `@if (activeModal() !== 'none')` e fuori da `@switch (authService.state().mode)`, così i toast risultano visibili anche a modale chiuso e nelle schermate Auth/verifica email senza duplicati).
 
 ### Step 3.2 — Fix backdrop modale incompatibile con Tailwind CSS v4
-- [ ] **Problema rilevato:** `src/app.component.html:331` usa `bg-opacity-50 ... bg-black`, utility rimossa in Tailwind v4 (produce sfondo nero pieno opaco invece di semitrasparente).
-- [ ] **Fix:** sostituire con `bg-black/50` e verificare l'assenza di altre classi v3 deprecate (`bg-opacity-*`, ecc.) in tutto `src/`.
+- [x] **Problema rilevato:** `src/app.component.html:331` usa `bg-opacity-50 ... bg-black`, utility rimossa in Tailwind v4 (produce sfondo nero pieno opaco invece di semitrasparente).
+- [x] **Fix:** sostituito con `bg-black/50` (verificato `.bg-black\/50` in `dist/styles-OWYY3EZV.css` e alfa ~0.5 via Playwright/Jest) e verificata l'assenza di altre classi `*-opacity-*` deprecate in tutto `src/` (`0` occorrenze residue).
 
 ### Step 3.3 — Fix bordo colore turni in `CalendarComponent`
-- [ ] **Problema rilevato:** `src/components/calendar.component.ts` riga 237 (`[style.borderLeftColor]="shift.color"`) passa nomi token (`'sky'`, `'amber'`, `'rose'`, ...) anziché valori esadecimali validi CSS, rendendo il bordo sinistro invalido/trasparente nei dettagli del giorno selezionato.
-- [ ] **Fix (TDD):**
-  1. Aggiungere test rosso in `calendar.component.spec.ts` su `borderLeftColor` con turno di colore nominale (`'sky'`).
-  2. Usare `[style.borderLeftColor]="getShiftIndicatorColor(shift)"` (riutilizzando `COLOR_MAP` già presente nello stesso componente).
+- [x] **Problema rilevato:** `src/components/calendar.component.ts` riga 237 (`[style.borderLeftColor]="shift.color"`) passa nomi token (`'sky'`, `'amber'`, `'rose'`, ...) anziché valori esadecimali validi CSS, rendendo il bordo sinistro invalido/trasparente nei dettagli del giorno selezionato.
+- [x] **Fix (TDD):**
+  1. Aggiunti 3 test in `src/components/calendar.component.spec.ts` (red → green) su `borderLeftColor` per `'sky'`, tutte le 8 chiavi `ShiftColor` e fallback sicuro.
+  2. Usato `[style.borderLeftColor]="getShiftIndicatorColor(shift)"` (riutilizzando `COLOR_MAP`, con guard `Object.hasOwn`, validazione `CSS_COLOR_REGEX` e fallback a `COLOR_MAP.slate` `#64748B`), verificato anche via Playwright (`rgb(14, 165, 233)`).
 
 ### Step 3.4 — Rimozione stringhe italiane hardcoded nella modale Statistiche
-- [ ] **Problema rilevato:** in `src/app.component.html` (righe ~1409–1721) risultano stringhe hardcoded in italiano anche quando la lingua è inglese (`"Analisi e resoconto delle tue ore e indennità"`, `"turni"`, `"Dati calcolati in locale con successo"`, `"ore"`, `"Non ci sono turni pianificati in questo periodo..."`).
-- [ ] **Fix:** spostare tutte le stringhe in `src/assets/i18n/it.json` e `src/assets/i18n/en.json` mantenendo parità di chiavi (`207+` chiavi simmetriche) e collegarle con `| translate`.
+- [x] **Problema rilevato:** in `src/app.component.html` (righe ~1409–1721) risultano stringhe hardcoded in italiano anche quando la lingua è inglese (`"Analisi e resoconto delle tue ore e indennità"`, `"turni"`, `"Dati calcolati in locale con successo"`, `"ore"`, `"Non ci sono turni pianificati in questo periodo..."`).
+- [x] **Fix:** spostate tutte le stringhe in `src/assets/i18n/it.json` e `src/assets/i18n/en.json` aggiungendo 5 chiavi simmetriche (`statsSubtitle`, `statsShiftSingular`, `statsShiftPlural`, `statsCalculatedLocally`, `statsNoShiftsDescription`) e riutilizzando `hours`, raggiungendo `212` chiavi foglia in perfetta parità (`onlyIt: []`, `onlyEn: []`), collegate con `| translate` e verificate via Jest + Playwright EN empty/populated.
 
 **Gate Fase 3:**
 ```bash
@@ -343,3 +343,4 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 | 2026-11-18 | Fase 0 (Step 0.1–0.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK, `tsc --noEmit` OK, Jest 25/25 (689/689 pass; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB, Playwright 30/30 (+13 test in `calendar-offline.spec.ts`, eseguiti su cached `chromium_headless_shell-1255`), `audit --omit=dev` 62 → 8 vuln (-87%) |
 | 2026-11-18 | Fase 1 (Step 1.1–1.2) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK (`npm run format` su 4 file `src/`), `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (689/689 pass in 5.85 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB (3.22 s), `npm run test:pw` 30/30 pass (29.8 s), `audit --omit=dev` 8 vuln, `audit` completo 138 → 131 vuln (`critical` 7 → 5, rimosso override `handlebars: 4.7.9`) |
 | 2026-11-18 | Fase 2 (Step 2.1–2.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ⚠️ completata (`test:firebase` bloccato da Java assente) | Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, `zone.js ~0.16.3`, `jest-preset-angular ^17.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2`; `npm ci` pulito senza `--legacy-peer-deps` (rimosso da `ci.yml`); Lint OK, Prettier OK, `tsc --noEmit` & `playwright/tsconfig.json` OK (`tsconfig.spec` invariato a 213 pre-esistenti), Jest 25/25 (689/689 pass in 8.61 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L), `ng build` 1.65 MB raw / 382.97 kB transfer (3.95 s, `styles` 65.25 kB / 8.29 kB), `check-csp` 19/19 pass, Playwright 30/30 pass (39.7 s), `audit --omit=dev` 0 vuln (con override `@grpc/grpc-js: ^1.14.7`), `audit` completo 131 → 72 (`0 critical`); `npm run test:firebase` fallisce localmente per assenza `java` sul host |
+| 2026-11-18 | Fase 3 (Step 3.1–3.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | `<app-toast-container>` spostato fuori da `@if (activeModal() !== 'none')` e `@switch`; backdrop `bg-black/50` (`0` classi `*-opacity-*` residue in `src/`); `CalendarComponent` `borderLeftColor` mappato a hex via `getShiftIndicatorColor(shift)`; i18n Statistiche completo (`212/212` chiavi simmetriche `it.json`/`en.json`); Lint OK, Prettier OK, `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (701/701 pass in 6.21 s; 98.32%S / 94.75%B / 96.83%F / 99.18%L), `ng build` 1.65 MB raw / 383.21 kB transfer (4.11 s), `check-csp` 19/19 pass, Playwright `npm run test:pw` 36/36 pass (49.6 s, inclusi 6 nuovi test in `fase3-fixes.spec.ts`) |

@@ -6,12 +6,14 @@ import { ToastService } from './services/toast.service';
 import { NotificationService } from './services/notification.service';
 import { CryptoService } from './services/crypto.service';
 import { FirestoreUserDataService } from './services/firestore-user-data.service';
-import { AuthService } from './services/auth.service';
+import { AuthService, AuthState } from './services/auth.service';
 import { SyncService } from './services/sync.service';
 import { SwUpdateService } from './services/sw-update.service';
 import { DatePipe, DOCUMENT } from '@angular/common';
 import { signal } from '@angular/core';
 import { Shift, ShiftColor } from './shift.model';
+import translationsIt from './assets/i18n/it.json';
+import translationsEn from './assets/i18n/en.json';
 
 describe('AppComponent - Integration Tests', () => {
   let component: AppComponent;
@@ -2467,6 +2469,258 @@ describe('AppComponent - Integration Tests', () => {
             jest.useRealTimers();
           }
         });
+      });
+    });
+  });
+
+  describe('Fase 3 UI Fixes (Steps 3.1, 3.2, 3.4)', () => {
+    const setupAuthMode = (initialMode: AuthState['mode'] = 'guest') => {
+      const authState = signal<AuthState>({
+        mode: initialMode,
+        email: initialMode === 'email-not-verified' ? 'user@example.com' : undefined,
+      });
+      component.authService = {
+        ...(component.authService as unknown as Record<string, unknown>),
+        state: authState.asReadonly(),
+        isAuthenticated: () => authState().mode === 'authenticated',
+        isGuest: () => authState().mode === 'guest',
+        hasPasswordProvider: () => false,
+      } as unknown as AuthService;
+      return authState;
+    };
+
+    describe('Step 3.1: Toast container visibility outside activeModal and across auth modes', () => {
+      it('renders a single app-toast-container when activeModal is none', () => {
+        setupAuthMode('guest');
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        expect(component.activeModal()).toBe('none');
+        expect(host.querySelectorAll('app-toast-container').length).toBe(1);
+      });
+
+      it('renders toast in the DOM after executeReset() closes the modal', () => {
+        jest.useFakeTimers();
+        try {
+          setupAuthMode('guest');
+          fixture.detectChanges();
+
+          component.confirmReset();
+          fixture.detectChanges();
+          component.executeReset();
+          fixture.detectChanges();
+
+          const host = fixture.nativeElement as HTMLElement;
+          expect(component.activeModal()).toBe('none');
+          const alertEl = host.querySelector('app-toast-container [role="alert"]');
+          expect(alertEl).not.toBeNull();
+          expect(alertEl?.textContent).toContain(translationService.translate('resetSuccess'));
+        } finally {
+          toastService.dismissAll();
+          jest.useRealTimers();
+        }
+      });
+
+      it('renders toast in the DOM after out-of-range search closes the modal', () => {
+        jest.useFakeTimers();
+        try {
+          setupAuthMode('guest');
+          fixture.detectChanges();
+
+          component.openModal('searchDate');
+          component.searchDateInput.set('1900-01-01');
+          fixture.detectChanges();
+
+          component.handleDateSearch();
+          fixture.detectChanges();
+
+          const host = fixture.nativeElement as HTMLElement;
+          expect(component.activeModal()).toBe('none');
+          const alertEl = host.querySelector('app-toast-container [role="alert"]');
+          expect(alertEl).not.toBeNull();
+          expect(alertEl?.textContent).toContain(
+            translationService.translate('searchOutsideRange')
+          );
+        } finally {
+          toastService.dismissAll();
+          jest.useRealTimers();
+        }
+      });
+
+      it('renders a single app-toast-container in auth and email-verification modes too', () => {
+        jest.useFakeTimers();
+        try {
+          const authState = setupAuthMode('unauthenticated');
+          fixture.detectChanges();
+
+          const host = fixture.nativeElement as HTMLElement;
+          expect(host.querySelector('app-auth-screen')).not.toBeNull();
+          expect(host.querySelectorAll('app-toast-container').length).toBe(1);
+
+          toastService.error('Auth screen error');
+          fixture.detectChanges();
+          expect(host.querySelector('app-toast-container [role="alert"]')?.textContent).toContain(
+            'Auth screen error'
+          );
+
+          toastService.dismissAll();
+          authState.set({ mode: 'email-not-verified', email: 'verify@example.com' });
+          fixture.detectChanges();
+
+          expect(host.querySelector('app-email-verification-screen')).not.toBeNull();
+          expect(host.querySelectorAll('app-toast-container').length).toBe(1);
+
+          toastService.info('Verification info');
+          fixture.detectChanges();
+          expect(host.querySelector('app-toast-container [role="alert"]')?.textContent).toContain(
+            'Verification info'
+          );
+        } finally {
+          toastService.dismissAll();
+          jest.useRealTimers();
+        }
+      });
+
+      it('keeps exactly one app-toast-container when a modal is open', () => {
+        setupAuthMode('guest');
+        component.openModal('settings');
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        expect(host.querySelectorAll('app-toast-container').length).toBe(1);
+      });
+    });
+
+    describe('Step 3.2: Modal backdrop Tailwind v4 opacity', () => {
+      it('renders modal backdrop with bg-black/50 and without deprecated bg-opacity-50', () => {
+        setupAuthMode('guest');
+        component.openModal('form');
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        const backdrop = host.querySelector('.fixed.inset-0.z-50') as HTMLElement | null;
+
+        expect(backdrop).not.toBeNull();
+        expect(backdrop!.classList.contains('bg-black/50')).toBe(true);
+        expect(backdrop!.classList.contains('bg-opacity-50')).toBe(false);
+        expect(backdrop!.classList.contains('bg-black')).toBe(false);
+      });
+    });
+
+    describe('Step 3.4: Statistics modal i18n and translation key parity', () => {
+      it('renders Statistics modal in English without hardcoded Italian leftovers when populated', () => {
+        setupAuthMode('guest');
+        translationService.setLanguage('en');
+        shiftService.deleteAllShifts();
+
+        shiftService.addShift({
+          title: 'Morning',
+          start: '2025-10-01T08:00:00',
+          end: '2025-10-01T16:00:00',
+          color: 'sky',
+          isRecurring: false,
+          overtimeHours: 2,
+          allowances: [{ name: 'Meal', amount: 15 }],
+        });
+        shiftService.addShift({
+          title: 'Morning',
+          start: '2025-10-02T08:00:00',
+          end: '2025-10-02T16:00:00',
+          color: 'sky',
+          isRecurring: false,
+        });
+        shiftService.addShift({
+          title: 'Night',
+          start: '2025-10-03T22:00:00',
+          end: '2025-10-04T06:00:00',
+          color: 'indigo',
+          isRecurring: false,
+        });
+
+        component.statsStartDate.set('2025-10-01');
+        component.statsEndDate.set('2025-10-31');
+        component.openStatistics();
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        const modal = host.querySelector('.modal-fade-in') as HTMLElement | null;
+        expect(modal).not.toBeNull();
+
+        const text = modal!.textContent ?? '';
+        expect(text).toContain('Statistics');
+        expect(text).toContain('hours');
+        expect(text).toContain('2 shifts (67%)');
+        expect(text).toContain('1 shift (33%)');
+
+        expect(text).not.toContain('Analisi e resoconto');
+        expect(text).not.toContain('Dati calcolati in locale');
+        expect(text).not.toContain('Non ci sono turni pianificati');
+        expect(text).not.toMatch(/\bturn[oi]\b/i);
+        expect(text).not.toMatch(/\bore\b/i);
+
+        // Subtitle and local badge must also translate cleanly to Italian when switched back
+        translationService.setLanguage('it');
+        fixture.detectChanges();
+        const itText = modal!.textContent ?? '';
+        expect(itText).toContain('Analisi e resoconto');
+        expect(itText).toContain('Dati calcolati in locale');
+        expect(itText).toContain('ore');
+        expect(itText).toContain('2 turni (67%)');
+        expect(itText).toContain('1 turno (33%)');
+      });
+
+      it('renders Statistics modal empty state in English without hardcoded Italian leftovers', () => {
+        setupAuthMode('guest');
+        translationService.setLanguage('en');
+        shiftService.deleteAllShifts();
+
+        component.statsStartDate.set('2025-10-01');
+        component.statsEndDate.set('2025-10-31');
+        component.openStatistics();
+        fixture.detectChanges();
+
+        const host = fixture.nativeElement as HTMLElement;
+        const modal = host.querySelector('.modal-fade-in') as HTMLElement | null;
+        expect(modal).not.toBeNull();
+
+        const text = modal!.textContent ?? '';
+        expect(text).toContain(translationService.translate('noData'));
+        expect(text).not.toContain('Analisi e resoconto');
+        expect(text).not.toContain('Non ci sono turni pianificati');
+        expect(text).not.toMatch(/\bturn[oi]\b/i);
+        expect(text).not.toMatch(/\bore\b/i);
+
+        const emptyDescEn = modal!.querySelector('p.max-w-sm')?.textContent?.trim() ?? '';
+        expect(emptyDescEn.length).toBeGreaterThan(10);
+
+        translationService.setLanguage('it');
+        fixture.detectChanges();
+        const emptyDescIt = modal!.querySelector('p.max-w-sm')?.textContent?.trim() ?? '';
+        expect(emptyDescIt).toContain('Non ci sono turni pianificati');
+        expect(emptyDescEn).not.toBe(emptyDescIt);
+      });
+
+      it('maintains exact symmetric key parity between it.json and en.json', () => {
+        const collectLeafKeys = (obj: Record<string, unknown>, prefix = ''): string[] => {
+          const keys: string[] = [];
+          for (const [k, v] of Object.entries(obj)) {
+            const path = prefix ? `${prefix}.${k}` : k;
+            if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+              keys.push(...collectLeafKeys(v as Record<string, unknown>, path));
+            } else {
+              expect(typeof v).toBe('string');
+              expect((v as string).trim().length).toBeGreaterThan(0);
+              keys.push(path);
+            }
+          }
+          return keys.sort();
+        };
+
+        const itKeys = collectLeafKeys(translationsIt as Record<string, unknown>);
+        const enKeys = collectLeafKeys(translationsEn as Record<string, unknown>);
+
+        expect(itKeys).toEqual(enKeys);
+        expect(itKeys.length).toBeGreaterThanOrEqual(210);
       });
     });
   });

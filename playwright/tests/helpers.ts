@@ -26,6 +26,9 @@ export async function bootEmptyApp(page: Page): Promise<void> {
   await expect(page.locator('[data-cy="view-toggle"]')).toBeVisible();
 }
 
+export type ShiftColorOption =
+  'sky' | 'green' | 'amber' | 'rose' | 'indigo' | 'teal' | 'fuchsia' | 'slate';
+
 export async function createShift(
   page: Page,
   options: {
@@ -34,6 +37,7 @@ export async function createShift(
     startTime?: string;
     endTime?: string;
     overtimeHours?: string;
+    color?: ShiftColorOption;
   }
 ): Promise<void> {
   const {
@@ -42,6 +46,7 @@ export async function createShift(
     startTime = '08:00',
     endTime = '12:00',
     overtimeHours,
+    color,
   } = options;
 
   await page.locator('[data-cy="add-shift-btn"]').first().click();
@@ -52,6 +57,10 @@ export async function createShift(
   await page.locator('[data-cy="shift-start-time"]').fill(startTime);
   await page.locator('[data-cy="shift-end-date"]').fill(date);
   await page.locator('[data-cy="shift-end-time"]').fill(endTime);
+
+  if (color) {
+    await page.locator(`.modal-fade-in button[aria-label="${color}"]`).click();
+  }
 
   if (overtimeHours) {
     await page.locator('[data-cy="overtime-hours-input"]').fill(overtimeHours);
