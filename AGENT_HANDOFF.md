@@ -136,6 +136,40 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI (Antigravity Swarm)
+Date/time: 2026-11-18T15:24:00+01:00
+Task: Execute Fase 2 of `update.md` (Steps 2.1–2.4: Angular 22.2.x, TS ~6.0.3, Tailwind 4.3.x, Firebase 13.4.0, Capacitor 8.x JS patches, clean `npm ci` without `--legacy-peer-deps`) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done; committed on branch chore/pwa-update-plan (user-authorized; `npm run test:firebase` blocked locally due to missing Java runtime).
+Files changed:
+- Modified: `package.json` & `package-lock.json` (Angular `22.2.6` runtime/compiler & `22.2.7` cli/build, removed `@angular/platform-browser-dynamic` and unused direct `vite`; `typescript@~6.0.3`, `zone.js@~0.16.3`, `jest-preset-angular@^17.0.3`; `tailwindcss@^4.3.5`, `@tailwindcss/postcss@^4.3.5`, `postcss@^8.5.33`; `firebase@^13.4.0`, `firebase-tools@^15.36.0`; `@capacitor/{core,cli,android}@^8.6.2` and plugin patches `app@^8.1.2`, `haptics@^8.0.2`, `local-notifications@^8.3.1`, `push-notifications@^8.1.3`, `share@^8.0.3`, `splash-screen@^8.0.2`, `status-bar@^8.0.4`; added `"overrides": { "@grpc/grpc-js": "^1.14.7" }` for Node-only `@firebase/firestore` dependency to clear `GHSA-m9gg-hp2v-232j` / `GHSA-f596-whhp-79r4` in `--omit=dev`).
+- Modified: `.github/workflows/ci.yml` (removed `--legacy-peer-deps` from both `npm ci` steps on lines 28 and 76).
+- Modified: `setup-jest.js` (migrated to `BrowserTestingModule`, `platformBrowserTesting` from `@angular/platform-browser/testing` + `import '@angular/compiler'`).
+- Modified: `tsconfig.json` (removed `disableTypeScriptVersionCheck: true`; kept Angular 22 `strictTemplates` active).
+- Modified: `src/components/toast-container.component.ts` (added `ChangeDetectionStrategy.Eager` via Angular v22 migration).
+- Modified: `src/app.component.html` (added `?? 0` fallback at lines 1613 and 1658 for Angular 22 strict template checking under `noUncheckedIndexedAccess`).
+- Modified: `update.md` (checked off Steps 2.1–2.4 except `npm run test:firebase` left unchecked with host Java note, documented `@grpc/grpc-js` override in Appendice A, added Fase 2 row in `Registro Avanzamento Esecuzioni`), `AGENT_HANDOFF.md` (this block + collapsed `2026-05-30` handoff into Older Handoffs).
+Tests red:
+- `npm run test:firebase`: blocked locally (`Error: Could not spawn java -version` — no `java` runtime installed on host, identical to baseline; emulator suite cannot execute until run in an environment with JDK).
+- `npx tsc -p tsconfig.spec.json --noEmit`: 213 pre-existing errors across 11 `*.spec.ts` files (0 new TypeScript 6 errors vs baseline).
+Tests green:
+- `npm ci` without `--legacy-peer-deps` (`added 1408 packages, and audited 1415 packages in 11s`)
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (0 errors)
+- `npm run lint` (0 errors) & `npm run format:check` ("All matched files use Prettier code style!")
+- `npm test -- --coverage --watchAll=false` (25/25 suites, 689/689 passed in 8.605 s; 98.32% Stmts / 94.73% Branch / 96.83% Funcs / 99.18% Lines)
+- `npm run build` (3.946 s; Initial total `1.65 MB` raw / `382.97 kB` transfer: `main` `1.58 MB` / `371.52 kB`, `styles` `65.25 kB` / `8.29 kB`, `chunk` `8.69 kB` / `3.15 kB`; Lazy `web` `4.51 kB` / `1.14 kB`; Tailwind v4 `@layer`, `.dark`, and all 8 shift palettes verified in `dist/styles-*.css`)
+- `npx jest scripts/check-csp.spec.ts` (19/19 passed in 1.169 s, including `dist/index.html` & `dist/_headers`, 0 skipped)
+- `npm run test:pw` (30/30 passed in 39.7 s)
+- `npm audit --omit=dev --audit-level=high` (0 vulnerabilities; full `npm audit`: 72 total, down from 131, 0 critical)
+Open concerns:
+- `npm run test:firebase` has not run against live Auth/Firestore emulators yet because no JDK/Java is installed on this host.
+- Initial bundle grew from `1.34 MB` / `310.52 kB` to `1.65 MB` / `382.97 kB` after Firebase `13.4.0` (targeted for reduction in Fase 4 via JIT `@angular/compiler` removal + `@defer` + lazy Firebase imports).
+- `firebase@13.4.0` subpackages declare `engines.node: >=24.12.0` (`npm ci` on CI Node `22.x` prints `EBADENGINE` warnings unless Node is bumped to `24.x` in Fase 6 Step 6.1).
+- `tsconfig.spec.json` still has 213 pre-existing spec diagnostics outside the Gate.
+Next agent starts from: Optionally run `npm run test:firebase` on a machine/CI runner with Java installed, and proceed to Fase 3 (`update.md` Steps 3.1–3.4: toast container placement outside activeModal, Tailwind v4 `bg-black/50` modal backdrop, Calendar `borderLeftColor` hex mapping, stats modal i18n keys).
+Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
+
+---
+
+Agent: Gemini CLI (Antigravity Swarm)
 Date/time: 2026-11-18T14:41:00+01:00
 Task: Execute Fase 1 of `update.md` (Steps 1.1–1.2) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
 Status: done; committed on branch chore/pwa-update-plan (user-authorized).
@@ -184,27 +218,6 @@ Open concerns:
 Next agent starts from: Proceed to Fase 1 on `chore/pwa-update-plan` (`update.md` Step 1.1–1.2: lint/format/Jest/Playwright upgrades + `npm run test:pw:install`).
 Do not touch: `web9.png` (local-only if present), external folder `EasyTurno_C_PWA`, `android/` (excluded per `update.md` web-only scope).
 
----
-
-Agent: Claude Code (Opus 4.8)
-Date/time: 2026-05-30T17:30:00+02:00
-Task: Fix user-reported bug — "RESETTA TUTTI I DATI" (reset all data) in Settings wiped shifts locally but, for users with an active (authenticated) account, all deleted shifts reappeared on reload because the reset never propagated to Firestore; the realtime `onSnapshot` listeners restored them.
-Status: done. Committed and pushed to `claude/firebase-data-reset-sync-fOJuQ` (this is a web session whose explicit task is to deliver the fix on that branch).
-Root cause: `ShiftService.deleteAllShifts()` only called `userDataService.setState(EMPTY_SHIFT_DATA_STATE)` — a local-only wipe. The Firestore docs under `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` were never deleted, so on the next reload `FirestoreUserDataService.start()` re-hydrated them and `UserDataService`'s effect mirrored them back to local state. `deleteUserDataTree` existed but was wired only into account deletion.
-Fix (3 source files):
-- `firestore-user-data.service.ts`: new `clearShiftData(uid)` — batch-deletes only the three shift collections (`shiftSeries`, `manualShifts`, `shiftOverrides`), deliberately leaving `devices`/`profile`/`settings` intact (unlike `deleteUserDataTree`, which is the full account-deletion nuke).
-- `user-data.service.ts`: new `clearAll()` — sets local state to EMPTY synchronously, then, when authenticated, awaits `firestore.clearShiftData(uid)`.
-- `shift.service.ts`: `deleteAllShifts()` now calls `void this.userDataService.clearAll()` instead of `setState(EMPTY...)`.
-No-resurrection reasoning: local wipe is synchronous; the `UserDataService` effect tracks `firestore.state()` (not local `_state`), so the local empty isn't overwritten until the cloud delete's snapshot fires empty too → consistent. Account-deletion path (`clearLocalAccountData`) is unaffected: it runs after `deleteAccount()` (which already calls `deleteUserDataTree` + `deleteUser`), so by then auth is no longer authenticated and `clearAll` issues no redundant cloud delete.
-Files changed: `src/services/firestore-user-data.service.ts` (+spec), `src/services/user-data.service.ts` (+spec), `src/services/shift.service.ts`, `AGENT_HANDOFF.md` (this block).
-Tests red: none.
-Tests green: full Jest suite 689/689 (was 686; +3 new: `clearShiftData` collection-scope test, `clearAll` authenticated + guest tests); `npm run lint` clean; `npm run build` OK.
-Open concerns:
-- Behavior verified by unit tests + build only; no authenticated browser/E2E run (Firestore deletion path requires a real logged-in session). Recommend a quick manual check on a real account: add shifts → reset → reload → confirm they stay gone.
-- The environment's `grep -n` line numbers were unreliable this session (shell output layer glitching); all edits were verified by re-reading file content, not by trusting line numbers.
-Next agent starts from: fix is on `claude/firebase-data-reset-sync-fOJuQ`. If the user wants it in production it must be merged to `main` (triggers Cloudflare Pages deploy).
-Do not touch: do not delete `web9.png` (local-only, ignored).
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -225,3 +238,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Claude Code (Opus 4.7) — tech-debt hooks & CI parity:** removed deprecated husky v9 preamble from `.husky/{pre-commit,post-checkout,post-merge}` and added full Playwright suite (`SKIP_PW=1` opt-out) to `.husky/pre-push`; verified live via commit/push.
 - **2026-05-24, Claude Code (Opus 4.7) — mobile-web `h-dvh` viewport fix:** replaced `h-screen` with `h-dvh` in `src/app.component.html` so mobile sticky toggle/reload bar is visible on initial load; updated `CLAUDE.md`; user-verified in prod.
 - **2026-05-25, Claude Code (Opus 4.7) — initial maintenance schedule (`update.md` doc-only):** created `update.md` 30/60-day check schedule capturing `package.json` + `android/` baseline versions and documenting accepted `firebase-tools→uuid<11.1.1` advisory.
+- **2026-05-30, Claude Code (Opus 4.8) — "reset all data" Firestore sync fix:** wired `ShiftService.deleteAllShifts()` → `UserDataService.clearAll()` → `FirestoreUserDataService.clearShiftData(uid)` so resetting shifts clears `shiftSeries`/`manualShifts`/`shiftOverrides` on Firestore while leaving `devices`/`profile`/`settings` intact; Jest 689/689, lint, build green (merged to `main` in `b4ce8d7`).

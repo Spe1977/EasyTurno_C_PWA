@@ -139,42 +139,40 @@ npm run lint && npm run format:check && npm test -- --coverage --watchAll=false 
 Obiettivo: portare l'applicazione ad Angular `22.2.x`, Tailwind `4.3.x` e Firebase `13.4.x` rispettando rigorosamente i `peerDependencies` (senza forzare versioni incompatibili come TypeScript 7).
 
 ### Step 2.1 — Upgrade Angular `21.2.x` → `22.2.x` (assorbe PR `#41`, `#30`, `#32`, `#35`)
-- [ ] Verificare le note ufficiali di migrazione su `https://update.angular.dev` (21 → 22).
-- [ ] Eseguire la migrazione guidata tramite Angular CLI:
+- [x] Verificare le note ufficiali di migrazione su `https://update.angular.dev` (21 → 22).
+- [x] Eseguire la migrazione guidata tramite Angular CLI:
   ```bash
-  npx ng update @angular/core@22 @angular/cli@22
+  npx ng update @angular/core@22 @angular/cli@22 --allow-dirty
   ```
-- [ ] Verificare/allineare le versioni core in base ai `peerDependencies` verificati di Angular `22.2.6`/`22.2.7`:
-  - `@angular/{core,common,compiler,compiler-cli,forms,platform-browser,platform-browser-dynamic}`: `^22.2.6`
+  *(Migrazioni applicate: `ChangeDetectionStrategy.Eager` su `src/components/toast-container.component.ts`; rimosso `disableTypeScriptVersionCheck` e conflitto `NG4003` da `tsconfig.json` mantenendo `strictTemplates` attivo tramite fallback `?? 0` in `src/app.component.html:1613,1658`; aggiornato `setup-jest.js` a `BrowserTestingModule`/`platformBrowserTesting`.)*
+- [x] Verificare/allineare le versioni core in base ai `peerDependencies` verificati di Angular `22.2.6`/`22.2.7`:
+  - `@angular/{core,common,compiler,compiler-cli,forms,platform-browser}`: `^22.2.6` *(rimosso `@angular/platform-browser-dynamic` dopo migrazione `setup-jest.js`)*
   - `@angular/{cli,build}`: `^22.2.7`
   - `typescript`: **`~6.0.3`** (`@angular/compiler-cli@22.2.6` richiede `>=6.0 <6.1` — **NON** salire a `7.0.2`)
-  - `zone.js`: **`~0.16.2`** / `0.16.3` (richiesto solo da `setup-jest.js` per TestBed; in runtime l'app usa già `provideZonelessChangeDetection()`)
-  - `vite`: allineato a `^8.3.x` (o lasciato gestire a `@angular/build@22.2.7` se non serve come dipendenza diretta)
-  - `jest-preset-angular`: aggiornare a **`^17.0.3`** (compatibile con `@angular/core >=20 <23` e `typescript >=5.8`).
-- [ ] Eseguire `npx tsc --noEmit` (e su `tsconfig.spec.json`) per verificare che TypeScript 6 non introduca nuovi errori di tipizzazione.
+  - `zone.js`: **`~0.16.3`** (richiesto solo da `setup-jest.js` per TestBed; in runtime l'app usa già `provideZonelessChangeDetection()`)
+  - `vite`: rimossa la dipendenza diretta inutilizzata (gestita da `@angular/build@22.2.7`)
+  - `jest-preset-angular`: aggiornato a **`^17.0.3`** (compatibile con `@angular/core >=20 <23` e `typescript >=5.8`).
+- [x] Eseguire `npx tsc --noEmit` (`0` errori) e `npx tsc -p tsconfig.spec.json --noEmit` (`213` errori pre-esistenti in 11 spec, `0` nuovi errori introdotti da TypeScript 6).
 
 ### Step 2.2 — Aggiornamento Tailwind CSS `4.3.x`
-- [ ] Aggiornare `tailwindcss` (`4.3.0 → 4.3.5`), `@tailwindcss/postcss` (`4.3.0 → 4.3.5`) e `postcss` (`8.5.14 → 8.5.33`).
-- [ ] Verificare il file CSS generato (`dist/styles-*.css`) e il corretto rendering di temi chiaro/scuro e palette colori dei turni.
+- [x] Aggiornare `tailwindcss` (`^4.2.2 → ^4.3.5`), `@tailwindcss/postcss` (`^4.2.2 → ^4.3.5`) e `postcss` (`^8.5.6 → ^8.5.33`).
+- [x] Verificare il file CSS generato (`dist/styles-OWYY3EZV.css`, `65.25 kB` raw / `8.29 kB` transfer) con `@layer`, `.dark` (`474` match) e tutte le 8 palette turni.
 
 ### Step 2.3 — Aggiornamento Firebase SDK `12.13.0` → `13.4.0`
-- [ ] Consultare le release notes di `firebase@13.x` per eventuali breaking changes su:
-  - `firebase/app` (`initializeApp`, `FirebaseError`)
-  - `firebase/auth` (`setPersistence`, `browserLocalPersistence`, `signInWithPopup`, `onAuthStateChanged`, `reauthenticateWithCredential`, `deleteUser`)
-  - `firebase/firestore` (`initializeFirestore`, `persistentLocalCache`, `onSnapshot`, `writeBatch`, `serverTimestamp`)
-- [ ] Aggiornare `firebase` a `^13.4.0` (e `firebase-tools` dev-only all'ultima patch `15.36.0` se compatibile con Node CI).
-- [ ] Aggiornare eventuali mock in `setup-jest.js` se cambiano firme o export dell'SDK.
+- [x] Consultare le release notes e i `.d.ts` di `firebase@13.4.0` (`firebase/app`, `firebase/auth`, `firebase/firestore`): nessuna breaking change su simboli/firme usati dall'app.
+- [x] Aggiornare `firebase` a `^13.4.0` e `firebase-tools` dev-only a `^15.36.0`.
+- [x] Verificare i mock in `setup-jest.js` (nessuna modifica necessaria alle firme Firebase).
 - [ ] Verificare obbligatoriamente la sync reale con gli emulatori locali:
   ```bash
   npm run test:firebase
   ```
-- [ ] Verificare i test CSP in `scripts/check-csp.spec.ts` dopo `ng build` (assicurarsi che `firebase@13` non richieda nuovi domini in `connect-src` / `script-src` / `frame-src`).
+  *(Bloccato su questo host locale: `Error: Could not spawn java -version` — nessun runtime Java installato; stesso stato della baseline, da eseguire in ambiente con JDK o CI.)*
+- [x] Verificare i test CSP in `scripts/check-csp.spec.ts` dopo `ng build` (`19/19 passed`, nessuna nuova origine richiesta da `firebase@13.4.0`).
 
 ### Step 2.4 — Verifica Peer Dependencies, `--legacy-peer-deps` e `npm audit`
-- [ ] Testare se `npm install` (rigenerando `package-lock.json`) risolve senza `--legacy-peer-deps`:
-  - se pulito, rimuovere `--legacy-peer-deps` da `.github/workflows/ci.yml` per avere verifiche peer strette in CI.
-- [ ] Allineare i pacchetti JS `@capacitor/*` a `8.6.x` / ultime patch `8.x` (solo per risolvere l'advisory `critical` su `@capacitor/android` `8.0.0–8.3.4`, senza toccare `android/`).
-- [ ] Rieseguire `npm audit --omit=dev --audit-level=high` e verificare **0 vulnerabilità high/critical** nelle dipendenze di produzione.
+- [x] Verificare `npm install` e `npm ci` puliti **senza** `--legacy-peer-deps` e rimuovere `--legacy-peer-deps` da `.github/workflows/ci.yml` (righe 28 e 76).
+- [x] Allineare i pacchetti JS `@capacitor/*` alle ultime patch `8.x` (`core`/`cli`/`android` `^8.6.2`, `app@^8.1.2`, `haptics@^8.0.2`, `local-notifications@^8.3.1`, `push-notifications@^8.1.3`, `share@^8.0.3`, `splash-screen@^8.0.2`, `status-bar@^8.0.4`, senza toccare `android/`).
+- [x] Aggiunto `"overrides": { "@grpc/grpc-js": "^1.14.7" }` (usato solo dal path Node di `@firebase/firestore@4.20.0`, escluso dal bundle browser) per risolvere `GHSA-m9gg-hp2v-232j` / `GHSA-f596-whhp-79r4` e verificare `npm audit --omit=dev --audit-level=high` (**`0` vulnerabilità**).
 
 **Gate Fase 2:**
 ```bash
@@ -326,6 +324,7 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 ### Rischi noti registrati dalla baseline precedente
 - **`firebase-tools` → `uuid <11.1.1` (GHSA-w5hq-g745-h8pq):** 6 advisory `moderate` transitive; CLI dev/release-only senza esposizione runtime nella PWA distribuita. Rivalutare man mano che `firebase-tools` aggiorna le proprie dipendenze.
 - **Override `handlebars: 4.7.9` in `package.json`:** ✅ rimosso in Fase 1 Step 1.2 (solo `ts-jest` dipendeva da `handlebars`; `ts-jest@29.4.15` richiede `^4.7.10`, risolvendo 2 advisory `critical` + 1 `moderate`).
+- **Override `@grpc/grpc-js: ^1.14.7` in `package.json`:** introdotto in Fase 2 Step 2.4 perché `@firebase/firestore@4.20.0` (`firebase@13.4.0`) dichiara ancora `"@grpc/grpc-js": "~1.9.0"` (`<=1.13.5` affetto da `GHSA-m9gg-hp2v-232j` / `GHSA-f596-whhp-79r4` `high`). `@grpc/grpc-js` è usato solo in Node (`index.node.mjs`, assente dal bundle PWA); rimovibile appena `@firebase/firestore` aggiornerà il range a `>=1.13.6`.
 
 ---
 
@@ -343,3 +342,4 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 | 2026-11-18 | Baseline su `main@b4ce8d7` | Gemini (Antigravity) | baseline | Lint OK, Prettier OK, Jest 25/25 (687 pass, 2 skip pre-build; Branch 94.73%), `ng build` 1.34 MB raw / 310.52 kB transfer (`@angular/compiler` 1008.1 KiB), `audit --omit=dev` 62 vuln, Playwright Chromium 1223 da installare |
 | 2026-11-18 | Fase 0 (Step 0.1–0.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK, `tsc --noEmit` OK, Jest 25/25 (689/689 pass; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB, Playwright 30/30 (+13 test in `calendar-offline.spec.ts`, eseguiti su cached `chromium_headless_shell-1255`), `audit --omit=dev` 62 → 8 vuln (-87%) |
 | 2026-11-18 | Fase 1 (Step 1.1–1.2) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK (`npm run format` su 4 file `src/`), `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (689/689 pass in 5.85 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB (3.22 s), `npm run test:pw` 30/30 pass (29.8 s), `audit --omit=dev` 8 vuln, `audit` completo 138 → 131 vuln (`critical` 7 → 5, rimosso override `handlebars: 4.7.9`) |
+| 2026-11-18 | Fase 2 (Step 2.1–2.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ⚠️ completata (`test:firebase` bloccato da Java assente) | Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, `zone.js ~0.16.3`, `jest-preset-angular ^17.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2`; `npm ci` pulito senza `--legacy-peer-deps` (rimosso da `ci.yml`); Lint OK, Prettier OK, `tsc --noEmit` & `playwright/tsconfig.json` OK (`tsconfig.spec` invariato a 213 pre-esistenti), Jest 25/25 (689/689 pass in 8.61 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L), `ng build` 1.65 MB raw / 382.97 kB transfer (3.95 s, `styles` 65.25 kB / 8.29 kB), `check-csp` 19/19 pass, Playwright 30/30 pass (39.7 s), `audit --omit=dev` 0 vuln (con override `@grpc/grpc-js: ^1.14.7`), `audit` completo 131 → 72 (`0 critical`); `npm run test:firebase` fallisce localmente per assenza `java` sul host |
