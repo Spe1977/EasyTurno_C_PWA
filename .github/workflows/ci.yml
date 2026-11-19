@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [22.x]
+        node-version: [22.x, 24.x]
 
     steps:
       - name: Checkout repository
@@ -36,10 +36,16 @@ jobs:
       - name: Run Prettier check
         run: npm run format:check
 
+      - name: Run TypeScript type checks
+        run: |
+          npx tsc --noEmit
+          npx tsc -p playwright/tsconfig.json --noEmit
+
       - name: Run unit tests with coverage
         run: npm test -- --coverage --watchAll=false
 
       - name: Upload coverage reports to Codecov
+        if: success() && matrix.node-version == '24.x'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -48,16 +54,52 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
-      - name: Build application
+      - name: Build application (production + bundle budgets)
         run: npm run build
+
+      - name: Run post-build CSP checks
+        run: npx jest scripts/check-csp.spec.ts
 
       - name: Archive build artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-node-${{ matrix.node-version }}
           path: dist/
           retention-days: 7
+
+  firebase:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: 'npm'
+
+      - name: Setup JDK 21 for Firebase Emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Firebase Emulator binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-firebase-emulators-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-firebase-emulators-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Firebase Emulator smoke test
+        run: npm run test:firebase
 
   playwright:
     runs-on: ubuntu-latest
@@ -66,10 +108,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22.x
+      - name: Setup Node.js 24.x
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: 24.x
           cache: 'npm'
 
       - name: Install dependencies
@@ -78,7 +120,7 @@ jobs:
       - name: Install Playwright browsers
         run: npm run test:pw:install
 
-      - name: Run Playwright smoke tests
+      - name: Run Playwright E2E tests
         run: npm run test:pw
 
       - name: Upload Playwright report
