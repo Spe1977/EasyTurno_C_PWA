@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
-import { LocalNotifications, ScheduleOptions, PendingResult } from '@capacitor/local-notifications';
+import type { ScheduleOptions, PendingResult } from '@capacitor/local-notifications';
 import { Shift } from '../shift.model';
 import { TranslationService } from './translation.service';
+import { createLazyLoader } from '../utils/lazy-loader';
 
 export interface NotificationSettings {
   enabled: boolean;
@@ -22,6 +23,9 @@ export class NotificationService {
   private readonly ALLOWED_REMINDER_MINUTES = new Set([15, 30, 60, 120, 180]);
   private notificationIdCounter = 0;
   private notificationIdMap = new Map<string, number>();
+  private readonly loadLocalNotifications = createLazyLoader(
+    async () => (await import('@capacitor/local-notifications')).LocalNotifications
+  );
 
   async initialize(): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
@@ -29,6 +33,7 @@ export class NotificationService {
       return false;
     }
 
+    const LocalNotifications = await this.loadLocalNotifications();
     // Richiedi permessi
     const permission = await LocalNotifications.requestPermissions();
     if (permission.display !== 'granted') {
@@ -55,6 +60,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
+      const LocalNotifications = await this.loadLocalNotifications();
       const pending = await LocalNotifications.getPending();
 
       // Find the highest ID in use
@@ -148,6 +154,7 @@ export class NotificationService {
       }
 
       if (notifications.length > 0) {
+        const LocalNotifications = await this.loadLocalNotifications();
         await LocalNotifications.schedule({ notifications });
         console.info(`Scheduled ${notifications.length} notification(s) for shift: ${shift.id}`);
       }
@@ -161,6 +168,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
+      const LocalNotifications = await this.loadLocalNotifications();
       // Cancella tutte le notifiche pending per questo turno
       const pending: PendingResult = await LocalNotifications.getPending();
       const toCancel = pending.notifications.filter(n => n.extra?.shiftId === shiftId);
@@ -181,6 +189,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
+      const LocalNotifications = await this.loadLocalNotifications();
       const pending = await LocalNotifications.getPending();
       if (pending.notifications.length > 0) {
         await LocalNotifications.cancel({

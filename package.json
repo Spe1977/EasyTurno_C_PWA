@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "NG_CLI_ANALYTICS=false ng serve",
-    "dev:pw": "NG_CLI_ANALYTICS=false ng serve --watch=false --host 127.0.0.1 --port 3100",
+    "dev:pw": "NG_CLI_ANALYTICS=false ng serve --watch=false --live-reload=false --host 127.0.0.1 --port 3100",
     "build": "ng build",
     "preview": "NG_CLI_ANALYTICS=false ng serve --configuration=production",
     "format": "prettier --write \"src/**/*.{ts,html,css,scss,json}\"",

@@ -36,7 +36,7 @@ export class SyncService {
       const auth = this.auth.state();
       const fcmToken = this.pushNotificationService.token();
       if (auth.mode === 'authenticated' && auth.uid) {
-        this.firestoreStore.start(auth.uid);
+        void this.firestoreStore.start(auth.uid);
         void this.firestoreStore.registerDevice(
           auth.uid,
           this.deviceService.deviceId(),

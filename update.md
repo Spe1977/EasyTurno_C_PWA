@@ -217,31 +217,31 @@ npm run lint && npm run format:check && npm test -- --coverage --watchAll=false 
 Obiettivo: abbattere drasticamente il bundle iniziale (`1.34 MB` raw / `310.52 kB` transfer) e migliorare manutenibilità e tempi di avvio su rete mobile.
 
 ### Step 4.1 — Rimozione del compilatore JIT (`@angular/compiler`) dal bundle client
-- [ ] **Problema rilevato:** `index.tsx:1` contiene `import '@angular/compiler';`. L'analisi `ng build --stats-json` mostra che `@angular/compiler` pesa **`1008.1 KiB`** non minificati nel bundle iniziale, nonostante `@angular/build:application` compili in AOT!
-- [ ] **Intervento:**
+- [x] **Problema rilevato:** `index.tsx:1` contiene `import '@angular/compiler';`. L'analisi `ng build --stats-json` mostra che `@angular/compiler` pesa **`1008.1 KiB`** non minificati nel bundle iniziale, nonostante `@angular/build:application` compili in AOT!
+- [x] **Intervento:**
   1. Verificare che nessun file di produzione usi API JIT a runtime (`compileComponent`, ecc.).
-  2. Rimuovere `import '@angular/compiler';` da `index.tsx` (lasciandolo eventualmente solo dove richiesto da testbed, se necessario).
-  3. Misurare il calo di `main-*.js` (raw e transfer) dopo `npm run build` e verificare con `npm run test:pw`.
+  2. Rimuovere `import '@angular/compiler';` da `index.tsx` (lasciandolo eventualmente solo dove richiesto da testbed, se necessario — `setup-jest.js` invariato; `@angular/compiler` mantenuto in `package.json` per peerDependencies di `@angular/core`).
+  3. Misurare il calo di `main-*.js` (raw e transfer) dopo `npm run build` (`1.65 MB` → `1.13 MB` raw, `383.21 kB` → `271.43 kB` transfer) e verificare con `npm run test:pw` (`36/36`).
 
 ### Step 4.2 — Decomposizione del monolite `AppComponent`
-- [ ] **Problema rilevato:** `src/app.component.html` è **1.746 righe** e `src/app.component.ts` è **1.276 righe**, impedendo il code splitting e rendendo complesso il template principale.
-- [ ] **Intervento:** estrarre componenti standalone `OnPush` dedicati, preservando al 100% attributi `data-cy` e comportamento accessibile:
+- [x] **Problema rilevato:** `src/app.component.html` è **1.746 righe** e `src/app.component.ts` è **1.276 righe**, impedendo il code splitting e rendendo complesso il template principale.
+- [x] **Intervento:** estrarre componenti standalone `OnPush` dedicati, preservando al 100% attributi `data-cy` e comportamento accessibile:
   - `ShiftFormModalComponent` (creazione/modifica turno, colori, straordinari, indennità, ricorrenza)
   - `StatisticsDrawerComponent` (preset temporali, date range, metriche ore/indennità, empty state)
   - `SettingsDrawerComponent` (tema, lingua, notifiche, account, gestione dispositivi, backup import/export)
   - `ConfirmDialogComponent` (conferme eliminazione turno/serie, modifica serie, reset dati, delete account, decryption error, password prompt, search date)
-- [ ] Coprire ogni nuovo componente con unit test dedicati mantenendo la coverage globale ≥ 95%.
+- [x] Coprire ogni nuovo componente con unit test dedicati mantenendo la coverage globale ≥ 95% (98.85% Stmts / 99.61% Lines / 97.85% Funcs / 94.96% Branch).
 
 ### Step 4.3 — Code Splitting con `@defer` & Lazy Loading Firebase per modalità Guest/Offline
-- [ ] **Opportunità:** dopo l'estrazione dei componenti, quasi tutto il codice di modali, drawer e Firebase (`~1,560 KiB` unminified tra Firestore e Auth) può essere caricato **on-demand**:
-  1. Avvolgere `ShiftFormModalComponent`, `StatisticsDrawerComponent`, `SettingsDrawerComponent` e i dialoghi secondari con `@defer (when activeModal() === '...')` in `app.component.html`, creando lazy chunk reali al posto del singolo monolito.
-  2. Disaccoppiare il caricamento di `firebase/firestore` (`939 KiB`) e `firebase/auth` (`424 KiB`) tramite `import()` dinamici nei service boundary (`FirebaseAppService` / `FirestoreUserDataService` / `AuthService`): quando l'utente sceglie **"Continua senza account" (Guest)**, non scaricare né inizializzare l'SDK Firestore/Auth all'avvio!
-- [ ] Verificare che i chunk lazy siano precachabili/gestiti correttamente dal Service Worker (`sw.js`) in modalità offline dopo il primo uso.
+- [x] **Opportunità:** dopo l'estrazione dei componenti, quasi tutto il codice di modali, drawer e Firebase (`~1,560 KiB` unminified tra Firestore e Auth) può essere caricato **on-demand**:
+  1. Avvolgere `ShiftFormModalComponent`, `StatisticsDrawerComponent`, `SettingsDrawerComponent`, `ConfirmDialogComponent`, `CalendarComponent`, `AuthScreenComponent` ed `EmailVerificationScreenComponent` con `@defer` in `app.component.html` (usando `prefetch on immediate` su `ShiftFormModalComponent` e `CalendarComponent` per continuità offline deterministica dopo il render iniziale della shell, e caricamento strettamente on-demand sui restanti 5 blocchi), creando lazy chunk reali al posto del singolo monolito.
+  2. Disaccoppiare il caricamento di `firebase/app`, `firebase/firestore` e `firebase/auth` tramite `import()` dinamici e helper `createLazyLoader` nei service boundary (`FirebaseAppService` / `FirestoreUserDataService` / `AuthService`, più rimozione import statico `FirebaseError` in `AuthScreenComponent`): quando l'utente sceglie **"Continua senza account" (Guest)**, non scarica né inizializza gli SDK Firestore/Auth all'avvio.
+- [x] Verificare che i chunk lazy siano precachabili/gestiti correttamente dal Service Worker (`sw.js`) in modalità offline dopo il primo uso (`playwright/tests/fase4-optimization.spec.ts`).
 
 ### Step 4.4 — Budget di Build & Valutazione Critical CSS (`angular.json`)
-- [ ] Aggiungere `budgets` nella configurazione `production` di `angular.json` (tarati sui nuovi valori ottimizzati post Step 4.1–4.3, es. `initial` warning/error e `anyComponentStyle`).
-- [ ] Valutare `optimization.styles.inlineCritical: true` verificando tramite `scripts/check-csp.spec.ts` e Playwright che non violi la CSP (`style-src 'self' 'unsafe-inline'` è già consentito).
-- [ ] Verificare l'eventuale impatto di `@capacitor/*` importati direttamente (`AppComponent`, `DeviceService`, `NotificationService`, `PushNotificationService`) e valutare wrapper/import lazy se superano soglie rilevanti nel bundle web.
+- [x] Aggiungere `budgets` nella configurazione `production` di `angular.json` (`initial` warning `450kB` / error `600kB`, `anyComponentStyle` warning `4kB` / error `8kB`).
+- [x] Valutare `optimization.styles.inlineCritical: true` tramite build, `scripts/check-csp.spec.ts` e ispezione di `dist/index.html`: mantenuto **`inlineCritical: false`** perché Beasties inietta un `<script>` inline per commutare `media="print"` (`document.querySelectorAll('link[data-beasties-media]')...`) che sarebbe bloccato dalla CSP `script-src 'self'` di produzione.
+- [x] Verificare l'impatto di `@capacitor/*`: estratti `@capacitor/local-notifications` (`NotificationService`) e `@capacitor/push-notifications` (`PushNotificationService`) via `createLazyLoader` + `import()` dinamico dopo il guard `Capacitor.isNativePlatform()`, isolandoli dal bundle iniziale web (`main`).
 
 **Gate Fase 4:**
 ```bash
@@ -256,29 +256,29 @@ npm run lint && npm run format:check && npm test -- --coverage --watchAll=false 
 Obiettivo: rendere affidabile il ciclo di aggiornamento offline/PWA e fluidi i calcoli reattivi su dataset grandi.
 
 ### Step 5.1 — Fix ciclo aggiornamento Service Worker (`sw.js` ↔ `SwUpdateService`)
-- [ ] **Problema rilevato:**
+- [x] **Problema rilevato:**
   - `sw.js` nell'evento `install` chiama incondizionatamente `self.skipWaiting()`. Questo impedisce al nuovo worker di restare nello stato `waiting`, rendendo sostanzialmente inattivo il banner *"Aggiornamento disponibile"* e il metodo `SwUpdateService.activateUpdate()` (`postMessage({ type: 'SKIP_WAITING' })`), e causando un reload improvviso della pagina via `controllerchange` mentre l'utente sta lavorando.
   - `SwUpdateService.checkForUpdates()` non controlla se `this.registration.waiting` sia già valorizzato subito dopo `navigator.serviceWorker.register('/sw.js')` (caso di update già scaricato in una sessione precedente).
-- [ ] **Intervento (TDD):**
+- [x] **Intervento (TDD):**
   1. Rimuovere `self.skipWaiting()` automatico dall'evento `install` in `sw.js`, attivandolo **solo** tramite il messaggio `SKIP_WAITING` verificato da `isSameOriginClient(event.source)`.
   2. In `SwUpdateService.checkForUpdates()`, controllare `if (this.registration.waiting && navigator.serviceWorker.controller)` per esporre subito `updateAvailable.set(true)`, oltre al listener `updatefound`.
   3. Aggiornare/aggiungere test in `sw-update.service.spec.ts` e testare l'aggiornamento SW reale.
 
 ### Step 5.2 — Strategia Cache & Pruning di `RUNTIME_CACHE` in `sw.js`
-- [ ] **Problema rilevato:** `sw.js` applica `staleWhileRevalidate` anche ai file `.js` e `.css` generati con hash da Angular (`outputHashing: "all"`), generando richieste di rete superflue, e `RUNTIME_CACHE` (`easyturno-runtime-v1`) accumula all'infinito vecchi chunk hash tra una release e l'altra.
-- [ ] **Intervento:**
+- [x] **Problema rilevato:** `sw.js` applica `staleWhileRevalidate` anche ai file `.js` e `.css` generati con hash da Angular (`outputHashing: "all"`), generando richieste di rete superflue, e `RUNTIME_CACHE` (`easyturno-runtime-v1`) accumula all'infinito vecchi chunk hash tra una release e l'altra.
+- [x] **Intervento:**
   1. Applicare strategia **cache-first** per gli asset statici con hash nel nome file (`-[A-Z0-9]{8}\.(js|css|woff2?)$` o path `/chunk-*`, `/main-*`, `/styles-*`), lasciando `staleWhileRevalidate` per asset non hash-ati e `networkFirst` per le navigazioni HTML.
   2. Aggiungere pulizia/limitazione (LRU o pruning dei vecchi chunk al cambio versione `STATIC_CACHE`) per non saturare la quota cache del browser.
   3. Verificare che anche eventuali nuovi chunk lazy `@defer` vengano messi in cache al primo caricamento e funzionino offline.
 
 ### Step 5.3 — Ottimizzazione Pipe Pure/Impure & Calcolo Occorrenze
-- [ ] **Analisi rilevata:** `TranslatePipe` (`src/pipes/translate.pipe.ts`) e `LangDatePipe` (`src/pipes/date-format.pipe.ts`) hanno `pure: false` e vengono rivalutate ad ogni ciclo di Change Detection per ogni turno visibile.
-- [ ] **Intervento:**
+- [x] **Analisi rilevata:** `TranslatePipe` (`src/pipes/translate.pipe.ts`) e `LangDatePipe` (`src/pipes/date-format.pipe.ts`) hanno `pure: false` e vengono rivalutate ad ogni ciclo di Change Detection per ogni turno visibile.
+- [x] **Intervento:**
   1. Introdurre memoizzazione interna per `(key/value, format, language)` nelle pipe (o helper basati su `Signal`/`Intl.DateTimeFormat` riutilizzabili) per evitare riformattazioni ripetute di date e lookup JSON identici ad ogni interazione UI.
   2. Profilare `ShiftService.materializeOccurrences`, `AppComponent.sortedShifts`, `AppComponent.generateList` e `CalendarComponent.shiftsByDay` con molte serie ricorrenti (es. 10 serie giornaliere su 2 anni = ~7.300 occorrenze), riducendo allocazioni `new Date(...)` ripetute nei sort/filter.
 
 ### Step 5.4 — Verifica Accessibilità & Manifest PWA
-- [ ] Controllare `manifest.webmanifest` (icone, `shortcuts`, `start_url`, `theme_color`), meta tag PWA e contrasti/attributi `aria-*` nei componenti estratti e nei modali (es. `role="dialog"`, `aria-modal="true"`, focus management alla chiusura/apertura).
+- [x] Controllare `manifest.webmanifest` (icone, `shortcuts`, `start_url`, `theme_color`), meta tag PWA e contrasti/attributi `aria-*` nei componenti estratti e nei modali (es. `role="dialog"`, `aria-modal="true"`, focus management alla chiusura/apertura).
 
 **Gate Fase 5:**
 ```bash
@@ -344,3 +344,14 @@ Obiettivo: allineare CI, documentazione e repository remoto.
 | 2026-11-18 | Fase 1 (Step 1.1–1.2) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | Lint OK, Prettier OK (`npm run format` su 4 file `src/`), `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (689/689 pass in 5.85 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L) + `check-csp` 19/19 pass, `ng build` 1.34 MB / 310.52 kB (3.22 s), `npm run test:pw` 30/30 pass (29.8 s), `audit --omit=dev` 8 vuln, `audit` completo 138 → 131 vuln (`critical` 7 → 5, rimosso override `handlebars: 4.7.9`) |
 | 2026-11-18 | Fase 2 (Step 2.1–2.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ⚠️ completata (`test:firebase` bloccato da Java assente) | Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, `zone.js ~0.16.3`, `jest-preset-angular ^17.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2`; `npm ci` pulito senza `--legacy-peer-deps` (rimosso da `ci.yml`); Lint OK, Prettier OK, `tsc --noEmit` & `playwright/tsconfig.json` OK (`tsconfig.spec` invariato a 213 pre-esistenti), Jest 25/25 (689/689 pass in 8.61 s; 98.32%S / 94.73%B / 96.83%F / 99.18%L), `ng build` 1.65 MB raw / 382.97 kB transfer (3.95 s, `styles` 65.25 kB / 8.29 kB), `check-csp` 19/19 pass, Playwright 30/30 pass (39.7 s), `audit --omit=dev` 0 vuln (con override `@grpc/grpc-js: ^1.14.7`), `audit` completo 131 → 72 (`0 critical`); `npm run test:firebase` fallisce localmente per assenza `java` sul host |
 | 2026-11-18 | Fase 3 (Step 3.1–3.4) su `chore/pwa-update-plan` | Gemini CLI (Swarm) | ✅ completata | `<app-toast-container>` spostato fuori da `@if (activeModal() !== 'none')` e `@switch`; backdrop `bg-black/50` (`0` classi `*-opacity-*` residue in `src/`); `CalendarComponent` `borderLeftColor` mappato a hex via `getShiftIndicatorColor(shift)`; i18n Statistiche completo (`212/212` chiavi simmetriche `it.json`/`en.json`); Lint OK, Prettier OK, `tsc --noEmit` & `playwright/tsconfig.json` OK, Jest 25/25 (701/701 pass in 6.21 s; 98.32%S / 94.75%B / 96.83%F / 99.18%L), `ng build` 1.65 MB raw / 383.21 kB transfer (4.11 s), `check-csp` 19/19 pass, Playwright `npm run test:pw` 36/36 pass (49.6 s, inclusi 6 nuovi test in `fase3-fixes.spec.ts`) |
+| 2026-11-19 | Fase 4 (Step 4.1–4.4) su `chore/pwa-update-plan` | Gemini CLI | ✅ completata | Rimosso `@angular/compiler` runtime; `AppComponent` decomposto in 4 componenti `OnPush` + `createLazyLoader`; `@defer` su modali/drawer/calendario/auth/verification; `firebase/*` & `@capacitor/*-notifications` lazy; `budgets` aggiunti in `angular.json` (`inlineCritical: false` confermato per compatibilità CSP); Initial total `1.65 MB` → **`335.24 kB`** raw (-79.7%) / `383.21 kB` → **`85.23 kB`** transfer (-77.8%); Jest 30/30 (697/697 pass; 98.85%S / 94.96%B / 97.85%F / 99.61%L), `check-csp` 19/19 pass, Playwright 38/38 pass (+2 in `fase4-optimization.spec.ts`) |
+| 2026-11-19 | Fase 5 (Step 5.1–5.4) su `chore/pwa-update-plan` | Gemini CLI | ✅ completata | Rimossa chiamata automatica `self.skipWaiting()` in `sw.js` (ora solo su `SKIP_WAITING` same-origin); `SwUpdateService` rileva subito `registration.waiting` e previene reload duplicati; cache `v7` (`STATIC_CACHE`/`RUNTIME_CACHE`) con cache-first per chunk hash `-[A-Za-z0-9_-]{8}\.(js\|css\|woff2?)$`, `{ ignoreVary: true }` contro `Vary: Origin`, e eviction LRU a 60 voci; memoizzazione `TranslatePipe`/`TranslationService`/`LangDatePipe` + ottimizzazione `materializeOccurrences`/`sortedShifts`/`shiftsByDay`/`StatisticsDrawer`; `manifest.webmanifest` `id: "/"`, meta PWA e accessibilità ARIA + focus trap/restore + `inert`; Lint OK, Prettier OK, `tsc` OK, Jest 32/32 (733/733 pass in 7.60 s; 98.85%S / 95.25%B / 97.49%F / 99.64%L), `ng build` 340.52 kB raw / 86.56 kB transfer (2.94 s), `check-csp` 19/19 pass, Playwright 40/40 pass (51.7 s, +2 in `fase5-pwa-perf.spec.ts`), `audit --omit=dev` 0 vuln |
+
+### Confronto Bundle Size — Prima vs Dopo Fase 4 (`npm run build`)
+
+- **Prima (Fase 3 / commit `7a861b4`):** Initial total **`1.65 MB`** raw / **`383.21 kB`** transfer (`main` `1.58 MB` / `371.76 kB`, `styles` `65.25 kB` / `8.29 kB`, `chunk` `8.69 kB` / `3.15 kB`); Lazy `web` `4.51 kB` / `1.14 kB`.
+- **Dopo Step 4.1 (rimozione `@angular/compiler` in `index.tsx`):** Initial total **`1.13 MB`** raw / **`271.43 kB`** transfer (`main` `1.05 MB` / `259.98 kB`).
+- **Dopo Step 4.2 (decomposizione `AppComponent` in 4 standalone `OnPush` + stili modal in `src/styles.css`):** Initial total **`1.13 MB`** raw / **`272.03 kB`** transfer (`styles` `61.49 kB` / `8.09 kB`).
+- **Dopo Step 4.3–4.4 (`@defer` + lazy `firebase/*` & `@capacitor/*-notifications` + `budgets`):**
+  - Initial total: **`335.24 kB`** raw / **`85.23 kB`** transfer (`chunk` `155.48 kB` / `46.36 kB`, `main` `115.40 kB` / `29.30 kB`, `styles` `61.49 kB` / `8.09 kB`, `chunk` `2.24 kB` / `852 bytes`, `chunk` `633 bytes` / `633 bytes`).
+  - Lazy chunks principali (on-demand): Firestore `592.39 kB` / `151.12 kB`, Auth `130.32 kB` / `31.75 kB`, Firebase app/common `44.63 kB` / `9.67 kB` + `30.26 kB` / `9.02 kB`, `auth-screen-component` `25.11 kB` / `5.38 kB`, `settings-drawer-component` `17.03 kB` / `4.25 kB`, `confirm-dialog-component` `16.98 kB` / `3.28 kB`, `shift-form-modal-component` `16.94 kB` / `4.20 kB`, `statistics-drawer-component` `16.42 kB` / `4.16 kB`, `calendar-component` `14.09 kB` / `4.01 kB`, `email-verification-screen-component` `5.46 kB` / `1.76 kB`, `web` `4.54 kB` / `1.20 kB`, Capacitor plugin wrappers `387 B` & `102 B`.

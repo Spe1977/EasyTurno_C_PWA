@@ -272,21 +272,34 @@ export class ShiftService {
   // Occurrence materialization
   // ------------------------------------------------------------------
 
+  private static readonly MANUAL_RANGE_START = new Date(-8640000000000000);
+  private static readonly MANUAL_RANGE_END = new Date(8640000000000000);
+
   private materializeOccurrences(state: ShiftDataState): Shift[] {
     const result: Shift[] = [];
 
     // Manual shifts are not bounded by the visibility window — the AppComponent
     // applies its own [today-12m, today+24m] filter for the list view.
-    const MANUAL_RANGE_START = new Date(-8640000000000000);
-    const MANUAL_RANGE_END = new Date(8640000000000000);
     const manualOccurrences = generateOccurrencesForRange({
       shiftSeries: [],
       manualShifts: state.manualShifts,
       shiftOverrides: [],
-      rangeStart: MANUAL_RANGE_START,
-      rangeEnd: MANUAL_RANGE_END,
+      rangeStart: ShiftService.MANUAL_RANGE_START,
+      rangeEnd: ShiftService.MANUAL_RANGE_END,
     });
-    result.push(...manualOccurrences);
+    for (const occ of manualOccurrences) {
+      result.push(occ);
+    }
+
+    const overridesBySeries = new Map<string, ShiftOverride[]>();
+    for (const override of state.shiftOverrides) {
+      let list = overridesBySeries.get(override.seriesId);
+      if (!list) {
+        list = [];
+        overridesBySeries.set(override.seriesId, list);
+      }
+      list.push(override);
+    }
 
     for (const series of state.shiftSeries) {
       if (series.deletedAt) continue;
@@ -297,14 +310,41 @@ export class ShiftService {
       const occurrences = generateOccurrencesForRange({
         shiftSeries: [series],
         manualShifts: [],
-        shiftOverrides: state.shiftOverrides.filter(o => o.seriesId === series.id),
+        shiftOverrides: overridesBySeries.get(series.id) ?? [],
         rangeStart,
         rangeEnd,
       });
-      result.push(...occurrences);
+      for (const occ of occurrences) {
+        result.push(occ);
+      }
     }
 
-    return result.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    if (result.length <= 1) {
+      return result;
+    }
+
+    // Parse start timestamps once (O(N)) rather than allocating `new Date(...)`
+    // inside every O(N log N) comparator call.
+    const indexed = new Array<{ shift: Shift; startMs: number }>(result.length);
+    let alreadySorted = true;
+    let prevStartMs = -Infinity;
+
+    for (let i = 0; i < result.length; i += 1) {
+      const shift = result[i]!;
+      const startMs = Date.parse(shift.start);
+      if (startMs < prevStartMs) {
+        alreadySorted = false;
+      }
+      prevStartMs = startMs;
+      indexed[i] = { shift, startMs };
+    }
+
+    if (alreadySorted) {
+      return result;
+    }
+
+    indexed.sort((a, b) => a.startMs - b.startMs);
+    return indexed.map(entry => entry.shift);
   }
 
   // ------------------------------------------------------------------

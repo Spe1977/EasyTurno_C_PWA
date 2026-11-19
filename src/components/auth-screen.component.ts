@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { FirebaseError } from 'firebase/app';
 
 import { AuthService } from '../services/auth.service';
 import { ToastService } from '../services/toast.service';
@@ -843,7 +842,13 @@ export class AuthScreenComponent {
   }
 
   private handleAuthError(err: unknown): void {
-    const code = err instanceof FirebaseError ? err.code : '';
+    const code =
+      typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      typeof (err as { code?: unknown }).code === 'string'
+        ? (err as { code: string }).code
+        : '';
     // Silent: user closed the Google popup intentionally.
     if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
       return;

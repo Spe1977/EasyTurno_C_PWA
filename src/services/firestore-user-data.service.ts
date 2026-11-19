@@ -1,18 +1,10 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import {
-  collection,
-  doc,
-  onSnapshot,
-  writeBatch,
-  getDocs,
-  type QuerySnapshot,
-  type Unsubscribe,
-  serverTimestamp,
-} from 'firebase/firestore';
+import type { QuerySnapshot, Unsubscribe } from 'firebase/firestore';
 import { ManualShift, ShiftDataState, ShiftOverride, ShiftSeries } from '../shift.model';
 import { DevicePlatform, DeviceRecord } from './device.service';
 import { FirebaseAppService } from './firebase-app.service';
 import { EMPTY_SHIFT_DATA_STATE } from './user-data.model';
+import { createLazyLoader } from '../utils/lazy-loader';
 
 /** Devices untouched for longer than this are pruned on the next registration. */
 const STALE_DEVICE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -40,6 +32,8 @@ export class FirestoreUserDataService {
   );
   private readonly _snapshotsReady = signal(false);
   readonly snapshotsReady = this._snapshotsReady.asReadonly();
+  private sessionEpoch = 0;
+  private readonly loadFirestoreSdk = createLazyLoader(() => import('firebase/firestore'));
   private unsubscribers: Unsubscribe[] = [];
   private initialSnapshotsSeen = {
     shiftSeries: false,
@@ -48,9 +42,16 @@ export class FirestoreUserDataService {
     devices: false,
   };
 
-  start(uid: string): void {
+  async start(uid: string): Promise<void> {
     this.stop();
-    const db = this.firebase.firestore;
+    const epoch = this.sessionEpoch;
+    const [db, { collection, onSnapshot }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
+    if (epoch !== this.sessionEpoch) {
+      return;
+    }
     this.unsubscribers = [
       onSnapshot(collection(db, `users/${uid}/shiftSeries`), snapshot => {
         this.patch({
@@ -78,6 +79,7 @@ export class FirestoreUserDataService {
   }
 
   stop(): void {
+    this.sessionEpoch += 1;
     this.unsubscribers.forEach(unsubscribe => unsubscribe());
     this.unsubscribers = [];
     this._state.set(EMPTY_SHIFT_DATA_STATE);
@@ -92,21 +94,30 @@ export class FirestoreUserDataService {
   }
 
   async upsertManualShift(uid: string, shift: ManualShift): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { doc, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     batch.set(doc(db, `users/${uid}/manualShifts/${shift.id}`), this.withoutUndefined(shift));
     await batch.commit();
   }
 
   async upsertShiftSeries(uid: string, series: ShiftSeries): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { doc, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     batch.set(doc(db, `users/${uid}/shiftSeries/${series.id}`), this.withoutUndefined(series));
     await batch.commit();
   }
 
   async upsertShiftOverride(uid: string, override: ShiftOverride): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { doc, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     batch.set(
       doc(db, `users/${uid}/shiftOverrides/${override.id}`),
@@ -119,7 +130,10 @@ export class FirestoreUserDataService {
     uid: string,
     data: { manuals?: ManualShift[]; series?: ShiftSeries[]; overrides?: ShiftOverride[] }
   ): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { doc, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     data.manuals?.forEach(m =>
       batch.set(doc(db, `users/${uid}/manualShifts/${m.id}`), this.withoutUndefined(m))
@@ -145,7 +159,10 @@ export class FirestoreUserDataService {
     platform: DevicePlatform,
     fcmToken?: string | null
   ): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { collection, doc, getDocs, serverTimestamp, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const snapshot = await getDocs(collection(db, `users/${uid}/devices`));
     const batch = writeBatch(db);
     const now = Date.now();
@@ -174,7 +191,10 @@ export class FirestoreUserDataService {
 
   /** Manual escape hatch from Settings: free a slot by deleting one device. */
   async removeDevice(uid: string, deviceId: string): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { doc, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     batch.delete(doc(db, `users/${uid}/devices/${deviceId}`));
     await batch.commit();
@@ -187,7 +207,10 @@ export class FirestoreUserDataService {
    * restored by the realtime listeners on the next reload.
    */
   async clearShiftData(uid: string): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { collection, getDocs, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     for (const path of ['shiftSeries', 'manualShifts', 'shiftOverrides']) {
       const snapshot = await getDocs(collection(db, `users/${uid}/${path}`));
@@ -197,7 +220,10 @@ export class FirestoreUserDataService {
   }
 
   async deleteUserDataTree(uid: string): Promise<void> {
-    const db = this.firebase.firestore;
+    const [db, { collection, doc, getDocs, writeBatch }] = await Promise.all([
+      this.firebase.getFirestore(),
+      this.loadFirestoreSdk(),
+    ]);
     const batch = writeBatch(db);
     for (const path of ['shiftSeries', 'manualShifts', 'shiftOverrides', 'devices']) {
       const snapshot = await getDocs(collection(db, `users/${uid}/${path}`));

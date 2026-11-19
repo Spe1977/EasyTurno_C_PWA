@@ -10,7 +10,11 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
   imports: [TranslatePipe, LangDatePipe],
   template: `
     <div
+      role="button"
+      tabindex="0"
       (click)="view.emit(shift())"
+      (keydown.enter)="view.emit(shift())"
+      (keydown.space)="$event.preventDefault(); view.emit(shift())"
       class="relative flex cursor-pointer items-center space-x-4 overflow-hidden rounded-xl bg-white p-4 shadow-sm transition-shadow duration-300 hover:shadow-md dark:bg-slate-800/50"
     >
       <div
@@ -69,16 +73,18 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
           {{ shift().start | langDate: 'time' }} - {{ shift().end | langDate: 'time' }}
         </p>
         @if (shift().notes) {
-          <p class="mt-1 truncate text-sm text-slate-400 italic dark:text-slate-500">
+          <p class="mt-1 truncate text-sm text-slate-500 italic dark:text-slate-400">
             {{ shift().notes }}
           </p>
         }
       </div>
       <div class="flex shrink-0 items-center space-x-1">
         <button
+          type="button"
           data-cy="edit-shift-btn"
           (click)="edit.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
+          [attr.aria-label]="'editShift' | translate"
           [title]="'editShift' | translate"
         >
           <svg
@@ -88,6 +94,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               stroke-linecap="round"
@@ -97,9 +104,11 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
           </svg>
         </button>
         <button
+          type="button"
           data-cy="delete-shift-btn"
           (click)="deleteShift.emit(shift()); $event.stopPropagation()"
           class="rounded-full p-2 transition-colors hover:bg-rose-100 dark:hover:bg-rose-800/50"
+          [attr.aria-label]="'delete' | translate"
           [title]="'delete' | translate"
         >
           <svg
@@ -109,6 +118,7 @@ import { LangDatePipe } from '../pipes/date-format.pipe';
             viewBox="0 0 24 24"
             stroke-width="1.5"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path
               stroke-linecap="round"

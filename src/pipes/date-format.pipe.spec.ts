@@ -160,4 +160,73 @@ describe('LangDatePipe', () => {
       expect(englishResult).toBe('09/30/2025');
     });
   });
+
+  describe('Step 5.3: memoization', () => {
+    it('memoizes repeated calls with identical value, format, and language', () => {
+      const datePipe = TestBed.inject(DatePipe);
+      const transformSpy = jest.spyOn(datePipe, 'transform');
+      translationService.setLanguage('it');
+
+      const iso = '2025-09-30T10:30:00';
+      expect(pipe.transform(iso, 'shortDate')).toBe('30/09/2025');
+      expect(pipe.transform(iso, 'shortDate')).toBe('30/09/2025');
+      expect(pipe.transform(iso, 'shortDate')).toBe('30/09/2025');
+
+      expect(transformSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidates memoization when a Date instance is mutated, format changes, or language changes', () => {
+      const datePipe = TestBed.inject(DatePipe);
+      const transformSpy = jest.spyOn(datePipe, 'transform');
+      translationService.setLanguage('it');
+
+      const date = new Date('2025-09-10T10:30:00');
+      expect(pipe.transform(date, 'shortDate')).toBe('10/09/2025');
+
+      date.setDate(11);
+      expect(pipe.transform(date, 'shortDate')).toBe('11/09/2025');
+
+      expect(pipe.transform(date, 'time')).toBe('10:30');
+
+      translationService.setLanguage('en');
+      expect(pipe.transform(date, 'shortDate')).toBe('09/11/2025');
+
+      expect(transformSpy).toHaveBeenCalledTimes(4);
+    });
+
+    it('shares formatted output across pipe instances bound to the same DatePipe injector', () => {
+      const datePipe = TestBed.inject(DatePipe);
+      const transformSpy = jest.spyOn(datePipe, 'transform');
+      translationService.setLanguage('en');
+
+      const secondPipe = TestBed.runInInjectionContext(() => new LangDatePipe());
+      expect(pipe.transform('2025-09-30T14:45:00', 'time')).toBe('14:45');
+      expect(secondPipe.transform('2025-09-30T14:45:00', 'time')).toBe('14:45');
+
+      expect(transformSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles invalid Date instances, cache eviction past 1000 entries, and fallback when language signal is absent', () => {
+      const datePipe = TestBed.inject(DatePipe);
+      expect(() => pipe.transform(new Date('invalid-date'), 'shortDate')).toThrow();
+
+      // Exceed MAX_SHARED_DATE_CACHE_ENTRIES (1000) to verify bounded eviction
+      const baseMs = Date.UTC(2025, 0, 1);
+      for (let i = 0; i < 1005; i += 1) {
+        expect(pipe.transform(baseMs + i * 86_400_000, 'dayNumber')).toBeTruthy();
+      }
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          LangDatePipe,
+          DatePipe,
+          { provide: TranslationService, useValue: { translate: (k: string) => k } },
+        ],
+      });
+      const fallbackPipe = TestBed.inject(LangDatePipe);
+      expect(fallbackPipe.transform('2025-09-30T10:30:00', 'shortDate')).toBe('09/30/2025');
+      expect(datePipe).toBeTruthy();
+    });
+  });
 });

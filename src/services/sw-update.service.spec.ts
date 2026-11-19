@@ -118,6 +118,24 @@ describe('SwUpdateService', () => {
       );
     });
 
+    it('should immediately expose updateAvailable when registration.waiting and controller already exist', async () => {
+      (navigator.serviceWorker as any).controller = {};
+      mockRegistration.waiting = { postMessage: jest.fn() };
+
+      await service.checkForUpdates();
+
+      expect(service.updateAvailable()).toBe(true);
+    });
+
+    it('should keep updateAvailable false when registration.waiting exists without an active controller', async () => {
+      (navigator.serviceWorker as any).controller = null;
+      mockRegistration.waiting = { postMessage: jest.fn() };
+
+      await service.checkForUpdates();
+
+      expect(service.updateAvailable()).toBe(false);
+    });
+
     it('should set updateAvailable to true when new worker is installed', async () => {
       // Set navigator.serviceWorker.controller to simulate existing SW
       (navigator.serviceWorker as any).controller = {};
@@ -201,6 +219,24 @@ describe('SwUpdateService', () => {
 
       expect(controllerchangeCallback).toBeDefined();
 
+      controllerchangeCallback();
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+
+      reloadSpy.mockRestore();
+    });
+
+    it('should trigger reload only once even if controllerchange fires multiple times', async () => {
+      const reloadSpy = jest
+        .spyOn(service as unknown as { reloadPage: () => void }, 'reloadPage')
+        .mockImplementation(() => {});
+
+      await service.checkForUpdates();
+
+      const controllerchangeCallback = (
+        navigator.serviceWorker.addEventListener as jest.Mock
+      ).mock.calls.find((call: any) => call[0] === 'controllerchange')?.[1];
+
+      controllerchangeCallback();
       controllerchangeCallback();
       expect(reloadSpy).toHaveBeenCalledTimes(1);
 

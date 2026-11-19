@@ -774,4 +774,75 @@ describe('CalendarComponent', () => {
       expect(januaryName).not.toBe(februaryName);
     });
   });
+
+  describe('Step 5.3: Calendar indexing and Intl formatter optimization', () => {
+    it('indexes large datasets cleanly and reuses cached Intl.DateTimeFormat instances', () => {
+      const bulkShifts: Shift[] = Array.from({ length: 2000 }, (_, idx) => {
+        const day = (idx % 28) + 1;
+        const dd = String(day).padStart(2, '0');
+        return {
+          id: `cal-${idx}`,
+          seriesId: 's',
+          title: `Shift ${idx}`,
+          start: `2025-01-${dd}T08:00:00`,
+          end: `2025-01-${dd}T16:00:00`,
+          color: 'indigo',
+          isRecurring: true,
+        };
+      });
+
+      fixture.componentRef.setInput('shifts', bulkShifts);
+      fixture.detectChanges();
+
+      expect(component.shiftsByDay()['2025-01-01']?.length).toBeGreaterThan(70);
+
+      const dtfSpy = jest.spyOn(Intl, 'DateTimeFormat');
+      const first = component.formatShiftTime(bulkShifts[0]);
+      const callsAfterFirst = dtfSpy.mock.calls.length;
+      const second = component.formatShiftTime(bulkShifts[1]);
+      const third = component.formatShiftTime(bulkShifts[2]);
+
+      expect(first).toContain('08:00');
+      expect(second).toContain('08:00');
+      expect(third).toContain('08:00');
+      expect(dtfSpy.mock.calls.length).toBe(callsAfterFirst);
+      dtfSpy.mockRestore();
+    });
+  });
+
+  describe('Step 5.4: Calendar keyboard accessibility & ARIA', () => {
+    it('exposes role=button, tabindex=0, aria-pressed, and Enter/Space selection on calendar day cells and shift cards', () => {
+      fixture.componentRef.setInput('shifts', mockShifts);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const firstDayCell = host.querySelector('[data-cy="calendar-day-0"]') as HTMLElement;
+      expect(firstDayCell.getAttribute('role')).toBe('button');
+      expect(firstDayCell.getAttribute('tabindex')).toBe('0');
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('false');
+      expect(firstDayCell.getAttribute('aria-label')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      firstDayCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('true');
+
+      firstDayCell.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      fixture.detectChanges();
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('false');
+
+      // Cover cached formatter reuse for selected date and multi-day shift times
+      component.selectedDate.set(new Date(2025, 0, 15));
+      expect(component.formatSelectedDate()).toBe(component.formatSelectedDate());
+      const overnightShift: Shift = {
+        id: 'ov-1',
+        title: 'Overnight',
+        start: '2025-01-15T22:00:00',
+        end: '2025-01-16T06:00:00',
+        color: 'indigo',
+      };
+      expect(component.formatShiftTime(overnightShift)).toBe(
+        component.formatShiftTime(overnightShift)
+      );
+    });
+  });
 });

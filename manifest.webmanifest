@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "EasyTurno",
   "short_name": "EasyTurno",
   "description": "Offline-first app for managing single and recurring work shifts.",

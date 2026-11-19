@@ -16,25 +16,36 @@ describe('FirebaseAppService', () => {
     service = TestBed.inject(FirebaseAppService);
   });
 
-  it('should initialize the named Firebase app once', () => {
+  it('does not initialize Firebase eagerly on service construction', () => {
+    expect(service.isInitialized).toBe(false);
+    expect(initializeApp).not.toHaveBeenCalled();
+    expect(getAuth).not.toHaveBeenCalled();
+    expect(initializeFirestore).not.toHaveBeenCalled();
+  });
+
+  it('should initialize the named Firebase app once (including concurrent callers)', async () => {
     const app = { name: 'easyturno' };
     (initializeApp as jest.Mock).mockReturnValue(app);
 
-    expect(service.initialize()).toBe(app);
-    expect(service.initialize()).toBe(app);
+    const [a, b] = await Promise.all([service.initialize(), service.initialize()]);
+    const c = await service.initialize();
+
+    expect(a).toBe(app);
+    expect(b).toBe(app);
+    expect(c).toBe(app);
     expect(initializeApp).toHaveBeenCalledTimes(1);
     expect(initializeApp).toHaveBeenCalledWith(firebaseConfig, 'easyturno');
   });
 
-  it('should reuse an existing named app instead of creating a new one', () => {
+  it('should reuse an existing named app instead of creating a new one', async () => {
     const existingApp = { name: 'easyturno' };
     (getApps as jest.Mock).mockReturnValue([{ name: 'other' }, existingApp]);
 
-    expect(service.initialize()).toBe(existingApp);
+    await expect(service.initialize()).resolves.toBe(existingApp);
     expect(initializeApp).not.toHaveBeenCalled();
   });
 
-  it('should cache auth and firestore instances lazily', () => {
+  it('should cache auth and firestore instances lazily', async () => {
     const app = { name: 'easyturno' };
     const auth = { currentUser: null };
     const firestore = { app };
@@ -43,13 +54,13 @@ describe('FirebaseAppService', () => {
     (persistentLocalCache as jest.Mock).mockReturnValue({ kind: 'persistentLocalCache' });
     (initializeFirestore as jest.Mock).mockReturnValue(firestore);
 
-    expect(service.auth).toBe(auth);
-    expect(service.auth).toBe(auth);
+    await expect(service.getAuth()).resolves.toBe(auth);
+    await expect(service.getAuth()).resolves.toBe(auth);
     expect(getAuth).toHaveBeenCalledTimes(1);
     expect(getAuth).toHaveBeenCalledWith(app);
 
-    expect(service.firestore).toBe(firestore);
-    expect(service.firestore).toBe(firestore);
+    await expect(service.getFirestore()).resolves.toBe(firestore);
+    await expect(service.getFirestore()).resolves.toBe(firestore);
     expect(persistentLocalCache).toHaveBeenCalledTimes(1);
     expect(initializeFirestore).toHaveBeenCalledTimes(1);
     expect(initializeFirestore).toHaveBeenCalledWith(app, {
@@ -57,26 +68,41 @@ describe('FirebaseAppService', () => {
     });
   });
 
-  it('should report whether a global default Firebase app exists', () => {
+  it('resets cached initialize promise on failure so a subsequent attempt can succeed', async () => {
+    const app = { name: 'easyturno' };
+    (initializeApp as jest.Mock)
+      .mockImplementationOnce(() => {
+        throw new Error('init failed');
+      })
+      .mockReturnValueOnce(app);
+
+    await expect(service.initialize()).rejects.toThrow('init failed');
+    expect(service.isInitialized).toBe(false);
+
+    await expect(service.initialize()).resolves.toBe(app);
+    expect(service.isInitialized).toBe(true);
+  });
+
+  it('should report whether a global default Firebase app exists', async () => {
     (getApp as jest.Mock).mockReturnValueOnce({ name: '[DEFAULT]' });
-    expect(service.hasGlobalDefaultApp()).toBe(true);
+    await expect(service.hasGlobalDefaultApp()).resolves.toBe(true);
 
     (getApp as jest.Mock).mockImplementationOnce(() => {
       throw new Error('no default app');
     });
-    expect(service.hasGlobalDefaultApp()).toBe(false);
+    await expect(service.hasGlobalDefaultApp()).resolves.toBe(false);
   });
 
-  it('should report correct initialization status', () => {
+  it('should report correct initialization status', async () => {
     expect(service.isInitialized).toBe(false);
-    service.initialize();
+    await service.initialize();
     expect(service.isInitialized).toBe(true);
   });
 
-  it('should return the app instance or initialize it on getApp', () => {
+  it('should return the app instance or initialize it on getApp', async () => {
     const app = { name: 'easyturno' };
     (initializeApp as jest.Mock).mockReturnValue(app);
-    expect(service.getApp()).toBe(app);
-    expect(service.getApp()).toBe(app);
+    await expect(service.getApp()).resolves.toBe(app);
+    await expect(service.getApp()).resolves.toBe(app);
   });
 });

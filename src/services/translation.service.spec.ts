@@ -172,4 +172,29 @@ describe('TranslationService', () => {
       expect(service.language()).toBe('en');
     });
   });
+
+  describe('Step 5.3: lookup caching', () => {
+    it('caches nested key lookups per language to avoid repeated key splitting', () => {
+      const splitSpy = jest.spyOn(String.prototype, 'split');
+      service.setLanguage('it');
+
+      expect(service.translate('viewMode.list')).toBe('Lista');
+      const callsAfterFirst = splitSpy.mock.calls.length;
+
+      expect(service.translate('viewMode.list')).toBe('Lista');
+      expect(service.translate('viewMode.list')).toBe('Lista');
+      expect(splitSpy.mock.calls.length).toBe(callsAfterFirst);
+
+      service.setLanguage('en');
+      expect(service.translate('viewMode.list')).toBe('List');
+      expect(splitSpy.mock.calls.length).toBe(callsAfterFirst + 1);
+      expect(service.translate('viewMode.list')).toBe('List');
+      expect(splitSpy.mock.calls.length).toBe(callsAfterFirst + 1);
+
+      expect(service.translate('missing_key')).toBe('missing_key');
+      expect(service.translate('missing_key')).toBe('missing_key');
+      expect(service.translate('viewMode')).toBe('viewMode');
+      expect(service.translate('viewMode')).toBe('viewMode');
+    });
+  });
 });
