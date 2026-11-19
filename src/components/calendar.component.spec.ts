@@ -298,6 +298,106 @@ describe('CalendarComponent', () => {
 
       expect(indicatorColor).toBe('#123456');
     });
+
+    it('should fall back to slate hex color for missing, unknown, or prototype-key shift colors', () => {
+      const baseShift: Omit<Shift, 'color'> = {
+        id: 'fallback-color',
+        seriesId: 'fallback-color',
+        title: 'Fallback Color',
+        start: '2025-01-20T09:00:00',
+        end: '2025-01-20T17:00:00',
+        isRecurring: false,
+      };
+
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: '' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: undefined as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: 'unknown-token' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+      expect(
+        component.getShiftIndicatorColor({
+          ...baseShift,
+          color: 'toString' as unknown as Shift['color'],
+        })
+      ).toBe('#64748B');
+    });
+
+    it('should render borderLeftColor from COLOR_MAP for nominal shift color sky in selected-day details', () => {
+      const skyShift: Shift = {
+        id: 'sky-1',
+        seriesId: 'sky-1',
+        title: 'Sky Shift',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        color: 'sky',
+        isRecurring: false,
+      };
+
+      fixture.componentRef.setInput('shifts', [skyShift]);
+      component.onDayClick(new Date(2025, 0, 15));
+      fixture.detectChanges();
+
+      const shiftCard = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-cy="calendar-shift-sky-1"]'
+      ) as HTMLElement | null;
+
+      expect(shiftCard).not.toBeNull();
+      const borderLeftColor = shiftCard?.style.borderLeftColor.toLowerCase() ?? '';
+      expect(borderLeftColor).not.toBe('');
+      expect(borderLeftColor).not.toBe('sky');
+      expect(borderLeftColor).not.toBe('transparent');
+      expect(['#0ea5e9', 'rgb(14, 165, 233)']).toContain(borderLeftColor);
+    });
+
+    it('should map all semantic ShiftColor values to valid CSS borderLeftColor values in selected-day details', () => {
+      const colorExpectations: Array<{ token: Shift['color']; expected: string[] }> = [
+        { token: 'sky', expected: ['#0ea5e9', 'rgb(14, 165, 233)'] },
+        { token: 'green', expected: ['#22c55e', 'rgb(34, 197, 94)'] },
+        { token: 'amber', expected: ['#f59e0b', 'rgb(245, 158, 11)'] },
+        { token: 'rose', expected: ['#f43f5e', 'rgb(244, 63, 94)'] },
+        { token: 'indigo', expected: ['#6366f1', 'rgb(99, 102, 241)'] },
+        { token: 'teal', expected: ['#14b8a6', 'rgb(20, 184, 166)'] },
+        { token: 'fuchsia', expected: ['#d946ef', 'rgb(217, 70, 239)'] },
+        { token: 'slate', expected: ['#64748b', 'rgb(100, 116, 139)'] },
+      ];
+
+      const shifts: Shift[] = colorExpectations.map(({ token }, index) => ({
+        id: `color-${token}-${index}`,
+        seriesId: `color-${token}-${index}`,
+        title: `Shift ${token}`,
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        color: token,
+        isRecurring: false,
+      }));
+
+      fixture.componentRef.setInput('shifts', shifts);
+      component.onDayClick(new Date(2025, 0, 15));
+      fixture.detectChanges();
+
+      for (const [index, { token, expected }] of colorExpectations.entries()) {
+        const shiftCard = (fixture.nativeElement as HTMLElement).querySelector(
+          `[data-cy="calendar-shift-color-${token}-${index}"]`
+        ) as HTMLElement | null;
+
+        expect(shiftCard).not.toBeNull();
+        const borderLeftColor = shiftCard?.style.borderLeftColor.toLowerCase() ?? '';
+        expect(expected).toContain(borderLeftColor);
+      }
+    });
   });
 
   describe('Date Formatting', () => {
@@ -672,6 +772,77 @@ describe('CalendarComponent', () => {
       const februaryName = component.monthName();
 
       expect(januaryName).not.toBe(februaryName);
+    });
+  });
+
+  describe('Step 5.3: Calendar indexing and Intl formatter optimization', () => {
+    it('indexes large datasets cleanly and reuses cached Intl.DateTimeFormat instances', () => {
+      const bulkShifts: Shift[] = Array.from({ length: 2000 }, (_, idx) => {
+        const day = (idx % 28) + 1;
+        const dd = String(day).padStart(2, '0');
+        return {
+          id: `cal-${idx}`,
+          seriesId: 's',
+          title: `Shift ${idx}`,
+          start: `2025-01-${dd}T08:00:00`,
+          end: `2025-01-${dd}T16:00:00`,
+          color: 'indigo',
+          isRecurring: true,
+        };
+      });
+
+      fixture.componentRef.setInput('shifts', bulkShifts);
+      fixture.detectChanges();
+
+      expect(component.shiftsByDay()['2025-01-01']?.length).toBeGreaterThan(70);
+
+      const dtfSpy = jest.spyOn(Intl, 'DateTimeFormat');
+      const first = component.formatShiftTime(bulkShifts[0]);
+      const callsAfterFirst = dtfSpy.mock.calls.length;
+      const second = component.formatShiftTime(bulkShifts[1]);
+      const third = component.formatShiftTime(bulkShifts[2]);
+
+      expect(first).toContain('08:00');
+      expect(second).toContain('08:00');
+      expect(third).toContain('08:00');
+      expect(dtfSpy.mock.calls.length).toBe(callsAfterFirst);
+      dtfSpy.mockRestore();
+    });
+  });
+
+  describe('Step 5.4: Calendar keyboard accessibility & ARIA', () => {
+    it('exposes role=button, tabindex=0, aria-pressed, and Enter/Space selection on calendar day cells and shift cards', () => {
+      fixture.componentRef.setInput('shifts', mockShifts);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const firstDayCell = host.querySelector('[data-cy="calendar-day-0"]') as HTMLElement;
+      expect(firstDayCell.getAttribute('role')).toBe('button');
+      expect(firstDayCell.getAttribute('tabindex')).toBe('0');
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('false');
+      expect(firstDayCell.getAttribute('aria-label')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      firstDayCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('true');
+
+      firstDayCell.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      fixture.detectChanges();
+      expect(firstDayCell.getAttribute('aria-pressed')).toBe('false');
+
+      // Cover cached formatter reuse for selected date and multi-day shift times
+      component.selectedDate.set(new Date(2025, 0, 15));
+      expect(component.formatSelectedDate()).toBe(component.formatSelectedDate());
+      const overnightShift: Shift = {
+        id: 'ov-1',
+        title: 'Overnight',
+        start: '2025-01-15T22:00:00',
+        end: '2025-01-16T06:00:00',
+        color: 'indigo',
+      };
+      expect(component.formatShiftTime(overnightShift)).toBe(
+        component.formatShiftTime(overnightShift)
+      );
     });
   });
 });

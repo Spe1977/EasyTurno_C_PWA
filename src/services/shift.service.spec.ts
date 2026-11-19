@@ -2137,5 +2137,49 @@ describe('ShiftService', () => {
       expect((service as any).isValidAllowance(null)).toBe(false);
       expect((service as any).isValidAllowance({ name: 'Meal', amount: Number.NaN })).toBe(false);
     });
+
+    it('Step 5.3: materializes 10 daily series over 2 years (~7,300 occurrences) with pre-indexed overrides and Date.parse sorting', () => {
+      const shiftSeries = Array.from({ length: 10 }, (_, idx) => ({
+        id: `series-${idx}`,
+        title: `Daily ${idx}`,
+        start: `2026-01-01T0${idx % 10}:00:00.000Z`,
+        end: `2026-01-01T1${idx % 10}:00:00.000Z`,
+        color: 'indigo' as const,
+        repetition: { frequency: 'days' as const, interval: 1 },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }));
+      const shiftOverrides = [
+        {
+          id: 'ov-1',
+          seriesId: 'series-0',
+          occurrenceStart: '2026-01-05T00:00:00.000Z',
+          action: 'deleted' as const,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ];
+      const filterSpy = jest.spyOn(shiftOverrides, 'filter');
+      const parseSpy = jest.spyOn(Date, 'parse');
+
+      const result: any[] = (service as any).materializeOccurrences({
+        schemaVersion: 2,
+        manualShifts: [],
+        shiftSeries,
+        shiftOverrides,
+      });
+
+      // 10 daily series over 2026 (365) + 2027 (365) = 730 occurrences each = 7,300 minus 1 deleted override = 7,299
+      expect(result).toHaveLength(7299);
+      expect(filterSpy).not.toHaveBeenCalled();
+      expect(parseSpy).toHaveBeenCalled();
+
+      for (let i = 1; i < result.length; i += 1) {
+        expect(Date.parse(result[i - 1].start)).toBeLessThanOrEqual(Date.parse(result[i].start));
+      }
+
+      filterSpy.mockRestore();
+      parseSpy.mockRestore();
+    });
   });
 });

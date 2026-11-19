@@ -6,6 +6,7 @@ import { Injectable, isDevMode, signal } from '@angular/core';
 export class SwUpdateService {
   updateAvailable = signal(false);
   private registration: ServiceWorkerRegistration | null = null;
+  private isReloading = false;
 
   private updateCheckInterval: ReturnType<typeof setInterval> | null = null;
   private readonly isTestEnvironment =
@@ -23,6 +24,11 @@ export class SwUpdateService {
 
     try {
       this.registration = await navigator.serviceWorker.register('/sw.js');
+
+      // Expose an update that already finished installing before this check ran
+      if (this.registration.waiting && navigator.serviceWorker.controller) {
+        this.updateAvailable.set(true);
+      }
 
       // Check for updates every 60 seconds
 
@@ -44,6 +50,10 @@ export class SwUpdateService {
 
       // Handle controller change (after skipWaiting)
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (this.isReloading) {
+          return;
+        }
+        this.isReloading = true;
         this.reloadPage();
       });
     } catch (error) {

@@ -1,6 +1,5 @@
-import { Pipe, PipeTransform } from '@angular/core';
+import { Pipe, PipeTransform, inject } from '@angular/core';
 import { TranslationService } from '../services/translation.service';
-import { inject } from '@angular/core';
 
 @Pipe({
   name: 'translate',
@@ -9,8 +8,22 @@ import { inject } from '@angular/core';
 })
 export class TranslatePipe implements PipeTransform {
   private translationService = inject(TranslationService);
+  private lastKey: string | undefined;
+  private lastLang: 'it' | 'en' | undefined;
+  private lastValue = '';
 
   transform(key: string): string {
-    return this.translationService.translate(key);
+    if (typeof this.translationService.language !== 'function') {
+      return this.translationService.translate(key);
+    }
+
+    const lang = this.translationService.language();
+    if (key === this.lastKey && lang === this.lastLang) {
+      return this.lastValue;
+    }
+    this.lastKey = key;
+    this.lastLang = lang;
+    this.lastValue = this.translationService.translate(key);
+    return this.lastValue;
   }
 }

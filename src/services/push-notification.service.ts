@@ -1,11 +1,15 @@
 import { Injectable, signal } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
-import { PushNotifications, Token } from '@capacitor/push-notifications';
+import type { Token } from '@capacitor/push-notifications';
+import { createLazyLoader } from '../utils/lazy-loader';
 
 @Injectable({ providedIn: 'root' })
 export class PushNotificationService {
   private readonly _token = signal<string | null>(null);
   readonly token = this._token.asReadonly();
+  private readonly loadPushNotifications = createLazyLoader(
+    async () => (await import('@capacitor/push-notifications')).PushNotifications
+  );
 
   async initialize(): Promise<void> {
     if (!Capacitor.isNativePlatform()) {
@@ -13,6 +17,7 @@ export class PushNotificationService {
       return;
     }
 
+    const PushNotifications = await this.loadPushNotifications();
     // Request permissions
     let permStatus = await PushNotifications.checkPermissions();
 

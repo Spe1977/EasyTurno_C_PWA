@@ -118,4 +118,33 @@ describe('TranslatePipe', () => {
       pipe.transform('app_title');
     });
   });
+
+  describe('Step 5.3: memoization', () => {
+    it('returns memoized translation when key and language are unchanged across change detection cycles', () => {
+      translationService.setLanguage('it');
+      const translateSpy = jest.spyOn(translationService, 'translate');
+
+      const first = pipe.transform('addShift');
+      const second = pipe.transform('addShift');
+      const third = pipe.transform('addShift');
+
+      expect(first).toBe('Aggiungi Turno');
+      expect(second).toBe('Aggiungi Turno');
+      expect(third).toBe('Aggiungi Turno');
+      expect(translateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalidates memoized translation when language or key changes', () => {
+      translationService.setLanguage('it');
+      const translateSpy = jest.spyOn(translationService, 'translate');
+
+      expect(pipe.transform('addShift')).toBe('Aggiungi Turno');
+      translationService.setLanguage('en');
+      expect(pipe.transform('addShift')).toBe('Add Shift');
+      expect(pipe.transform('settings')).toBe('Settings');
+      expect(pipe.transform('settings')).toBe('Settings');
+
+      expect(translateSpy).toHaveBeenCalledTimes(3);
+    });
+  });
 });

@@ -41,6 +41,18 @@
                 },
                 "fonts": true
               },
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "450kB",
+                  "maximumError": "600kB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
               "index": {
                 "input": "index.production.html",
                 "output": "index.html"

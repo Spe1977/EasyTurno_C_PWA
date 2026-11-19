@@ -156,4 +156,25 @@ describe('ShiftListItemComponent', () => {
       expect(viewSpy.mock.calls[1][0]).toEqual(updatedShift);
     });
   });
+
+  describe('Step 5.4: Accessibility & keyboard support', () => {
+    it('supports keyboard activation on shift card and exposes aria-label on icon buttons', () => {
+      const viewSpy = jest.fn();
+      component.view.subscribe(viewSpy);
+
+      const host = fixture.nativeElement as HTMLElement;
+      const card = host.querySelector('div.cursor-pointer') as HTMLElement;
+      expect(card.getAttribute('role')).toBe('button');
+      expect(card.getAttribute('tabindex')).toBe('0');
+
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      card.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+      expect(viewSpy).toHaveBeenCalledTimes(2);
+
+      const editBtn = host.querySelector('[data-cy="edit-shift-btn"]') as HTMLButtonElement;
+      const deleteBtn = host.querySelector('[data-cy="delete-shift-btn"]') as HTMLButtonElement;
+      expect(editBtn.getAttribute('aria-label')).toBeTruthy();
+      expect(deleteBtn.getAttribute('aria-label')).toBeTruthy();
+    });
+  });
 });

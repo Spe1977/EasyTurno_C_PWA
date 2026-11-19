@@ -1,20 +1,22 @@
 import {
   Component,
   ChangeDetectionStrategy,
+  ElementRef,
+  afterEveryRender,
   signal,
   computed,
   inject,
   WritableSignal,
   effect,
+  untracked,
 } from '@angular/core';
 import { DatePipe, DOCUMENT } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { Capacitor } from '@capacitor/core';
-import { Shift, Repetition, AllowanceWithId, ShiftColor } from './shift.model';
+import { Shift } from './shift.model';
 import { ShiftService } from './services/shift.service';
 import { TranslationService } from './services/translation.service';
 import { ToastService } from './services/toast.service';
-import { NotificationService, NotificationSettings } from './services/notification.service';
+import { NotificationService } from './services/notification.service';
 import { SwUpdateService } from './services/sw-update.service';
 import { CryptoService } from './services/crypto.service';
 import { AuthService } from './services/auth.service';
@@ -25,25 +27,20 @@ import { ShiftListItemComponent } from './components/shift-list-item.component';
 import { CalendarComponent } from './components/calendar.component';
 import { AuthScreenComponent } from './components/auth-screen.component';
 import { EmailVerificationScreenComponent } from './components/email-verification-screen.component';
+import {
+  ShiftFormModalComponent,
+  type ShiftFormSaveEvent,
+} from './components/shift-form-modal.component';
+import { StatisticsDrawerComponent } from './components/statistics-drawer.component';
+import { SettingsDrawerComponent } from './components/settings-drawer.component';
+import {
+  ConfirmDialogComponent,
+  type SecondaryDialogMode,
+} from './components/confirm-dialog.component';
 import { SyncService } from './services/sync.service';
-import { DeviceService, DeviceRecord } from './services/device.service';
-import { UserDataService } from './services/user-data.service';
 import { PushNotificationService } from './services/push-notification.service';
 
-type Modal =
-  | 'none'
-  | 'form'
-  | 'settings'
-  | 'deleteAccountWarning'
-  | 'deleteAccountConfirm'
-  | 'deleteConfirm'
-  | 'deleteSeriesConfirm'
-  | 'resetConfirm'
-  | 'editSeriesConfirm'
-  | 'searchDate'
-  | 'statistics'
-  | 'decryptionError'
-  | 'passwordPrompt';
+export type Modal = 'none' | 'form' | 'settings' | 'statistics' | SecondaryDialogMode;
 
 type PasswordPromptMode = 'export' | 'import';
 
@@ -53,7 +50,6 @@ type ViewMode = 'list' | 'calendar';
   selector: 'app-root',
   standalone: true,
   imports: [
-    FormsModule,
     TranslatePipe,
     LangDatePipe,
     ToastContainerComponent,
@@ -61,27 +57,14 @@ type ViewMode = 'list' | 'calendar';
     CalendarComponent,
     AuthScreenComponent,
     EmailVerificationScreenComponent,
+    ShiftFormModalComponent,
+    StatisticsDrawerComponent,
+    SettingsDrawerComponent,
+    ConfirmDialogComponent,
   ],
   providers: [DatePipe],
   templateUrl: './app.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [
-    `
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: scale(0.97);
-        }
-        to {
-          opacity: 1;
-          transform: scale(1);
-        }
-      }
-      .modal-fade-in {
-        animation: fadeIn 0.15s ease-out forwards;
-      }
-    `,
-  ],
 })
 export class AppComponent {
   shiftService = inject(ShiftService);
@@ -95,6 +78,10 @@ export class AppComponent {
   pushNotificationService = inject(PushNotificationService);
   datePipe = inject(DatePipe);
   private document = inject(DOCUMENT);
+  private elementRef = inject(ElementRef<HTMLElement>);
+  private lastFocusedElement: HTMLElement | null = null;
+  private pendingDialogFocus = false;
+  private pendingFocusRestore = false;
   private readonly MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
   private readonly MIN_BACKUP_PASSWORD_LENGTH = 12;
   private readonly BACKUP_REMINDER_THRESHOLD = 5;
@@ -103,9 +90,6 @@ export class AppComponent {
   // Native platform detection (wrap to preserve `this` binding on Capacitor)
   isNativePlatform = (): boolean => Capacitor.isNativePlatform();
 
-  // Notification settings
-  notificationSettings = signal<NotificationSettings>(this.notificationService.getSettings());
-
   // UI State
   theme: WritableSignal<'light' | 'dark'>;
   activeModal = signal<Modal>('none');
@@ -113,36 +97,25 @@ export class AppComponent {
   isImporting = signal(false);
   isExporting = signal(false);
 
+  readonly secondaryDialogMode = computed<SecondaryDialogMode | null>(() => {
+    const mode = this.activeModal();
+    if (mode === 'none' || mode === 'form' || mode === 'settings' || mode === 'statistics') {
+      return null;
+    }
+    return mode;
+  });
+
   // Form & Edit State
   editingShift: WritableSignal<Shift | null> = signal(null);
   pendingShiftData = signal<Partial<Shift> | null>(null);
-  shiftTitle = signal('');
-  shiftStartDate = signal('');
-  shiftStartTime = signal('');
-  shiftEndDate = signal('');
-  shiftEndTime = signal('');
-  shiftColor = signal<ShiftColor>('sky');
-  shiftIsRecurring = signal(false);
-  shiftRepetition = signal<Repetition>({ frequency: 'days', interval: 1 });
-  shiftNotes = signal('');
-  shiftOvertimeHours = signal<number>(0);
-  shiftAllowances = signal<AllowanceWithId[]>([]);
 
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
-  deleteAccountEmailInput = signal('');
-  deleteAccountPasswordInput = signal('');
   isDeletingAccount = signal(false);
 
   // Password prompt state
   passwordPromptMode = signal<PasswordPromptMode>('export');
-  passwordInput = signal('');
-  passwordConfirmInput = signal('');
   pendingImportData = signal<string | null>(null);
-
-  // Statistics state
-  statsStartDate = signal('');
-  statsEndDate = signal('');
 
   // List view state
   listVisibleCount = signal(50); // Initialized with INITIAL_LIST_SIZE constant below
@@ -150,10 +123,8 @@ export class AppComponent {
   searchDateInput = signal('');
 
   // Constants
-  private readonly STATS_DEFAULT_DAYS = 30;
   private readonly INITIAL_LIST_SIZE = 50;
   private readonly LIST_LOAD_INCREMENT = 50;
-  private readonly ONE_HOUR_MS = 60 * 60 * 1000;
   // Visible list window around today (Phase 5 / firebase.md §8): the default
   // list shows shifts that intersect [today-12 months, today+24 months].
   // Date search bypasses the window so the user can still look up shifts
@@ -161,73 +132,10 @@ export class AppComponent {
   private readonly PAST_MONTHS_VISIBLE = 12;
   private readonly FUTURE_MONTHS_VISIBLE = 24;
 
-  colors: ShiftColor[] = ['sky', 'green', 'amber', 'rose', 'indigo', 'teal', 'fuchsia', 'slate'];
-  repFrequencies = ['days', 'weeks', 'months', 'years'];
-  repIntervals: Record<Repetition['frequency'], number[]> = {
-    days: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-    weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-    years: [1, 2, 3, 4, 5],
-  };
-
   // Derived State (Computed Signals)
   allListShifts = computed(() => this.generateList());
   listShifts = computed(() => this.allListShifts().slice(0, this.listVisibleCount()));
-  deviceService = inject(DeviceService);
-  userDataService = inject(UserDataService);
-  deviceLimitExceeded = computed(() =>
-    this.deviceService.isSoftLimitExceeded(this.userDataService.activeDeviceCount())
-  );
-  /** Stable id of the device currently running the app (to mark "this device"). */
-  currentDeviceId = this.deviceService.deviceId();
-  /**
-   * Devices shown in the Settings list: installations only (`platform !== 'web'`).
-   * Web sessions are excluded so the list stays short even when the user signs
-   * in from many browsers; their count is still surfaced separately.
-   */
-  installedDevices = computed(() =>
-    this.userDataService.devices().filter(device => device.platform !== 'web')
-  );
-  /** Device id awaiting an inline remove confirmation in the Settings list. */
-  devicePendingRemoval = signal<string | null>(null);
 
-  /** i18n key for a device row's platform badge. */
-  devicePlatformLabelKey(platform: DeviceRecord['platform']): string {
-    switch (platform) {
-      case 'native':
-        return 'devicePlatformNative';
-      case 'pwa-installed':
-        return 'devicePlatformInstalled';
-      default:
-        return 'devicePlatformWeb';
-    }
-  }
-
-  /** Localized last-active date for a device row, or '' when pending/unknown. */
-  formatDeviceLastActive(lastActive: number | null): string {
-    if (!lastActive) return '';
-    return new Date(lastActive).toLocaleDateString(this.translationService.language(), {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  }
-
-  promptRemoveDevice(deviceId: string): void {
-    this.devicePendingRemoval.set(deviceId);
-  }
-
-  cancelRemoveDevice(): void {
-    this.devicePendingRemoval.set(null);
-  }
-
-  async confirmRemoveDevice(deviceId: string): Promise<void> {
-    await this.userDataService.removeDevice(deviceId);
-    this.devicePendingRemoval.set(null);
-    this.toastService.success(this.translationService.translate('deviceRemoved'));
-  }
-
-  // Methods
   constructor() {
     // Check for Service Worker updates
     void this.swUpdateService.checkForUpdates();
@@ -268,6 +176,10 @@ export class AppComponent {
           e.preventDefault();
           this.closeModal();
         }
+        // Tab = Trap focus inside active modal dialog
+        if (e.key === 'Tab' && this.activeModal() !== 'none') {
+          this.trapFocusInDialog(e);
+        }
         // Ctrl/Cmd + S = Open statistics (when in settings)
         if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.activeModal() === 'settings') {
           e.preventDefault();
@@ -279,6 +191,34 @@ export class AppComponent {
 
       // Angular effects use onCleanup callback, not return value
       onCleanup(() => window.removeEventListener('keydown', handleKeyboard));
+    });
+
+    // Manage modal dialog focus on open and restore focus to trigger on close
+    let previousModal: Modal = 'none';
+    effect(() => {
+      const currentModal = this.activeModal();
+      if (currentModal !== 'none' && currentModal !== previousModal) {
+        if (previousModal === 'none' && !this.lastFocusedElement) {
+          const active = this.document.activeElement;
+          this.lastFocusedElement =
+            active instanceof HTMLElement && active !== this.document.body ? active : null;
+        }
+        this.pendingFocusRestore = false;
+        this.pendingDialogFocus = true;
+      } else if (previousModal !== 'none' && currentModal === 'none') {
+        this.pendingDialogFocus = false;
+        this.pendingFocusRestore = true;
+      }
+      previousModal = currentModal;
+    });
+
+    afterEveryRender(() => {
+      if (this.pendingDialogFocus) {
+        this.tryFocusActiveDialog();
+      }
+      if (this.pendingFocusRestore) {
+        this.tryRestoreFocusAfterModal();
+      }
     });
 
     // Open decryption-error modal when ShiftService reports a decrypt failure
@@ -313,8 +253,6 @@ export class AppComponent {
       }
     });
 
-    this.resetForm();
-
     // Initialize search date with proper error handling
     const searchDate = this.datePipe.transform(new Date(), 'yyyy-MM-dd');
     if (!searchDate) {
@@ -323,25 +261,6 @@ export class AppComponent {
       this.searchDateInput.set(fallback ?? '');
     } else {
       this.searchDateInput.set(searchDate);
-    }
-
-    // Initialize statistics date range (configurable default days)
-    const today = new Date();
-    const defaultDaysAgo = new Date(
-      today.getTime() - this.STATS_DEFAULT_DAYS * 24 * 60 * 60 * 1000
-    );
-    const statsStart = this.datePipe.transform(defaultDaysAgo, 'yyyy-MM-dd');
-    const statsEnd = this.datePipe.transform(today, 'yyyy-MM-dd');
-
-    if (!statsStart || !statsEnd) {
-      console.error('Failed to format stats dates, using fallback');
-      const fallbackStart = defaultDaysAgo.toISOString().split('T')[0];
-      const fallbackEnd = today.toISOString().split('T')[0];
-      this.statsStartDate.set(fallbackStart ?? '');
-      this.statsEndDate.set(fallbackEnd ?? '');
-    } else {
-      this.statsStartDate.set(statsStart);
-      this.statsEndDate.set(statsEnd);
     }
 
     // Initialize notifications (solo su native platform)
@@ -359,7 +278,7 @@ export class AppComponent {
     return this.syncService.status().mode !== 'connecting';
   }
 
-  private checkUrlForActions() {
+  private checkUrlForActions(): void {
     const urlParams = new URLSearchParams(this.document.location.search);
     if (urlParams.get('action') === 'add_shift') {
       this.openNewShiftForm();
@@ -369,12 +288,34 @@ export class AppComponent {
     }
   }
 
-  // Cache sorted shifts to avoid re-sorting on every computation
-  private sortedShifts = computed(() => {
-    return [...this.shiftService.shifts()].sort(
-      (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
-    );
+  // Pre-parse start/end timestamps once per shift change and avoid re-sorting
+  // when ShiftService already emits shifts in chronological order.
+  private indexedSortedShifts = computed(() => {
+    const shifts = this.shiftService.shifts();
+    const entries = new Array<{ shift: Shift; startMs: number; endMs: number }>(shifts.length);
+    let alreadySorted = true;
+    let prevStartMs = -Infinity;
+
+    for (let i = 0; i < shifts.length; i += 1) {
+      const shift = shifts[i]!;
+      const startMs = Date.parse(shift.start);
+      const endMs = Date.parse(shift.end);
+      if (startMs < prevStartMs) {
+        alreadySorted = false;
+      }
+      prevStartMs = startMs;
+      entries[i] = { shift, startMs, endMs };
+    }
+
+    if (!alreadySorted) {
+      entries.sort((a, b) => a.startMs - b.startMs);
+    }
+
+    return entries;
   });
+
+  // Cache sorted shifts to avoid re-sorting on every computation
+  private sortedShifts = computed(() => this.indexedSortedShifts().map(entry => entry.shift));
 
   // Default visible window around today: [today-PAST_MONTHS, today+FUTURE_MONTHS].
   // Date search bypasses this filter — the user can still look up shifts
@@ -390,36 +331,38 @@ export class AppComponent {
   });
 
   private generateList() {
-    const allShifts = this.sortedShifts();
+    const entries = this.indexedSortedShifts();
     const search = this.searchDate();
+
+    let windowStartMs: number;
+    let windowEndMs: number;
 
     if (search) {
       const searchDayStart = new Date(search);
       searchDayStart.setHours(0, 0, 0, 0);
-      const searchDayStartTime = searchDayStart.getTime();
+      windowStartMs = searchDayStart.getTime();
 
       const searchDayEnd = new Date(search);
       searchDayEnd.setHours(23, 59, 59, 999);
-      const searchDayEndTime = searchDayEnd.getTime();
-
-      return allShifts.filter(s => {
-        const shiftStartTime = new Date(s.start).getTime();
-        const shiftEndTime = new Date(s.end).getTime();
-        // A shift is relevant for a given day if it overlaps with that day at any point.
-        return shiftStartTime <= searchDayEndTime && shiftEndTime >= searchDayStartTime;
-      });
+      windowEndMs = searchDayEnd.getTime();
+    } else {
+      // Default list: shifts whose interval intersects the visible window.
+      const { startTime, endTime } = this.visibleRange();
+      windowStartMs = startTime;
+      windowEndMs = endTime;
     }
 
-    // Default list: shifts whose interval intersects the visible window.
-    const { startTime, endTime } = this.visibleRange();
-    return allShifts.filter(s => {
-      const shiftStart = new Date(s.start).getTime();
-      const shiftEnd = new Date(s.end).getTime();
-      return shiftStart <= endTime && shiftEnd >= startTime;
-    });
+    const filtered: Shift[] = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i]!;
+      if (entry.startMs <= windowEndMs && entry.endMs >= windowStartMs) {
+        filtered.push(entry.shift);
+      }
+    }
+    return filtered;
   }
 
-  loadMoreShifts() {
+  loadMoreShifts(): void {
     this.listVisibleCount.update(c => c + this.LIST_LOAD_INCREMENT);
   }
 
@@ -428,12 +371,12 @@ export class AppComponent {
   // to the last one so the user lands at the closest item to today.
   // Auto-loads additional pages when the target is beyond the current
   // pagination cutoff.
-  goToToday(behavior: ScrollBehavior = 'smooth') {
+  goToToday(behavior: ScrollBehavior = 'smooth'): void {
     const list = this.allListShifts();
     if (list.length === 0) return;
 
     const todayMs = new Date().setHours(0, 0, 0, 0);
-    let targetIndex = list.findIndex(s => new Date(s.end).getTime() >= todayMs);
+    let targetIndex = list.findIndex(s => Date.parse(s.end) >= todayMs);
     if (targetIndex === -1) targetIndex = list.length - 1;
 
     // Make sure the target is rendered before we try to scroll to it.
@@ -464,28 +407,97 @@ export class AppComponent {
     }, 0);
   }
 
-  openModal(modal: Modal) {
+  openModal(modal: Modal): void {
+    if (untracked(() => this.activeModal()) === 'none' && modal !== 'none') {
+      const active = this.document.activeElement;
+      this.lastFocusedElement =
+        active instanceof HTMLElement && active !== this.document.body ? active : null;
+    }
     this.activeModal.set(modal);
   }
 
-  closeModal() {
+  private getActiveDialogElement(): HTMLElement | null {
+    const host = this.elementRef.nativeElement as HTMLElement;
+    return host.querySelector('[role="dialog"], [role="alertdialog"]');
+  }
+
+  private getFocusableElements(container: HTMLElement): HTMLElement[] {
+    const selector =
+      'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(el => {
+      if (el.hasAttribute('hidden') || el.getAttribute('aria-hidden') === 'true') {
+        return false;
+      }
+      const style = window.getComputedStyle(el);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    });
+  }
+
+  private tryFocusActiveDialog(): void {
+    if (this.activeModal() === 'none') {
+      this.pendingDialogFocus = false;
+      return;
+    }
+    const dialog = this.getActiveDialogElement();
+    if (!dialog) {
+      return;
+    }
+    this.pendingDialogFocus = false;
+    if (!dialog.contains(this.document.activeElement)) {
+      const focusables = this.getFocusableElements(dialog);
+      const target = focusables[0] ?? dialog;
+      target.focus();
+    }
+  }
+
+  private tryRestoreFocusAfterModal(): void {
+    this.pendingFocusRestore = false;
+    const target = this.lastFocusedElement;
+    this.lastFocusedElement = null;
+    if (
+      this.activeModal() === 'none' &&
+      target &&
+      target !== this.document.body &&
+      target.isConnected
+    ) {
+      target.focus();
+    }
+  }
+
+  private trapFocusInDialog(e: KeyboardEvent): void {
+    const dialog = this.getActiveDialogElement();
+    if (!dialog) return;
+
+    const focusables = this.getFocusableElements(dialog);
+    if (focusables.length === 0) {
+      e.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const first = focusables[0]!;
+    const last = focusables[focusables.length - 1]!;
+    const active = this.document.activeElement;
+
+    if (e.shiftKey) {
+      if (active === first || !dialog.contains(active)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !dialog.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  closeModal(): void {
     if (this.activeModal() === 'passwordPrompt') {
       this.pendingImportData.set(null);
       this.isImporting.set(false);
-      this.passwordInput.set('');
-      this.passwordConfirmInput.set('');
-    }
-    if (
-      this.activeModal() === 'deleteAccountWarning' ||
-      this.activeModal() === 'deleteAccountConfirm'
-    ) {
-      this.resetDeleteAccountForm();
     }
     this.activeModal.set('none');
-    // Don't reset form here, as it clears pending data for confirmations
+    // Don't reset pending shift state here, as confirmation modals depend on it
   }
-
-  authExitLabelKey = computed(() => (this.authService.isGuest() ? 'authLoginLink' : 'authLogout'));
 
   async handleAuthExit(): Promise<void> {
     this.closeModal();
@@ -505,16 +517,14 @@ export class AppComponent {
   }
 
   proceedDeleteAccountConfirmation(): void {
-    this.deleteAccountEmailInput.set('');
-    this.deleteAccountPasswordInput.set('');
     this.openModal('deleteAccountConfirm');
   }
 
-  async executeDeleteAccount(): Promise<void> {
+  async executeDeleteAccount(credentials: { email: string; password: string }): Promise<void> {
     if (this.isDeletingAccount()) return;
 
     const accountEmail = this.authService.state().email?.trim().toLowerCase();
-    const confirmationEmail = this.deleteAccountEmailInput().trim().toLowerCase();
+    const confirmationEmail = credentials.email.trim().toLowerCase();
     if (!accountEmail || confirmationEmail !== accountEmail) {
       this.toastService.error(this.translationService.translate('authDeleteAccountEmailMismatch'));
       return;
@@ -522,9 +532,8 @@ export class AppComponent {
 
     this.isDeletingAccount.set(true);
     try {
-      await this.authService.deleteAccount(this.deleteAccountPayload());
+      await this.authService.deleteAccount(this.deleteAccountPayload(credentials.password));
       this.clearLocalAccountData();
-      this.resetDeleteAccountForm();
       this.activeModal.set('none');
       this.toastService.success(this.translationService.translate('authDeleteAccountSuccess'));
     } catch (error) {
@@ -534,9 +543,9 @@ export class AppComponent {
     }
   }
 
-  private deleteAccountPayload(): { password?: string } {
+  private deleteAccountPayload(password: string): { password?: string } {
     if (!this.authService.hasPasswordProvider()) return {};
-    return { password: this.deleteAccountPasswordInput() };
+    return { password };
   }
 
   private async handleDeleteAccountError(error: unknown): Promise<void> {
@@ -545,7 +554,6 @@ export class AppComponent {
         ? (error as { code?: unknown }).code
         : null;
     if (code === 'auth/requires-recent-login') {
-      this.resetDeleteAccountForm();
       this.activeModal.set('none');
       this.toastService.error(
         this.translationService.translate('authDeleteAccountReauthRequired'),
@@ -580,109 +588,35 @@ export class AppComponent {
     ].forEach(key => localStorage.removeItem(key));
   }
 
-  private resetDeleteAccountForm(): void {
-    this.deleteAccountEmailInput.set('');
-    this.deleteAccountPasswordInput.set('');
-  }
-
-  openNewShiftForm() {
-    this.resetForm();
+  openNewShiftForm(): void {
     this.editingShift.set(null);
+    this.pendingShiftData.set(null);
+    this.shiftToDelete.set(null);
     this.openModal('form');
   }
 
-  openEditShiftForm(shift: Shift) {
+  openEditShiftForm(shift: Shift): void {
     this.editingShift.set(shift);
-    this.shiftTitle.set(shift.title);
-
-    // Handle date formatting with proper error handling
-    const startDate = this.datePipe.transform(shift.start, 'yyyy-MM-dd');
-    const startTime = this.datePipe.transform(shift.start, 'HH:mm');
-    const endDate = this.datePipe.transform(shift.end, 'yyyy-MM-dd');
-    const endTime = this.datePipe.transform(shift.end, 'HH:mm');
-
-    if (!startDate || !startTime || !endDate || !endTime) {
-      console.error('Failed to format shift dates, using ISO fallback');
-      const start = new Date(shift.start);
-      const end = new Date(shift.end);
-      this.shiftStartDate.set(start.toISOString().split('T')[0] ?? '');
-      this.shiftStartTime.set(start.toTimeString().slice(0, 5));
-      this.shiftEndDate.set(end.toISOString().split('T')[0] ?? '');
-      this.shiftEndTime.set(end.toTimeString().slice(0, 5));
-    } else {
-      this.shiftStartDate.set(startDate);
-      this.shiftStartTime.set(startTime);
-      this.shiftEndDate.set(endDate);
-      this.shiftEndTime.set(endTime);
-    }
-
-    this.shiftColor.set(shift.color);
-    this.shiftIsRecurring.set(shift.isRecurring);
-    this.shiftNotes.set(shift.notes || '');
-    this.shiftOvertimeHours.set(shift.overtimeHours || 0);
-    // Add _id to existing allowances for UI tracking
-    const allowancesWithId: AllowanceWithId[] = (shift.allowances || []).map(a => ({
-      ...a,
-      _id: crypto.randomUUID(),
-    }));
-    this.shiftAllowances.set(allowancesWithId);
-    if (shift.repetition) {
-      this.shiftRepetition.set(shift.repetition);
-    }
     this.openModal('form');
   }
 
-  handleFormSubmit() {
-    // Validate required fields
-    if (!this.shiftTitle().trim()) {
-      this.toastService.error(this.translationService.translate('titleRequired'));
-      return;
-    }
-
-    const start = new Date(`${this.shiftStartDate()}T${this.shiftStartTime()}`);
-    const end = new Date(`${this.shiftEndDate()}T${this.shiftEndTime()}`);
-
-    // Validate end > start
-    if (end <= start) {
-      this.toastService.error(this.translationService.translate('endMustBeAfterStart'));
-      return;
-    }
-
-    // Capture user's timezone
-    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    const shiftData = {
-      title: this.shiftTitle().trim(),
-      start: start.toISOString(),
-      end: end.toISOString(),
-      color: this.shiftColor(),
-      isRecurring: this.shiftIsRecurring(),
-      repetition: this.shiftIsRecurring() ? this.shiftRepetition() : undefined,
-      notes: this.shiftNotes() || undefined,
-      overtimeHours: this.shiftOvertimeHours() > 0 ? this.shiftOvertimeHours() : undefined,
-      // Remove _id before saving (only for UI tracking)
-      allowances:
-        this.shiftAllowances().length > 0
-          ? this.shiftAllowances().map(({ _id, ...allowance }) => allowance)
-          : undefined,
-      timezone: userTimezone,
-    };
-
-    const editing = this.editingShift();
-    if (editing) {
+  handleShiftFormSave({ shiftData, editingShift }: ShiftFormSaveEvent): void {
+    if (editingShift) {
+      this.editingShift.set(editingShift);
       this.pendingShiftData.set(shiftData);
-      if (editing.isRecurring) {
+      if (editingShift.isRecurring) {
         this.openModal('editSeriesConfirm');
       } else {
-        const updatedShift: Shift = { ...editing, ...shiftData };
+        const updatedShift: Shift = { ...editingShift, ...shiftData };
         this.shiftService.updateShift(updatedShift);
         this.activeModal.set('none');
-        this.resetForm();
+        this.editingShift.set(null);
+        this.pendingShiftData.set(null);
       }
     } else {
       this.shiftService.addShift(shiftData);
       this.activeModal.set('none');
-      this.resetForm();
+      this.editingShift.set(null);
       this.maybeSuggestBackupExport();
     }
   }
@@ -692,14 +626,14 @@ export class AppComponent {
   // lost (cleared browser data, switched device), so a backup is the only
   // safety net. Persisted via localStorage so it fires at most once per
   // browser profile.
-  private maybeSuggestBackupExport() {
+  private maybeSuggestBackupExport(): void {
     if (localStorage.getItem(this.BACKUP_REMINDER_STORAGE_KEY) === '1') return;
     if (this.shiftService.shifts().length < this.BACKUP_REMINDER_THRESHOLD) return;
     localStorage.setItem(this.BACKUP_REMINDER_STORAGE_KEY, '1');
     this.toastService.info(this.translationService.translate('backupReminderSuggestion'), 8000);
   }
 
-  executeEdit(updateSeries: boolean) {
+  executeEdit(updateSeries: boolean): void {
     const editing = this.editingShift();
     const shiftData = this.pendingShiftData();
     if (!editing || !shiftData) return;
@@ -718,68 +652,12 @@ export class AppComponent {
       this.shiftService.updateShift(updatedShift);
     }
     this.activeModal.set('none');
-    this.resetForm();
-  }
-
-  resetForm() {
-    const now = new Date();
-    const oneHourLater = new Date(now.getTime() + this.ONE_HOUR_MS);
-    this.shiftTitle.set('');
-
-    // Handle date formatting with proper error handling
-    const startDate = this.datePipe.transform(now, 'yyyy-MM-dd');
-    const startTime = this.datePipe.transform(now, 'HH:mm');
-    const endDate = this.datePipe.transform(oneHourLater, 'yyyy-MM-dd');
-    const endTime = this.datePipe.transform(oneHourLater, 'HH:mm');
-
-    if (!startDate || !startTime || !endDate || !endTime) {
-      console.error('Failed to format reset dates, using ISO fallback');
-      this.shiftStartDate.set(now.toISOString().split('T')[0] ?? '');
-      this.shiftStartTime.set(now.toTimeString().slice(0, 5));
-      this.shiftEndDate.set(oneHourLater.toISOString().split('T')[0] ?? '');
-      this.shiftEndTime.set(oneHourLater.toTimeString().slice(0, 5));
-    } else {
-      this.shiftStartDate.set(startDate);
-      this.shiftStartTime.set(startTime);
-      this.shiftEndDate.set(endDate);
-      this.shiftEndTime.set(endTime);
-    }
-
-    this.shiftColor.set('indigo');
-    this.shiftIsRecurring.set(false);
-    this.shiftRepetition.set({ frequency: 'days', interval: 1 });
-    this.shiftNotes.set('');
-    this.shiftOvertimeHours.set(0);
-    this.shiftAllowances.set([]);
     this.editingShift.set(null);
     this.pendingShiftData.set(null);
-    this.shiftToDelete.set(null);
-  }
-
-  onFrequencyChange(event: Event) {
-    const freq = (event.target as HTMLSelectElement).value as Repetition['frequency'];
-    const intervalsForFreq = this.repIntervals[freq];
-    const newInterval: number = (intervalsForFreq && intervalsForFreq[0]) ?? 1;
-    this.shiftRepetition.update(r => ({ ...r, frequency: freq, interval: newInterval }));
-  }
-
-  onRepetitionIntervalChange(event: Event) {
-    const interval = Number((event.target as HTMLSelectElement).value);
-    this.shiftRepetition.update(r => ({ ...r, interval }));
-  }
-
-  onStartDateChange(newStartDate: string) {
-    // Align end date to start date automatically
-    this.shiftEndDate.set(newStartDate);
-  }
-
-  onStartTimeChange(newStartTime: string) {
-    // Align end time to start time automatically
-    this.shiftEndTime.set(newStartTime);
   }
 
   // --- Deletion Logic ---
-  confirmDelete(shift: Shift) {
+  confirmDelete(shift: Shift): void {
     this.shiftToDelete.set(shift);
     if (shift.isRecurring) {
       this.openModal('deleteSeriesConfirm');
@@ -788,7 +666,7 @@ export class AppComponent {
     }
   }
 
-  executeDelete(allSeries: boolean = false) {
+  executeDelete(allSeries: boolean = false): void {
     const shift = this.shiftToDelete();
     if (!shift) return;
 
@@ -798,12 +676,13 @@ export class AppComponent {
       this.shiftService.deleteShift(shift.id);
     }
     this.activeModal.set('none');
-    this.resetForm();
+    this.shiftToDelete.set(null);
+    this.editingShift.set(null);
+    this.pendingShiftData.set(null);
   }
 
   // --- Search Logic ---
-  handleDateSearch() {
-    const input = this.searchDateInput();
+  handleDateSearch(input: string): void {
     if (!input) {
       this.closeModal();
       return;
@@ -827,6 +706,7 @@ export class AppComponent {
         return;
       }
 
+      this.searchDateInput.set(input);
       this.searchDate.set(date);
       this.listVisibleCount.set(this.INITIAL_LIST_SIZE); // Reset pagination for new search
       this.closeModal();
@@ -845,21 +725,24 @@ export class AppComponent {
     }
   }
 
-  clearSearch() {
+  clearSearch(): void {
     this.searchDate.set(null);
     this.listVisibleCount.set(this.INITIAL_LIST_SIZE); // Reset pagination
   }
 
-  // --- Settings Logic ---
-  exportBackup() {
+  // --- Settings / Backup Logic ---
+  exportBackup(): void {
     this.passwordPromptMode.set('export');
-    this.passwordInput.set('');
-    this.passwordConfirmInput.set('');
     this.openModal('passwordPrompt');
   }
 
-  async confirmPasswordPrompt() {
-    const password = this.passwordInput();
+  async confirmPasswordPrompt({
+    password,
+    confirmPassword,
+  }: {
+    password: string;
+    confirmPassword: string;
+  }): Promise<void> {
     const mode = this.passwordPromptMode();
 
     if (!password) {
@@ -877,8 +760,7 @@ export class AppComponent {
         return;
       }
 
-      const confirmation = this.passwordConfirmInput();
-      if (password !== confirmation) {
+      if (password !== confirmPassword) {
         this.toastService.error(this.translationService.translate('backupPasswordMismatch'), 5000);
         return;
       }
@@ -917,11 +799,7 @@ export class AppComponent {
     }
   }
 
-  triggerImport() {
-    document.getElementById('importFile')?.click();
-  }
-
-  importBackup(event: Event) {
+  importBackup(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
@@ -939,8 +817,6 @@ export class AppComponent {
         if (this.cryptoService.isPasswordProtectedBackupPayload(result)) {
           this.pendingImportData.set(result);
           this.passwordPromptMode.set('import');
-          this.passwordInput.set('');
-          this.passwordConfirmInput.set('');
           this.openModal('passwordPrompt');
           return;
         }
@@ -959,7 +835,7 @@ export class AppComponent {
     reader.readAsText(file);
   }
 
-  private finishImport(data: string) {
+  private finishImport(data: string): void {
     const importResult = this.shiftService.importShifts(data);
     if (importResult.success) {
       const message = `${this.translationService.translate('importSuccess')} (${importResult.imported} shifts)`;
@@ -970,248 +846,34 @@ export class AppComponent {
     }
   }
 
-  confirmReset() {
+  confirmReset(): void {
     this.openModal('resetConfirm');
   }
 
-  executeReset() {
+  executeReset(): void {
     this.shiftService.deleteAllShifts();
     this.closeModal();
     this.toastService.success(this.translationService.translate('resetSuccess'));
   }
 
-  executeDecryptionReset() {
+  executeDecryptionReset(): void {
     this.shiftService.resetAfterDecryptionError();
     this.closeModal();
     this.toastService.success(this.translationService.translate('resetSuccess'));
   }
 
-  dismissDecryptionError() {
+  dismissDecryptionError(): void {
     // User chooses to keep the unreadable data — just close the modal.
     // The app will remain empty until the user exports/imports a backup.
     this.closeModal();
   }
 
-  // --- Allowances Management ---
-  addAllowance() {
-    const newAllowance: AllowanceWithId = {
-      name: '',
-      amount: 0,
-      _id: crypto.randomUUID(),
-    };
-    this.shiftAllowances.update(allowances => [...allowances, newAllowance]);
-  }
-
-  removeAllowance(index: number) {
-    this.shiftAllowances.update(allowances => allowances.filter((_, i) => i !== index));
-  }
-
-  updateAllowanceName(index: number, event: Event) {
-    const name = (event.target as HTMLInputElement).value;
-    this.shiftAllowances.update(allowances =>
-      allowances.map((a, i) => (i === index ? { ...a, name } : a))
-    );
-  }
-
-  updateAllowanceAmount(index: number, event: Event) {
-    const raw = Number((event.target as HTMLInputElement).value);
-    if (!Number.isFinite(raw) || raw < 0) {
-      return;
-    }
-    const amount = Math.floor(raw);
-    this.shiftAllowances.update(allowances =>
-      allowances.map((a, i) => (i === index ? { ...a, amount } : a))
-    );
-  }
-
-  formatAllowanceAmount(amount: number): string {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return '0';
-    }
-    return String(Math.floor(amount));
-  }
-
-  updateOvertimeHours(value: number | null) {
-    if (value === null || !Number.isFinite(value) || value < 0) {
-      this.shiftOvertimeHours.set(0);
-      return;
-    }
-    this.shiftOvertimeHours.set(value);
-  }
-
-  // --- Statistics ---
-  // Computed date range for stats (memoized)
-  private statsDateRange = computed(() => {
-    const start = new Date(this.statsStartDate());
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(this.statsEndDate());
-    end.setHours(23, 59, 59, 999);
-    return {
-      startTime: start.getTime(),
-      endTime: end.getTime(),
-    };
-  });
-
-  // Pre-filtered shifts for stats (memoized separately)
-  private filteredStatsShifts = computed(() => {
-    const { startTime, endTime } = this.statsDateRange();
-    return this.shiftService.shifts().filter(shift => {
-      const shiftStart = new Date(shift.start).getTime();
-      return shiftStart >= startTime && shiftStart <= endTime;
-    });
-  });
-
-  // Optimized stats calculation with early exit
-  statsData = computed(() => {
-    const shifts = this.filteredStatsShifts();
-
-    // Early exit for empty results
-    if (shifts.length === 0) {
-      return {
-        totalShifts: 0,
-        totalHours: 0,
-        totalOvertime: 0,
-        shiftsByTitle: {} as Record<string, number>,
-        allowancesByName: {} as Record<string, number>,
-      };
-    }
-
-    // Single-pass accumulation
-    const stats = {
-      totalShifts: shifts.length,
-      totalHours: 0,
-      totalOvertime: 0,
-      shiftsByTitle: {} as Record<string, number>,
-      allowancesByName: {} as Record<string, number>,
-    };
-
-    for (const shift of shifts) {
-      // Calculate hours
-      const hours = (new Date(shift.end).getTime() - new Date(shift.start).getTime()) / 3_600_000;
-      stats.totalHours += hours;
-      stats.totalOvertime += shift.overtimeHours ?? 0;
-
-      // Group by title
-      stats.shiftsByTitle[shift.title] = (stats.shiftsByTitle[shift.title] ?? 0) + 1;
-
-      // Accumulate allowances
-      if (shift.allowances?.length) {
-        for (const { name, amount } of shift.allowances) {
-          stats.allowancesByName[name] = (stats.allowancesByName[name] ?? 0) + amount;
-        }
-      }
-    }
-
-    return stats;
-  });
-
-  // Type-safe computed signals for template iteration (removes Object exposure)
-  statsShiftTitles = computed(() => Object.keys(this.statsData().shiftsByTitle));
-  statsAllowanceNames = computed(() => Object.keys(this.statsData().allowancesByName));
-
-  getShiftColorForTitle(title: string): ShiftColor {
-    const shift = this.filteredStatsShifts().find(s => s.title === title);
-    return shift?.color ?? 'indigo';
-  }
-
-  getShiftStylesForTitle(title: string) {
-    const color = this.getShiftColorForTitle(title);
-    const maps: Record<ShiftColor, { bar: string; labelBg: string; text: string }> = {
-      sky: {
-        bar: 'bg-sky-500',
-        labelBg: 'bg-sky-100/70 dark:bg-sky-950/40',
-        text: 'text-sky-700 dark:text-sky-300',
-      },
-      green: {
-        bar: 'bg-emerald-500',
-        labelBg: 'bg-emerald-100/70 dark:bg-emerald-950/40',
-        text: 'text-emerald-700 dark:text-emerald-300',
-      },
-      amber: {
-        bar: 'bg-amber-500',
-        labelBg: 'bg-amber-100/70 dark:bg-amber-950/40',
-        text: 'text-amber-700 dark:text-amber-300',
-      },
-      rose: {
-        bar: 'bg-rose-500',
-        labelBg: 'bg-rose-100/70 dark:bg-rose-950/40',
-        text: 'text-rose-700 dark:text-rose-300',
-      },
-      indigo: {
-        bar: 'bg-indigo-500',
-        labelBg: 'bg-indigo-100/70 dark:bg-indigo-950/40',
-        text: 'text-indigo-700 dark:text-indigo-300',
-      },
-      teal: {
-        bar: 'bg-teal-500',
-        labelBg: 'bg-teal-100/70 dark:bg-teal-950/40',
-        text: 'text-teal-700 dark:text-teal-300',
-      },
-      fuchsia: {
-        bar: 'bg-fuchsia-500',
-        labelBg: 'bg-fuchsia-100/70 dark:bg-fuchsia-950/40',
-        text: 'text-fuchsia-700 dark:text-fuchsia-300',
-      },
-      slate: {
-        bar: 'bg-slate-500',
-        labelBg: 'bg-slate-100/70 dark:bg-slate-950/40',
-        text: 'text-slate-700 dark:text-slate-300',
-      },
-    };
-    return maps[color] ?? maps.indigo;
-  }
-
-  setStatsPreset(preset: 'thisMonth' | 'lastMonth' | 'last30Days' | 'thisYear') {
-    const today = new Date();
-    let start: Date;
-    let end: Date;
-
-    switch (preset) {
-      case 'thisMonth': {
-        start = new Date(today.getFullYear(), today.getMonth(), 1);
-        end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        break;
-      }
-      case 'lastMonth': {
-        start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        end = new Date(today.getFullYear(), today.getMonth(), 0);
-        break;
-      }
-      case 'last30Days': {
-        start = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        end = today;
-        break;
-      }
-      case 'thisYear': {
-        start = new Date(today.getFullYear(), 0, 1);
-        end = new Date(today.getFullYear(), 11, 31);
-        break;
-      }
-    }
-
-    const formatDate = (d: Date) => {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-    };
-
-    this.statsStartDate.set(formatDate(start));
-    this.statsEndDate.set(formatDate(end));
-  }
-
-  openStatistics() {
+  openStatistics(): void {
     this.openModal('statistics');
   }
 
-  // --- Notification Settings ---
-  onNotificationSettingsChange() {
-    this.notificationService.saveSettings(this.notificationSettings());
-    this.notificationSettings.set(this.notificationService.getSettings());
-  }
-
   // Calendar view methods
-  toggleViewMode() {
+  toggleViewMode(): void {
     const currentMode = this.viewMode();
     const goingToList = currentMode === 'calendar';
     // Reset search filter when switching from calendar to list view
@@ -1225,7 +887,7 @@ export class AppComponent {
     }
   }
 
-  setViewMode(mode: ViewMode) {
+  setViewMode(mode: ViewMode): void {
     const currentMode = this.viewMode();
     const goingToList = currentMode === 'calendar' && mode === 'list';
     // Reset search filter when switching from calendar to list view
@@ -1239,38 +901,15 @@ export class AppComponent {
     }
   }
 
-  onCalendarDaySelected(date: Date | null) {
+  onCalendarDaySelected(date: Date | null): void {
     if (date) {
       this.searchDate.set(date);
-      // Optionally switch to list view to show filtered results
-      // this.viewMode.set('list');
     } else {
       this.searchDate.set(null);
     }
   }
 
-  onCalendarShiftClick(shift: Shift) {
-    // Open shift for editing
+  onCalendarShiftClick(shift: Shift): void {
     this.openEditShiftForm(shift);
-  }
-
-  // Helper for Tailwind classes
-  getColorClasses(color: ShiftColor): string {
-    const colorMap: Record<ShiftColor, string> = {
-      sky: 'bg-sky-100 text-sky-700 border-sky-500 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-400',
-      green:
-        'bg-green-100 text-green-700 border-green-500 dark:bg-green-500/20 dark:text-green-300 dark:border-green-400',
-      amber:
-        'bg-amber-100 text-amber-700 border-amber-500 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400',
-      rose: 'bg-rose-100 text-rose-700 border-rose-500 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-400',
-      indigo:
-        'bg-indigo-100 text-indigo-700 border-indigo-500 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-400',
-      teal: 'bg-teal-100 text-teal-700 border-teal-500 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-400',
-      fuchsia:
-        'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-500 dark:bg-fuchsia-500/20 dark:text-fuchsia-300 dark:border-fuchsia-400',
-      slate:
-        'bg-slate-100 text-slate-700 border-slate-500 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-400',
-    };
-    return colorMap[color];
   }
 }

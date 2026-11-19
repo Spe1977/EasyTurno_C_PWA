@@ -24,12 +24,19 @@ import { Shift, ShiftColor } from '../shift.model';
         class="calendar-header flex items-center justify-between bg-blue-600 p-4 dark:bg-blue-700"
       >
         <button
+          type="button"
           (click)="previousMonth()"
           class="rounded-full p-2 transition-colors hover:bg-blue-700 dark:hover:bg-blue-800"
           [attr.aria-label]="'calendar.previousMonth' | translate"
           data-cy="calendar-prev-month"
         >
-          <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            class="h-6 w-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -44,6 +51,7 @@ import { Shift, ShiftColor } from '../shift.model';
             {{ monthName() }} {{ calendarService.currentYear() }}
           </h2>
           <button
+            type="button"
             (click)="goToToday()"
             class="mt-1 text-sm text-blue-100 underline hover:text-white"
             data-cy="calendar-today"
@@ -53,12 +61,19 @@ import { Shift, ShiftColor } from '../shift.model';
         </div>
 
         <button
+          type="button"
           (click)="nextMonth()"
           class="rounded-full p-2 transition-colors hover:bg-blue-700 dark:hover:bg-blue-800"
           [attr.aria-label]="'calendar.nextMonth' | translate"
           data-cy="calendar-next-month"
         >
-          <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            class="h-6 w-6 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -89,7 +104,12 @@ import { Shift, ShiftColor } from '../shift.model';
         data-cy="calendar-grid"
       >
         @for (day of calendarService.calendarDays(); track day.date.getTime(); let i = $index) {
+          @let dayIso = calendarService.toISODateString(day.date);
           <div
+            role="button"
+            tabindex="0"
+            [attr.aria-pressed]="isSelectedDay(day.date)"
+            [attr.aria-label]="dayIso"
             class="calendar-day relative min-h-[60px] cursor-pointer border border-gray-200 transition-colors sm:min-h-[80px] dark:border-gray-600"
             [class.bg-gray-50]="!day.isCurrentMonth"
             [class.dark:bg-gray-900]="!day.isCurrentMonth"
@@ -100,6 +120,8 @@ import { Shift, ShiftColor } from '../shift.model';
             [class.bg-blue-50]="isSelectedDay(day.date)"
             [class.dark:bg-blue-900]="isSelectedDay(day.date)"
             (click)="onDayClick(day.date)"
+            (keydown.enter)="onDayClick(day.date)"
+            (keydown.space)="$event.preventDefault(); onDayClick(day.date)"
             [attr.data-cy]="'calendar-day-' + i"
           >
             <!-- Day Number -->
@@ -116,13 +138,11 @@ import { Shift, ShiftColor } from '../shift.model';
             </div>
 
             <!-- Shift Indicators -->
+            @let dayShifts = shiftsByDay()[dayIso];
             <div
               class="shift-indicators flex max-h-[40px] flex-wrap gap-1 overflow-hidden px-1 pb-1"
             >
-              @for (
-                shift of shiftsByDay()[calendarService.toISODateString(day.date)];
-                track shift.id
-              ) {
+              @for (shift of dayShifts; track shift.id) {
                 <div
                   class="h-2 w-2 flex-shrink-0 rounded-full"
                   [style.backgroundColor]="getShiftIndicatorColor(shift)"
@@ -132,12 +152,12 @@ import { Shift, ShiftColor } from '../shift.model';
             </div>
 
             <!-- Shift Count Badge -->
-            @if ((shiftsByDay()[calendarService.toISODateString(day.date)]?.length ?? 0) > 5) {
+            @if ((dayShifts?.length ?? 0) > 5) {
               <div
                 class="absolute right-1 bottom-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white dark:bg-blue-500"
                 data-cy="calendar-shift-badge"
               >
-                {{ shiftsByDay()[calendarService.toISODateString(day.date)]?.length }}
+                {{ dayShifts?.length }}
               </div>
             }
           </div>
@@ -155,6 +175,7 @@ import { Shift, ShiftColor } from '../shift.model';
               {{ formatSelectedDate() }}
             </h3>
             <button
+              type="button"
               (click)="clearSelection()"
               class="text-sm text-blue-600 hover:underline dark:text-blue-400"
               data-cy="calendar-clear-selection"
@@ -181,9 +202,13 @@ import { Shift, ShiftColor } from '../shift.model';
             <div class="space-y-2">
               @for (shift of selectedDayShifts(); track shift.id) {
                 <div
+                  role="button"
+                  tabindex="0"
                   class="cursor-pointer rounded-lg border-l-4 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:bg-gray-800"
-                  [style.borderLeftColor]="shift.color"
+                  [style.borderLeftColor]="getShiftIndicatorColor(shift)"
                   (click)="onShiftClick(shift)"
+                  (keydown.enter)="onShiftClick(shift)"
+                  (keydown.space)="$event.preventDefault(); onShiftClick(shift)"
                   [attr.data-cy]="'calendar-shift-' + shift.id"
                 >
                   <!-- Shift title -->
@@ -195,7 +220,13 @@ import { Shift, ShiftColor } from '../shift.model';
 
                   <!-- Shift time -->
                   <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                    <svg class="mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      class="mr-1 h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
                       <path
                         stroke-linecap="round"
                         stroke-linejoin="round"
@@ -256,6 +287,9 @@ import { Shift, ShiftColor } from '../shift.model';
   ],
 })
 export class CalendarComponent {
+  private static readonly CSS_COLOR_REGEX =
+    /^(#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|(?:rgb|rgba|hsl|hsla)\([^)]+\))$/i;
+
   private readonly COLOR_MAP: Record<ShiftColor, string> = {
     sky: '#0EA5E9',
     green: '#22C55E',
@@ -285,6 +319,10 @@ export class CalendarComponent {
   calendarService = inject(CalendarService);
   private translationService = inject(TranslationService);
 
+  private readonly timeFormatters = new Map<string, Intl.DateTimeFormat>();
+  private readonly shortDateFormatters = new Map<string, Intl.DateTimeFormat>();
+  private readonly fullDateFormatters = new Map<string, Intl.DateTimeFormat>();
+
   private readonly locale = computed(() =>
     this.translationService.language() === 'it' ? 'it-IT' : 'en-US'
   );
@@ -300,8 +338,35 @@ export class CalendarComponent {
   readonly shiftsByDay = computed(() => {
     const map: Record<string, Shift[]> = {};
     for (const shift of this.shifts()) {
-      for (const dateStr of this.getShiftDateKeys(shift)) {
+      const current = new Date(shift.start);
+      const last = new Date(shift.end);
+      if (Number.isNaN(current.getTime()) || Number.isNaN(last.getTime())) {
+        continue;
+      }
+
+      const startYear = current.getFullYear();
+      const startMonth = current.getMonth();
+      const startDay = current.getDate();
+      const endYear = last.getFullYear();
+      const endMonth = last.getMonth();
+      const endDay = last.getDate();
+
+      if (startYear === endYear && startMonth === endMonth && startDay === endDay) {
+        const dateStr = this.formatIsoDateParts(startYear, startMonth + 1, startDay);
         (map[dateStr] ??= []).push(shift);
+        continue;
+      }
+
+      current.setHours(0, 0, 0, 0);
+      last.setHours(0, 0, 0, 0);
+      while (current.getTime() <= last.getTime()) {
+        const dateStr = this.formatIsoDateParts(
+          current.getFullYear(),
+          current.getMonth() + 1,
+          current.getDate()
+        );
+        (map[dateStr] ??= []).push(shift);
+        current.setDate(current.getDate() + 1);
       }
     }
     return map;
@@ -357,18 +422,29 @@ export class CalendarComponent {
   }
 
   getShiftIndicatorColor(shift: Shift): string {
-    return this.COLOR_MAP[shift.color] ?? shift.color;
+    const rawColor = shift?.color;
+    if (typeof rawColor !== 'string') {
+      return this.COLOR_MAP.slate;
+    }
+
+    const color = rawColor.trim();
+    // Guard against prototype keys (e.g. 'toString') before reading COLOR_MAP.
+    if (Object.hasOwn(this.COLOR_MAP, color)) {
+      return this.COLOR_MAP[color as ShiftColor];
+    }
+
+    if (CalendarComponent.CSS_COLOR_REGEX.test(color)) {
+      return color;
+    }
+
+    // Fall back to slate instead of forwarding unknown nominal tokens that CSS drops as transparent.
+    return this.COLOR_MAP.slate;
   }
 
   formatSelectedDate(): string {
     const date = this.selectedDate();
     if (!date) return '';
-    return date.toLocaleDateString(this.locale(), {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    return this.getFullDateFormatter(this.locale()).format(date);
   }
 
   // Shift interaction
@@ -381,25 +457,16 @@ export class CalendarComponent {
     const endDate = new Date(shift.end);
 
     const loc = this.locale();
-    const startTime = startDate.toLocaleTimeString(loc, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
-    const endTime = endDate.toLocaleTimeString(loc, {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const timeFormatter = this.getTimeFormatter(loc);
+    const startTime = timeFormatter.format(startDate);
+    const endTime = timeFormatter.format(endDate);
 
     const isSameDay = this.calendarService.isSameDay(startDate, endDate);
 
     if (isSameDay) {
       return `${startTime} - ${endTime}`;
     } else {
-      const endDateStr = endDate.toLocaleDateString(loc, {
-        day: 'numeric',
-        month: 'short',
-      });
+      const endDateStr = this.getShortDateFormatter(loc).format(endDate);
       return `${startTime} - ${endTime} (${endDateStr})`;
     }
   }
@@ -451,26 +518,41 @@ export class CalendarComponent {
     this.hasMoved = false;
   }
 
-  private getShiftDateKeys(shift: Shift): string[] {
-    const start = new Date(shift.start);
-    const end = new Date(shift.end);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return [];
+  private getTimeFormatter(locale: string): Intl.DateTimeFormat {
+    let formatter = this.timeFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' });
+      this.timeFormatters.set(locale, formatter);
     }
+    return formatter;
+  }
 
-    const current = new Date(start);
-    current.setHours(0, 0, 0, 0);
-
-    const last = new Date(end);
-    last.setHours(0, 0, 0, 0);
-
-    const keys: string[] = [];
-    while (current.getTime() <= last.getTime()) {
-      keys.push(this.calendarService.toISODateString(current));
-      current.setDate(current.getDate() + 1);
+  private getShortDateFormatter(locale: string): Intl.DateTimeFormat {
+    let formatter = this.shortDateFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' });
+      this.shortDateFormatters.set(locale, formatter);
     }
+    return formatter;
+  }
 
-    return keys;
+  private getFullDateFormatter(locale: string): Intl.DateTimeFormat {
+    let formatter = this.fullDateFormatters.get(locale);
+    if (!formatter) {
+      formatter = new Intl.DateTimeFormat(locale, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      this.fullDateFormatters.set(locale, formatter);
+    }
+    return formatter;
+  }
+
+  private formatIsoDateParts(year: number, month: number, day: number): string {
+    const mm = month < 10 ? `0${month}` : String(month);
+    const dd = day < 10 ? `0${day}` : String(day);
+    return `${year}-${mm}-${dd}`;
   }
 }

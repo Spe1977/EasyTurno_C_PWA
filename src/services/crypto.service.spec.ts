@@ -635,8 +635,7 @@ describe('CryptoService', () => {
       expect(localStorageMock['easyturno_device_key']).toBeUndefined();
 
       const storedKey = idbContents.get(IDB_DB)?.get(IDB_STORE)?.get(IDB_KEY) as
-        | CryptoKey
-        | undefined;
+        CryptoKey | undefined;
       expect(storedKey).toBeTruthy();
       // The whole point of using IDB: the key bytes never become extractable.
       expect((storedKey as CryptoKey).extractable).toBe(false);

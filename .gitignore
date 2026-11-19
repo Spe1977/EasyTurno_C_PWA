@@ -27,11 +27,6 @@ coverage
 # Angular cache
 .angular/
 
-# Cypress
-cypress/screenshots
-cypress/videos
-cypress/downloads
-
 # Playwright
 playwright-report
 test-results

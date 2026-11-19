@@ -2,13 +2,11 @@
 // but jest-preset-angular still requires zone.js for TestBed compatibility
 // See: https://angular.dev/guide/experimental/zoneless
 
+import '@angular/compiler';
 import 'zone.js';
 import 'zone.js/testing';
 import { getTestBed } from '@angular/core/testing';
-import {
-  BrowserDynamicTestingModule,
-  platformBrowserDynamicTesting,
-} from '@angular/platform-browser-dynamic/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { registerLocaleData } from '@angular/common';
 import localeIt from '@angular/common/locales/it';
 
@@ -97,4 +95,4 @@ jest.mock('firebase/firestore', () => ({
   serverTimestamp: jest.fn(() => 'serverTimestamp'),
 }));
 
-getTestBed().initTestEnvironment(BrowserDynamicTestingModule, platformBrowserDynamicTesting());
+getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());

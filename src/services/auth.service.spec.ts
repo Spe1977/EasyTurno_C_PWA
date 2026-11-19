@@ -1,7 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import * as fbApp from 'firebase/app';
 import * as fbAuth from 'firebase/auth';
+import * as fbFirestore from 'firebase/firestore';
 
 import { AuthService } from './auth.service';
+import { FirebaseAppService } from './firebase-app.service';
 
 const flushMicrotasks = async () => {
   await Promise.resolve();
@@ -22,12 +25,17 @@ describe('AuthService', () => {
     expect(service.state().mode).toBe('unauthenticated');
   });
 
-  it('restores guest mode synchronously from localStorage and skips Firebase bootstrap', () => {
+  it('restores guest mode synchronously from localStorage and skips Firebase bootstrap and SDK initialization', () => {
     localStorage.setItem('easyturno.authMode', 'guest');
     const service = TestBed.runInInjectionContext(() => new AuthService());
+    const firebaseApp = TestBed.inject(FirebaseAppService);
     expect(service.state().mode).toBe('guest');
     expect(service.isGuest()).toBe(true);
+    expect(firebaseApp.isInitialized).toBe(false);
+    expect(fbApp.initializeApp).not.toHaveBeenCalled();
+    expect(fbAuth.getAuth).not.toHaveBeenCalled();
     expect(fbAuth.onAuthStateChanged).not.toHaveBeenCalled();
+    expect(fbFirestore.initializeFirestore).not.toHaveBeenCalled();
   });
 
   it('continueAsGuest persists the choice and updates state', () => {
@@ -417,5 +425,27 @@ describe('AuthService', () => {
     const service = TestBed.runInInjectionContext(() => new AuthService());
     (service as any)._state.set({ mode: 'authenticated' });
     expect(service.hasPasswordProvider()).toBe(false);
+  });
+
+  it('falls back to unauthenticated and resets initialization flag if bootstrapAuth fails', async () => {
+    const firebaseApp = TestBed.inject(FirebaseAppService);
+    jest
+      .spyOn(firebaseApp, 'getAuth')
+      .mockRejectedValueOnce(new Error('auth chunk unavailable'))
+      .mockRejectedValueOnce(new Error('auth chunk still down'));
+
+    const service = TestBed.runInInjectionContext(() => new AuthService());
+    await flushMicrotasks();
+
+    expect(service.state().mode).toBe('unauthenticated');
+    expect((service as any).authInitialized).toBe(false);
+
+    // Trigger again from non-loading state (continueAsGuest -> exitGuestMode -> bootstrapAuth)
+    service.continueAsGuest();
+    service.exitGuestMode();
+    await flushMicrotasks();
+
+    expect(service.state().mode).toBe('unauthenticated');
+    expect((service as any).authInitialized).toBe(false);
   });
 });

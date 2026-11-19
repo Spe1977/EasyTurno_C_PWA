@@ -135,80 +135,101 @@ Do not touch:
 
 ## Current Handoff
 
-Agent: Claude Code (Opus 4.8)
-Date/time: 2026-05-30T17:30:00+02:00
-Task: Fix user-reported bug — "RESETTA TUTTI I DATI" (reset all data) in Settings wiped shifts locally but, for users with an active (authenticated) account, all deleted shifts reappeared on reload because the reset never propagated to Firestore; the realtime `onSnapshot` listeners restored them.
-Status: done. Committed and pushed to `claude/firebase-data-reset-sync-fOJuQ` (this is a web session whose explicit task is to deliver the fix on that branch).
-Root cause: `ShiftService.deleteAllShifts()` only called `userDataService.setState(EMPTY_SHIFT_DATA_STATE)` — a local-only wipe. The Firestore docs under `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` were never deleted, so on the next reload `FirestoreUserDataService.start()` re-hydrated them and `UserDataService`'s effect mirrored them back to local state. `deleteUserDataTree` existed but was wired only into account deletion.
-Fix (3 source files):
-- `firestore-user-data.service.ts`: new `clearShiftData(uid)` — batch-deletes only the three shift collections (`shiftSeries`, `manualShifts`, `shiftOverrides`), deliberately leaving `devices`/`profile`/`settings` intact (unlike `deleteUserDataTree`, which is the full account-deletion nuke).
-- `user-data.service.ts`: new `clearAll()` — sets local state to EMPTY synchronously, then, when authenticated, awaits `firestore.clearShiftData(uid)`.
-- `shift.service.ts`: `deleteAllShifts()` now calls `void this.userDataService.clearAll()` instead of `setState(EMPTY...)`.
-No-resurrection reasoning: local wipe is synchronous; the `UserDataService` effect tracks `firestore.state()` (not local `_state`), so the local empty isn't overwritten until the cloud delete's snapshot fires empty too → consistent. Account-deletion path (`clearLocalAccountData`) is unaffected: it runs after `deleteAccount()` (which already calls `deleteUserDataTree` + `deleteUser`), so by then auth is no longer authenticated and `clearAll` issues no redundant cloud delete.
-Files changed: `src/services/firestore-user-data.service.ts` (+spec), `src/services/user-data.service.ts` (+spec), `src/services/shift.service.ts`, `AGENT_HANDOFF.md` (this block).
-Tests red: none.
-Tests green: full Jest suite 689/689 (was 686; +3 new: `clearShiftData` collection-scope test, `clearAll` authenticated + guest tests); `npm run lint` clean; `npm run build` OK.
+Agent: Gemini CLI
+Date/time: 2026-11-19T11:52:52+01:00
+Task: Execute Fase 6 of `update.md` (Steps 6.1–6.3: CI Node matrix & `engines` alignment, post-build `check-csp` & `test:firebase` JDK 21 CI job, full local verification suite, `README.md`/`README_IT.md` sync, commit/push on `chore/pwa-update-plan`, PR to `main`, and superseded Dependabot PR cleanup) under `cli-collaboration` protocol.
+Status: done; committed and pushed on branch `chore/pwa-update-plan`, PR `#42` opened toward `main` (`https://github.com/Spe1977/EasyTurno_C_PWA/pull/42`), and all 10 superseded Dependabot PRs closed.
+Files changed:
+- Added: `scripts/ci-config.spec.ts` (TDD verification for `package.json` `engines`, `.github/workflows/ci.yml`, and `angular.json` bundle budgets).
+- Modified: `package.json` (`engines.node` aligned to `^22.22.3 || ^24.15.0 || >=26.0.0`).
+- Modified: `.github/workflows/ci.yml` (`test` matrix `[22.x, 24.x]` with `dist-node-${{ matrix.node-version }}` artifacts, `npx tsc --noEmit` + `npx tsc -p playwright/tsconfig.json --noEmit`, post-build `npx jest scripts/check-csp.spec.ts`, new `firebase` job with `actions/setup-java@v4` JDK 21 + `npm run test:firebase`, `playwright` job on `24.x`).
+- Modified: `README.md` & `README_IT.md` (removed Cypress/`npm run e2e`, updated tech stack versions, Node requirements, Phase 4/5 architecture tree, Current Status metrics, Playwright specs list, and 3-installed-device soft limit).
+- Modified: `update.md` & `AGENT_HANDOFF.md`.
+Tests red:
+- Step 6.1 TDD: `scripts/ci-config.spec.ts` failed (`7 failed, 2 passed`) before aligning `package.json` `engines.node` and `.github/workflows/ci.yml`.
+- Outside local host capability: `npm run test:firebase` blocked locally by missing Java runtime (`java` absent); verified green in GitHub Actions CI (`CI/firebase` job with JDK 21).
+Tests green (verified cleanly after final edits + CI on PR `#42`):
+- `npm ci` (clean, no `--legacy-peer-deps`)
+- `npm audit --omit=dev --audit-level=high` (`0` vulnerabilities)
+- `npm run lint` (`0` errors) & `npm run format:check` & Prettier on modified root/CI/script files (clean)
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (`0` errors)
+- `npm test -- --coverage --watchAll=false` (`33/33` suites, `742/742` passed in 9.36 s; `98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
+- `npm run build` (`2.889 s`, Initial total `340.52 kB` raw / `86.56 kB` transfer) & `npx jest scripts/check-csp.spec.ts` (`19/19` passed, 0 skipped)
+- `npm run test:pw` (`40/40` passed in 49.3 s)
+- GitHub PR `#42` checks: `CI/test (22.x)` (58s), `CI/test (24.x)` (58s), `CI/firebase` (48s), `CI/playwright` (5m27s), `Cloudflare Pages`, `GitGuardian Security Checks` — all green; Dependabot PRs `#6`, `#18`, `#30`, `#31`, `#32`, `#35`, `#36`, `#37`, `#40`, `#41` closed.
 Open concerns:
-- Behavior verified by unit tests + build only; no authenticated browser/E2E run (Firestore deletion path requires a real logged-in session). Recommend a quick manual check on a real account: add shifts → reset → reload → confirm they stay gone.
-- The environment's `grep -n` line numbers were unreliable this session (shell output layer glitching); all edits were verified by re-reading file content, not by trusting line numbers.
-Next agent starts from: fix is on `claude/firebase-data-reset-sync-fOJuQ`. If the user wants it in production it must be merged to `main` (triggers Cloudflare Pages deploy).
-Do not touch: do not delete `web9.png` (local-only, ignored).
+- None for Web PWA scope (Fases 0–6 of `update.md` complete). Android native (`android/`) and Stitch restyling (`EasyTurno_C_PWA`) remain intentionally excluded per `update.md` Appendix B.
+Next agent starts from: Review and merge PR `#42` (`chore/pwa-update-plan` → `main`) when authorized by the user, or start any separate follow-up scope (e.g. Android native sync / Stitch restyling).
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
 
 ---
 
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-25T00:15:00+02:00
-Task: Create `update.md` — a maintenance/update schedule documenting every dependency/framework/native group to re-check every 30/60 days, with cadence table, exact commands, and a check log. User-requested, doc-only.
-Status: done (not committed — no commit permission this turn).
-Files changed: `update.md` (new); `AGENT_HANDOFF.md` (this block).
-Versions captured as baseline in `update.md` from `package.json` + `android/`: Angular `^21.2.5`, TypeScript `~5.9.3`, Zone.js `^0.15.1`, RxJS `^7.8.2`, Vite `^7.1.9`, Tailwind `^4.2.2`, Jest `^30.2.0`, Playwright `^1.58.2`, Cypress `^15.3.0`, firebase `^12.13.0`, firebase-tools `^15.18.0`, Capacitor `^8.x`; Android: Gradle 8.14.3 / AGP 8.13.0 / google-services 4.4.4 / compile+target SDK 36 / minSdk 24; Node engines `^20.19 || ^22.12 || >=24` (local Node 24 / npm 11). Documented the accepted `firebase-tools→uuid<11.1.1` advisory (cross-ref `firebase.md`).
-Tests red: none.
-Tests green: none run — doc-only change, no source/build touched.
+Agent: Gemini CLI
+Date/time: 2026-11-19T11:30:11+01:00
+Task: Execute Fase 5 of `update.md` (Steps 5.1–5.4: Service Worker update lifecycle fix, versioned cache strategy + LRU pruning + Vary:Origin resilience, pipe memoization & large-dataset occurrence/sort/calendar optimization, PWA manifest + meta + ARIA dialog focus trap/restore & contrast) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done; committed on branch `chore/pwa-update-plan` (user-authorized, together with Fase 4 working-tree changes).
+Files changed:
+- Modified: `sw.js` (`CACHE_VERSION = 'v7'`, removed auto `self.skipWaiting()` from `install`, kept same-origin-verified `SKIP_WAITING` handler, added cache-first for `-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`, `staleWhileRevalidate` for unhashed same-origin runtime assets excluding `/sw.js`, `networkFirstNavigation` HTML shell fallback, `{ ignoreVary: true }` on `cache.match` for Vary:Origin resilience, and `MAX_RUNTIME_CACHE_ENTRIES = 60` LRU eviction).
+- Added: `scripts/sw.spec.ts` (VM sandbox unit suite covering Step 5.1 update/pruning lifecycle, Step 5.2 cache-first/SWR/network-first/LRU/Vary:Origin) & `scripts/pwa-manifest.spec.ts` (manifest fields, icon paths, shortcut routes, and index/production PWA meta tag checks).
+- Modified: `src/services/sw-update.service.{ts,spec.ts}` (immediate `registration.waiting` detection + duplicate `controllerchange` reload guard + tests).
+- Modified: `src/services/translation.service.{ts,spec.ts}`, `src/pipes/translate.pipe.{ts,spec.ts}`, `src/pipes/date-format.pipe.{ts,spec.ts}` (per-language lookup cache, per-instance memoization with mock-safe fallback, shared bounded `WeakMap<DatePipe, Map>` cache + `Date.getTime()` mutation guard + tests).
+- Modified: `src/services/shift.service.{ts,spec.ts}` (pre-indexed `overridesBySeries` map, static manual window bounds, `Date.parse` + O(N) sorted fast-path verified on ~7,300 occurrences).
+- Modified: `src/app.component.{ts,html,spec.ts}` (imported `untracked` in `openModal` so effect-driven modals such as `decryptionError` do not reopen after dismiss; `indexedSortedShifts` O(N) sorted fast-path & `Date.parse` in `generateList`/`goToToday`; `[attr.inert]` on background shell, `role="status"` update banner, `aria-label` on `settings-btn`, `role="group"` + `aria-pressed` on `view-toggle`, `type="button"`, `afterEveryRender` focus open/restore + `Tab`/`Shift+Tab` dialog trap + regression tests).
+- Modified: `src/components/{shift-form-modal,statistics-drawer,settings-drawer,confirm-dialog,shift-list-item,calendar}.component.ts` + corresponding `.spec.ts` (`aria-labelledby`, `<label for>`, `aria-pressed`, `tabindex="-1"`, `Date.parse` + `colorByTitle` map in `StatisticsDrawer`, single-pass `shiftsByDay` & cached `Intl.DateTimeFormat` + keyboard Enter/Space navigation in `Calendar`, AA contrast refinements on helper captions).
+- Modified: `manifest.webmanifest` (`"id": "/"`), `index.html`, `index.production.html` (SVG icon link + `apple-mobile-web-app-title`).
+- Added: `playwright/tests/fase5-pwa-perf.spec.ts` (+2 E2E tests covering real `@defer` JS chunk caching, offline reload/calendar rendering, SW `v7` → `v8-e2e` `waiting` pause + `SKIP_WAITING` activation + `v7` cache pruning, manifest/icons HTTP 200, shortcut URL, modal focus trap/restore, and keyboard calendar navigation).
+- Modified: `update.md` (checked off Steps 5.1–5.4 and recorded Fase 5 execution row) & `AGENT_HANDOFF.md` (this block + collapsed `2026-11-18T15:24:00+01:00` Fase 2 handoff).
+Tests red:
+- Step 5.1 & 5.2 TDD: `scripts/sw.spec.ts` failed against legacy `v6` auto-skipWaiting `sw.js`, failed on `Vary: Origin` mismatch test before adding `{ ignoreVary: true }`; `sw-update.service.spec.ts` failed for pre-existing `registration.waiting` detection before service update.
+- Step 5.3 & 5.4 TDD: pipe/service/accessibility unit tests failed before memoization, O(N) sort optimization, ARIA attributes, and `untracked(() => this.activeModal())` fix (`app.component.spec.ts` `dismissDecryptionError` stayed `'decryptionError'` until `untracked` was added).
+- Pre-existing outside Gate: `tsconfig.spec.json` spec diagnostics & `npm run test:firebase` (no local Java runtime).
+Tests green (verified after final code/test edit):
+- `npm run format:check` & `npx prettier --check sw.js manifest.webmanifest scripts/sw.spec.ts scripts/pwa-manifest.spec.ts playwright/tests/fase5-pwa-perf.spec.ts` (clean)
+- `npm run lint` (0 errors) & `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (0 errors)
+- `npm test -- --coverage --watchAll=false` (32/32 suites, 733/733 passed in 7.601 s; 98.85% Stmts / 95.25% Branch / 97.49% Funcs / 99.64% Lines)
+- `npm run build` (2.938 s; Initial total `340.52 kB` raw / `86.56 kB` transfer)
+- `npx jest scripts/check-csp.spec.ts` (19/19 passed)
+- `npm audit --omit=dev --audit-level=high` (0 vulnerabilities)
+- `npm run test:pw` (40/40 passed in 51.7 s, including `playwright/tests/fase5-pwa-perf.spec.ts`)
 Open concerns:
-- `.git` was not present at the repo root this turn (`git rev-parse` failed); could not run `git status`. The worktree itself is intact. Did NOT attempt any git recovery/cleanup. Flag to the user if commit/push is wanted.
-Next agent starts from:
-- `update.md` is the new maintenance schedule; keep its "Registro dei check" table current after each real update cycle. Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
-Do not touch:
-- Do not commit/push without explicit user permission. Do not clean `web9.png` (local-only, ignored).
+- `npm run test:firebase` still requires an environment with JDK/Java (scheduled in Fase 6).
+Next agent starts from: Execute Fase 6 (`update.md` Steps 6.1–6.3: CI alignment for `check-csp` post-build and Node matrix, full verification including `test:firebase`, PR & Dependabot cleanup).
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
 
 ---
 
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T22:00:00+02:00
-Task: Fix mobile-web layout bug (user-reported) — on the website opened in a phone browser, the Lista/Calendario toggle bar + reload button were hidden behind the sticky "EasyTurno" header on initial load; they appeared only after scrolling the page down, and once revealed stayed visible.
-Status: done; committed and pushed to `origin/main` this turn (user-authorized "commit e push con merge sul main").
-Root cause: the app shell container used `h-screen` (= `100vh`). On mobile browsers `100vh` equals the viewport height with the URL bar HIDDEN (the larger value), but at load the URL bar is shown, so the shell is taller than the visible area → the page itself scrolls and the toggle bar (sticky inside `<main>`) starts behind the sticky header. After the first scroll the browser collapses its URL bar, the viewport grows to match `100vh`, everything fits and stays — matching the user's report (mobile + stays visible once revealed).
-Fix: `src/app.component.html` — replaced `h-screen` with `h-dvh` (dynamic viewport height) on the authenticated app shell (line ~28) and the loading-splash container (line ~3), so the layout always matches the actually-visible viewport. Matches the convention already used by `auth-screen.component.ts` / `email-verification-screen.component.ts` (`min-h-[100dvh]`). Also added a convention note in `CLAUDE.md` (Development Notes): use `h-dvh`/`min-h-[100dvh]`, never `h-screen`/`100vh`, for full-height containers.
-Testing decision (user followed the recommendation): NO behavioral test added — the `100vh`-vs-dynamic-viewport discrepancy is not reproducible in any test env (jsdom has no layout; headless Chromium has no retractable URL bar, so `vh`/`dvh`/`svh`/`lvh` collapse to the same value). `toBeVisible()` also doesn't check viewport occlusion. A class-name guard was judged low-value; the CLAUDE.md convention note is the chosen guard instead.
-Files changed: `src/app.component.html`; `CLAUDE.md`; `AGENT_HANDOFF.md` (this block).
-Verification: `npm run build` exit 0 (1.34 MB raw / 310.38 kB transfer); generated `dist/.../styles*.css` contains `100dvh` and no longer contains any `100vh` (the two `h-screen` were the only occurrences). Playwright smoke 2/2 green (`view-toggle` still visible at boot). No spec asserts on `h-screen`/viewport height.
-Tests red: none.
-Tests green: `ng build`; Playwright smoke 2/2.
+Agent: Gemini CLI
+Date/time: 2026-11-19T10:56:55+01:00
+Task: Execute Fase 4 of `update.md` (Steps 4.1–4.4: runtime `@angular/compiler` removal, `AppComponent` decomposition into 4 `OnPush` standalone components, `@defer` + lazy Firebase SDK boundaries, `@capacitor/*-notifications` lazy imports, `angular.json` budgets & `inlineCritical` CSP evaluation) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
+Status: done on working tree (uncommitted; user did not authorize commit).
+Files changed:
+- Modified: `index.tsx` (removed runtime `import '@angular/compiler';`).
+- Modified: `src/styles.css` (moved `.modal-fade-in` and `@keyframes fadeIn` globally so extracted components share transitions).
+- Added: `src/utils/lazy-loader.ts` + `.spec.ts` (`createLazyLoader` with promise memoization & error retry reset).
+- Added: `src/components/shift-form-modal.component.{ts,spec.ts}`, `src/components/statistics-drawer.component.{ts,spec.ts}`, `src/components/settings-drawer.component.{ts,spec.ts}`, `src/components/confirm-dialog.component.{ts,spec.ts}`.
+- Modified: `src/app.component.{ts,html,spec.ts}` (slimmed `AppComponent` from 1,276/1,755 lines to 773/402 lines, wired `@defer (when ...; prefetch on immediate)` on `app-shift-form-modal`/`app-calendar` for deterministic offline reliability and strict on-demand `@defer (when ...)` on `app-auth-screen`/`app-email-verification-screen`/`app-settings-drawer`/`app-statistics-drawer`/`app-confirm-dialog`, `DeferBlockBehavior.Playthrough` + coverage tests in `app.component.spec.ts`).
+- Modified: `src/services/firebase-app.service.{ts,spec.ts}`, `src/services/auth.service.{ts,spec.ts}`, `src/services/firestore-user-data.service.{ts,spec.ts}`, `src/services/sync.service.ts`, `src/components/auth-screen.component.ts` (lazy `import('firebase/app' | 'firebase/auth' | 'firebase/firestore')`, `sessionEpoch` guard in `FirestoreUserDataService.start/stop`, removed static `FirebaseError` import in `AuthScreenComponent`).
+- Modified: `src/services/notification.service.ts` & `src/services/push-notification.service.ts` (lazy `import('@capacitor/local-notifications' | '@capacitor/push-notifications')` after `Capacitor.isNativePlatform()`).
+- Modified: `angular.json` (added `production.budgets` `initial` warn `450kB`/error `600kB` and `anyComponentStyle` `4kB`/`8kB`; evaluated `inlineCritical: true` and reverted to `false` because Beasties inlines an executable `<script>` blocked by strict production CSP `script-src 'self'`).
+- Modified: `package.json` (`dev:pw` updated with `--live-reload=false` alongside `--watch=false` to prevent HMR `@ng/component` polling and allow real `@defer` chunk splitting in E2E).
+- Added: `playwright/tests/fase4-optimization.spec.ts` (+2 E2E tests covering zero Firebase/deferred chunks on Guest boot + on-demand fetching + Service Worker offline reload serving `@defer` chunks).
+- Modified: `update.md` (checked off Steps 4.1–4.4, recorded Fase 4 row and exact before/after bundle comparison) & `AGENT_HANDOFF.md` (this block + collapsed `2026-11-18T14:41:00+01:00` Fase 1 handoff).
+Tests red:
+- Step 4.2 TDD extracted components: 4/4 red before component implementation.
+- Step 4.3 TDD lazy Firebase specs: `firebase-app.service.spec.ts` (5 failed) & `firestore-user-data.service.spec.ts` (1 failed) before lazy service refactor.
+- `src/utils/lazy-loader.spec.ts`: red before implementing `lazy-loader.ts`.
+- Pre-existing outside Gate: `tsconfig.spec.json` spec diagnostics & `npm run test:firebase` (no local Java runtime).
+Tests green (verified cleanly after final edits):
+- `npm run lint` & `npm run format:check` & `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit`
+- `npm test -- --coverage --watchAll=false` (30/30 suites, 697/697 passed; 98.85% Stmts / 94.96% Branch / 97.85% Funcs / 99.61% Lines)
+- `npm run build` (Initial total `335.24 kB` raw / `85.23 kB` transfer, down from `1.65 MB` / `383.21 kB`; separate lazy chunks for Auth, Firestore, Capacitor notifications, and all 7 `@defer` UI blocks)
+- `npx jest scripts/check-csp.spec.ts` (19/19 passed)
+- `npm run test:pw` (38/38 passed, including `playwright/tests/fase4-optimization.spec.ts`)
 Open concerns:
-- RESOLVED: user confirmed on 2026-05-25 that the deployed site works correctly on their phone browser (toggle/reload bar visible at first load, no scrolling needed). The fix is behaviorally verified end-to-end.
-- Push to `main` triggers the Cloudflare Pages production deploy — needed to test on the phone.
-Next agent starts from:
-- Working tree clean except `web9.png` (ignored). Roadmap item #5 custom domain `easyturno.com` remains future — do not start without explicit user authorization.
-Do not touch:
-- Do not clean `web9.png` (local-only, ignored). Do not commit/push without explicit user permission.
-
----
-
-Agent: Claude Code (Opus 4.7)
-Date/time: 2026-05-24T20:30:00+02:00
-Task: Tech-debt items 1 & 2 (user-authorized): (1) remove the deprecated husky preamble from all user hooks; (2) add Playwright to the pre-push hook for CI parity (option chosen by the user: full suite, skippable via `SKIP_PW=1`).
-Status: done; committed and pushed to `origin/main` this turn (user-authorized "Commit + push su main").
-Files changed: `.husky/pre-commit`, `.husky/post-checkout`, `.husky/post-merge` (removed the deprecated `#!/usr/bin/env sh` + `. "$(dirname -- "$0")/_/husky.sh"` 2-line preamble; `.husky/pre-push` already lacked it); `.husky/pre-push` (added `npm run test:pw` after Jest + build, gated by `if [ "$SKIP_PW" = "1" ]` to allow skipping just the e2e step); `AGENT_HANDOFF.md` (this block + marked both tech-debt items DONE).
-Verification: no deprecated preamble or shebang remains in any user hook (grep); `sh -n` syntax-OK on all 4 hooks. End-to-end proof from this push: the new `pre-commit` ran with NO `husky - DEPRECATED` warning, and the new `pre-push` ran Jest + build + the full 17-test Playwright suite green before the push was allowed.
-Tests red: none.
-Tests green: full Jest suite + `ng build` + Playwright 17/17 (all exercised live by the commit/push hooks this turn).
-Open concerns:
-- Every push now runs the ~4 min Playwright suite by default. For quick docs/handoff-only pushes use `SKIP_PW=1 git push` (Jest + build still run; only e2e is skipped). Prefer this over `git push --no-verify`, which bypasses ALL checks.
-- Push to `main` triggers the Cloudflare Pages production deploy. This turn touched only git hooks (no app/build/source code), so no functional/runtime impact on the deployed app.
-Next agent starts from:
-- Working tree clean except `web9.png` (ignored). No queued tech-debt items remain. Roadmap item #5 custom domain `easyturno.com` is future — do not start without explicit user authorization.
-Do not touch:
-- Do not delete `web9.png` (local-only). Do not commit/push without explicit user permission.
+- Working tree is uncommitted on `chore/pwa-update-plan` awaiting explicit user commit authorization (if desired).
+- Branch coverage improved from `94.75%` to `94.96%` (final 0.04% push to ≥95% aligns naturally with Step 6.2).
+Next agent starts from: Review or commit Fase 4 changes (if user instructs), then proceed to Fase 5 (`update.md` Steps 5.1–5.3: PWA SW runtime optimization, icons/manifest, UX/runtime responsiveness).
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
 
 ---
 
@@ -229,3 +250,11 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-05-24, Claude Code — Playwright recurring-test fix:** the `shift-title-row` wrapper (recurring indicator) added a DOM level that broke `getByText(title).locator('../..')` in the two recurring e2e tests (30s click timeouts in CI); replaced with `app-shift-list-item` host-element scoping + `.filter({ hasText })`. Reproduced red locally, then full Playwright suite 17/17 green. Committed in `89ebd7d`.
 - **2026-05-24, Claude Code — commit/push of completed work:** committed + pushed all then-uncommitted work (device-limit redesign, security-remediation closeout docs, reload button, recurring indicator) to `origin/main`; Jest 686/686 + lint + build green; `web9.png` excluded. Commit `1c2d8f2`.
 - **2026-05-24, Claude Code — screenshot PNG cleanup:** `git rm`'d the 8 stray `web*.png` (web.png, web2–8) from GitHub + added a `web*.png` `.gitignore` rule; `web9.png` left on disk (local-only). Commit `8fa3f81`.
+- **2026-05-24, Claude Code (Opus 4.7) — tech-debt hooks & CI parity:** removed deprecated husky v9 preamble from `.husky/{pre-commit,post-checkout,post-merge}` and added full Playwright suite (`SKIP_PW=1` opt-out) to `.husky/pre-push`; verified live via commit/push.
+- **2026-05-24, Claude Code (Opus 4.7) — mobile-web `h-dvh` viewport fix:** replaced `h-screen` with `h-dvh` in `src/app.component.html` so mobile sticky toggle/reload bar is visible on initial load; updated `CLAUDE.md`; user-verified in prod.
+- **2026-05-25, Claude Code (Opus 4.7) — initial maintenance schedule (`update.md` doc-only):** created `update.md` 30/60-day check schedule capturing `package.json` + `android/` baseline versions and documenting accepted `firebase-tools→uuid<11.1.1` advisory.
+- **2026-05-30, Claude Code (Opus 4.8) — "reset all data" Firestore sync fix:** wired `ShiftService.deleteAllShifts()` → `UserDataService.clearAll()` → `FirestoreUserDataService.clearShiftData(uid)` so resetting shifts clears `shiftSeries`/`manualShifts`/`shiftOverrides` on Firestore while leaving `devices`/`profile`/`settings` intact; Jest 689/689, lint, build green (merged to `main` in `b4ce8d7`).
+- **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 0 (`update.md` Steps 0.1–0.4) on `chore/pwa-update-plan`:** removed stray root artifacts + Cypress (`cypress/` & deps), cleaned `tsconfig.json`, added `playwright/tests/calendar-offline.spec.ts` (+13 E2E tests), moved build/CLI/Android packages to `devDependencies` (`npm audit --omit=dev` 62 → 8 vuln); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green.
+- **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 1 (`update.md` Steps 1.1–1.2) on `chore/pwa-update-plan`:** aligned ESLint 10 / Prettier 3.10.1 / Jest 30.5.2 / `ts-jest@29.4.15` / `jest-preset-angular@16.2.0` / `@playwright/test@1.65.1` without `--legacy-peer-deps`, removed `handlebars` override (`critical` 7 → 5); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green (committed on `chore/pwa-update-plan`).
+- **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 2 (`update.md` Steps 2.1–2.4) on `chore/pwa-update-plan`:** upgraded Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2` with clean `npm ci` (`--legacy-peer-deps` removed) and `@grpc/grpc-js: ^1.14.7` override (`0` `--omit=dev` high/critical vulns); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green (`test:firebase` blocked locally by missing Java).
+- **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 3 (`update.md` Steps 3.1–3.4) on `chore/pwa-update-plan`:** moved `<app-toast-container>` out of modal `@if`/`@switch`, replaced `bg-opacity-50` with `bg-black/50`, mapped `CalendarComponent` `borderLeftColor` to hex, internationalized Statistics modal (`212/212` i18n keys); Lint/Prettier/TSC/Jest (701/701)/build/CSP (19/19)/Playwright (36/36) green.

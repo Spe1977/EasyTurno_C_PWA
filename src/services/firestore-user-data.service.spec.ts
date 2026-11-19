@@ -25,7 +25,7 @@ describe('FirestoreUserDataService', () => {
     expect(service.state()).toEqual(EMPTY_SHIFT_DATA_STATE);
   });
 
-  it('subscribes to the user subcollections on start and unsubscribes on stop', () => {
+  it('subscribes to the user subcollections on start and unsubscribes on stop', async () => {
     const unsubscribers = [jest.fn(), jest.fn(), jest.fn(), jest.fn()];
     (firestore.onSnapshot as jest.Mock)
       .mockReturnValueOnce(unsubscribers[0])
@@ -34,7 +34,7 @@ describe('FirestoreUserDataService', () => {
       .mockReturnValueOnce(unsubscribers[3]);
 
     const service = TestBed.inject(FirestoreUserDataService);
-    service.start('uid-1');
+    await service.start('uid-1');
 
     expect(firestore.collection).toHaveBeenCalledWith(expect.anything(), 'users/uid-1/shiftSeries');
     expect(firestore.collection).toHaveBeenCalledWith(
@@ -57,7 +57,7 @@ describe('FirestoreUserDataService', () => {
     expect(service.state()).toEqual(EMPTY_SHIFT_DATA_STATE);
   });
 
-  it('updates state when snapshot callbacks fire for each subcollection', () => {
+  it('updates state when snapshot callbacks fire for each subcollection', async () => {
     const callbacks: Array<(snapshot: { docs: Array<{ data: () => unknown }> }) => void> = [];
     (firestore.onSnapshot as jest.Mock).mockImplementation((_query, cb) => {
       callbacks.push(cb);
@@ -65,7 +65,7 @@ describe('FirestoreUserDataService', () => {
     });
 
     const service = TestBed.inject(FirestoreUserDataService);
-    service.start('uid-2');
+    await service.start('uid-2');
 
     const seriesDoc = {
       id: 'series-1',
@@ -106,7 +106,7 @@ describe('FirestoreUserDataService', () => {
     expect(state.schemaVersion).toBe(2);
   });
 
-  it('reports snapshots as ready only after all initial listeners have emitted', () => {
+  it('reports snapshots as ready only after all initial listeners have emitted', async () => {
     const callbacks: Array<
       (snapshot: { docs: Array<{ data: () => unknown }>; size?: number }) => void
     > = [];
@@ -116,7 +116,7 @@ describe('FirestoreUserDataService', () => {
     });
 
     const service = TestBed.inject(FirestoreUserDataService);
-    service.start('uid-ready');
+    await service.start('uid-ready');
 
     expect(service.snapshotsReady()).toBe(false);
 
@@ -135,7 +135,7 @@ describe('FirestoreUserDataService', () => {
     expect(service.snapshotsReady()).toBe(false);
   });
 
-  it('derives installed-device and web-session counts from the devices snapshot', () => {
+  it('derives installed-device and web-session counts from the devices snapshot', async () => {
     const callbacks: Array<(snapshot: { docs: ReturnType<typeof deviceDoc>[] }) => void> = [];
     (firestore.onSnapshot as jest.Mock).mockImplementation((_query, cb) => {
       callbacks.push(cb);
@@ -143,7 +143,7 @@ describe('FirestoreUserDataService', () => {
     });
 
     const service = TestBed.inject(FirestoreUserDataService);
-    service.start('uid-devices');
+    await service.start('uid-devices');
 
     expect(service.activeDeviceCount()).toBe(0);
     expect(service.webSessionCount()).toBe(0);
@@ -166,7 +166,7 @@ describe('FirestoreUserDataService', () => {
     expect(service.devices()[1].lastActive).toBeNull();
   });
 
-  it('tears down previous listeners when start is called twice in a row', () => {
+  it('tears down previous listeners when start is called twice in a row', async () => {
     const firstUnsubs = [jest.fn(), jest.fn(), jest.fn(), jest.fn()];
     const secondUnsubs = [jest.fn(), jest.fn(), jest.fn(), jest.fn()];
     (firestore.onSnapshot as jest.Mock)
@@ -180,14 +180,23 @@ describe('FirestoreUserDataService', () => {
       .mockReturnValueOnce(secondUnsubs[3]);
 
     const service = TestBed.inject(FirestoreUserDataService);
-    service.start('uid-a');
-    service.start('uid-b');
+    await service.start('uid-a');
+    await service.start('uid-b');
 
     expect(firstUnsubs[0]).toHaveBeenCalledTimes(1);
     expect(firstUnsubs[1]).toHaveBeenCalledTimes(1);
     expect(firstUnsubs[2]).toHaveBeenCalledTimes(1);
     expect(firstUnsubs[3]).toHaveBeenCalledTimes(1);
     expect(secondUnsubs[0]).not.toHaveBeenCalled();
+  });
+
+  it('ignores stale start resolution if stop() is called while Firestore SDK is loading', async () => {
+    const service = TestBed.inject(FirestoreUserDataService);
+    const startPromise = service.start('uid-stale');
+    service.stop();
+    await startPromise;
+
+    expect(firestore.onSnapshot).not.toHaveBeenCalled();
   });
 
   it('writes manual shifts with last-write-wins updatedAt metadata', async () => {

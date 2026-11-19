@@ -89,8 +89,6 @@ export default [
       '**/*.spec.ts',
       'coverage/**',
       'setup-jest.js',
-      'cypress/**',
-      'cypress.config.ts',
       'capacitor.config.ts',
     ],
   },

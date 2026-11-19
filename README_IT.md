@@ -28,18 +28,18 @@ English documentation is available in [README.md](README.md).
 
 | Tecnologia   | Versione |
 | ------------ | -------- |
-| Angular      | 21.2.13  |
-| TypeScript   | 5.9.3    |
-| Tailwind CSS | 4.2.2    |
-| Capacitor    | 8.3.4    |
-| Firebase     | 11.4.0   |
-| Jest         | 30.3.0   |
-| Playwright   | 1.58.2   |
+| Angular      | 22.2.6   |
+| TypeScript   | 6.0.3    |
+| Tailwind CSS | 4.3.5    |
+| Capacitor    | 8.6.2    |
+| Firebase     | 13.4.0   |
+| Jest         | 30.5.2   |
+| Playwright   | 1.65.1   |
 
 ## Avvio rapido
 
 ```bash
-# Richiede Node.js 22+
+# Richiede Node.js ^22.22.3, ^24.15.0 (LTS) o >=26.0.0
 
 # Installazione dipendenze
 npm install
@@ -66,15 +66,15 @@ npm run format          # Formatta con Prettier
 npm run format:check    # Verifica formattazione
 
 # Test
-npm test                # Unit test Jest (singola esecuzione)
-npm run test:watch      # Unit test in watch mode
-npm run test:coverage   # Report copertura (output in coverage/)
-npm run e2e             # Avvia dev server + test E2E Cypress
-npm run test:pw:install # Installa Chromium per Playwright
-npm run test:pw         # Smoke test browser con Playwright
-npm run test:pw:ui      # Playwright UI mode
-npm run test:pw:headed  # Playwright headed mode
-npx tsc --noEmit        # Type check standalone
+npm test                              # Unit test Jest (singola esecuzione)
+npm run test:watch                    # Unit test in watch mode
+npm run test:coverage                 # Report copertura (output in coverage/)
+npx jest scripts/check-csp.spec.ts    # Verifica header CSP e build dist/
+npm run test:pw:install               # Installa Chromium per Playwright
+npm run test:pw                       # Suite E2E browser con Playwright
+npm run test:pw:ui                    # Playwright UI mode
+npm run test:pw:headed                # Playwright headed mode
+npx tsc --noEmit                      # Type check standalone
 
 # Mobile (Capacitor)
 npm run build:mobile    # Build + sync Capacitor
@@ -83,27 +83,46 @@ npm run android:dev     # Apri Android Studio
 
 ## Architettura
 
-L'applicazione usa standalone components Angular con signal-based state management e `OnPush` change detection.
+L'applicazione usa standalone components Angular con signal-based state management, code splitting `@defer` e `OnPush` change detection (con zoneless change detection a runtime).
 
 ```text
+sw.js                           # Service Worker v7 (cache-first chunk hash, SWR + LRU, SKIP_WAITING)
 src/
-  app.component.ts/html         # Componente principale, stato e modali
-  shift.model.ts                # Interfacce Shift, Repetition, Allowance
+  app.component.ts/html         # Shell principale, signals e blocchi lazy @defer
+  shift.model.ts                # Interfacce Shift, ShiftSeries, ManualShift, ShiftOverride
+  environments/
+    firebase.config.ts          # Configurazione client Firebase Web
+  utils/
+    lazy-loader.ts              # Helper di import dinamico memoizzato
   components/
-    calendar.component.ts       # Vista calendario con touch gesture
-    shift-list-item.component.ts  # Card turno
-    toast-container.component.ts  # Notifiche toast
+    auth-screen.component.ts              # Email/password, Google Login, accesso ospite
+    email-verification-screen.component.ts# Gate verifica email e timer reinvio
+    shift-form-modal.component.ts         # Modale creazione/modifica turno
+    statistics-drawer.component.ts        # Drawer statistiche (periodi, straordinari, indennita)
+    settings-drawer.component.ts          # Tema, lingua, notifiche, account, dispositivi, backup
+    confirm-dialog.component.ts           # Dialoghi di conferma, password e ricerca data
+    calendar.component.ts                 # Vista calendario con gesture touch e navigazione tastiera
+    shift-list-item.component.ts          # Card turno
+    toast-container.component.ts          # Notifiche toast
   services/
-    shift.service.ts            # CRUD turni, ricorrenze, persistenza cifrata
-    crypto.service.ts           # Cifratura AES-GCM 256-bit
+    shift.service.ts            # CRUD turni, ricorrenze, facade persistenza locale/cloud
+    occurrence-generator.ts     # Generatore puro di occorrenze su range + override
+    user-data.service.ts        # Confine unico locale/cloud per ShiftDataState
+    firestore-user-data.service.ts # Listener Firestore lazy, writeBatch e registro dispositivi
+    firebase-app.service.ts     # Inizializzazione Firebase lazy + persistentLocalCache
+    auth.service.ts             # Firebase Auth + stato modalita ospite
+    sync.service.ts             # Orchestrazione stato sync e registrazione dispositivo
+    device.service.ts           # ID dispositivo, rilevamento piattaforma, limite soft installazioni
+    crypto.service.ts           # Cifratura AES-GCM 256-bit e backup PBKDF2
     calendar.service.ts         # Navigazione calendario e griglia giorni
-    translation.service.ts      # Internazionalizzazione
-    notification.service.ts     # Notifiche locali native
+    translation.service.ts      # Internazionalizzazione con cache per lingua
+    notification.service.ts     # Notifiche locali native Capacitor (lazy)
+    push-notification.service.ts# Registrazione push FCM Capacitor (lazy)
     toast.service.ts            # Toast UI
-    sw-update.service.ts        # Aggiornamenti PWA
+    sw-update.service.ts        # Rilevamento e attivazione aggiornamenti Service Worker PWA
   pipes/
-    translate.pipe.ts           # Pipe traduzione
-    date-format.pipe.ts         # Pipe date localizzate
+    translate.pipe.ts           # Pipe traduzione memoizzata
+    date-format.pipe.ts         # Pipe date localizzate memoizzata
   assets/i18n/                  # Traduzioni JSON (it.json, en.json)
 ```
 
@@ -135,22 +154,24 @@ Nota importante:
 
 ## Stato attuale
 
-- Build verificata con Angular 21.2.13, TypeScript 5.9.3 e Tailwind CSS 4.2.2
-- Sincronizzazione cloud con Firebase Firestore implementata e testata
-- Autenticazione (Email/Password + Google Login) completa
-- Unit test: **495+ verdi** (inclusi nuovi test per Sync, Auth, Firestore e Push Notifications)
-- Playwright browser flows: 14/14 verdi (incluso smoke test di sincronizzazione)
-- Emulator Suite Firebase integrata per test di integrazione
+- Build verificata con Angular 22.2.6, TypeScript 6.0.3, Tailwind CSS 4.3.5 e Firebase 13.4.0
+- Ottimizzazione bundle con viste lazy `@defer`, lazy loading degli SDK Firebase/Capacitor e budget di produzione in `angular.json`
+- Sincronizzazione cloud con Firebase Firestore (`ShiftSeries`, `ManualShift`, `ShiftOverride`) implementata e testata
+- Autenticazione completa (Email/Password + verifica email, Google Login, eliminazione account con pulizia cloud)
+- Unit test: **33 suite, 742 test verdi** (inclusi Service Worker, manifest PWA, CSP, configurazione CI, Sync, Auth, Firestore e Push Notifications; branch coverage >95%)
+- Playwright browser flows: **40/40 verdi** su 6 file di test E2E
+- Emulator Suite Firebase integrata per test di integrazione Auth + Firestore
 - Notifiche Push (FCM) configurate e testate su Android nativo
 - Generazione icone adaptive, splash screen e Keystore di firma pronti per il Play Store
-- Build e lint verificati puliti al 100%
+- Build, lint e formattazione verificati puliti al 100%
 
 ## Sincronizzazione Firebase
 
 Gli utenti ospite salvano i dati cifrati localmente. Gli utenti autenticati salvano serie, turni manuali e override in Firestore sotto `users/{uid}`. La cache offline Firestore consente l'uso senza rete e la sincronizzazione riprende quando la connessione torna disponibile.
 
 ### Limitazioni note
-- Il limite di dispositivi per account è impostato a 4 (limite soft).
+
+- Il limite soft per account è impostato a **3 installazioni collegate** (app Android nativa o PWA installata); le sessioni da browser web standard non contano nel limite e i dispositivi inattivi (>90 giorni) vengono rimossi automaticamente o manualmente da Impostazioni.
 - La sincronizzazione richiede un account verificato via email o tramite provider Google.
 
 ## Firebase Emulator Suite
@@ -170,6 +191,7 @@ npm run test:firebase
 EasyTurno supporta l'esportazione nativa per Android tramite **Capacitor 8**.
 
 ### Requisiti di sistema
+
 - **JDK 21** (necessario per Capacitor 8 / Gradle)
 - **Android SDK** configurato o Android Studio installato
 
@@ -190,16 +212,15 @@ I file di firma (`release.keystore`), le configurazioni delle credenziali (`andr
 
 ## E2E Browser
 
-Il progetto usa due livelli di test browser:
-
-- Cypress per la suite E2E ampia gia esistente
-- Playwright per smoke test rapidi su Chromium con server gestito automaticamente
-
-File principali:
+Il progetto usa **Playwright** su Chromium con gestione automatica del dev server (`npm run dev:pw`) per tutti i test browser end-to-end:
 
 - `playwright.config.ts` - configurazione runner, browser e web server
 - `playwright/tests/smoke.spec.ts` - smoke test su bootstrap app, toggle calendario e creazione turno
-- `playwright/tests/app-flows.spec.ts` - flussi browser aggiuntivi: persistenza, CRUD base, tema/lingua, calendario, reset dati, modifica/cancellazione ricorrenze, rendering statistiche, backup/import cifrato con password e gestione errore import con password errata
+- `playwright/tests/app-flows.spec.ts` - flussi browser principali: persistenza, CRUD base, tema/lingua, calendario, reset dati, modifica/cancellazione ricorrenze, rendering statistiche, backup/import cifrato con password e gestione errore decryption
+- `playwright/tests/calendar-offline.spec.ts` - navigazione calendario completa, dark mode/gesture mobile, persistenza offline (`easyturno_user_data_v2`), split ricorrenze, indennità e i18n bidirezionale
+- `playwright/tests/fase3-fixes.spec.ts` - visibilità toast fuori dai modali, backdrop Tailwind v4, bordi colore calendario e traduzioni EN delle statistiche
+- `playwright/tests/fase4-optimization.spec.ts` - avvio Guest senza download SDK Firebase, caricamento chunk `@defer` su richiesta e caching offline dei chunk via Service Worker
+- `playwright/tests/fase5-pwa-perf.spec.ts` - ciclo update `SKIP_WAITING` del Service Worker, cache-first su chunk con hash, manifest/icone PWA, focus trap/restore dei modali e navigazione tastiera del calendario
 - `playwright/tests/helpers.ts` - helper condivisi per bootstrap e creazione turno
 
 ## Licenza

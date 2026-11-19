@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { ToastService } from '../services/toast.service';
 import { TranslatePipe } from '../pipes/translate.pipe';
@@ -128,6 +128,7 @@ import { TranslatePipe } from '../pipes/translate.pipe';
       }
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       @keyframes slide-in {
