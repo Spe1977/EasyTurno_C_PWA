@@ -136,6 +136,28 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI
+Date/time: 2026-11-19T12:06:00+01:00
+Task: Full local test verification on `chore/pwa-update-plan`, PR `#42` merge into `main` on GitHub, local `main` fast-forward pull, and `package-lock.json` `engines.node` sync + handoff commit/push to `main`.
+Status: done; PR `#42` squash-merged into `main` (`0febd5b`), local `main` synced, and `package-lock.json` + `AGENT_HANDOFF.md` committed and pushed to `origin/main`.
+Files changed:
+- Modified: `package-lock.json` (synced root `engines.node` to `^22.22.3 || ^24.15.0 || >=26.0.0` matching `package.json`, triggered by `.husky/post-merge` `npm install`).
+- Modified: `AGENT_HANDOFF.md` (recorded PR `#42` merge onto `main` and collapsed Fase 4 block into `Older Handoffs`).
+Tests red:
+- Outside local host capability: `npm run test:firebase` exited 1 (`Error: Could not spawn java -version`); covered by GitHub Actions `CI/firebase` job (JDK 21).
+Tests green (verified before and via `.husky/pre-push` on `main`):
+- `npm test -- --coverage --watchAll=false`: `33/33` suites, `742/742` passed (`98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
+- `npx jest scripts/check-csp.spec.ts --verbose`: `19/19` passed
+- `npm run build` (via pre-push hook)
+- `npm run test:pw`: `40/40` passed
+- GitHub PR `#42` (`chore/pwa-update-plan` → `main`): all 6 checks passed prior to squash-merge (`0febd5b`); `CI/firebase` on `0febd5b` passed in 38s.
+Open concerns:
+- None for Web PWA scope on `main`. Local `test:firebase` and Android Gradle test runs remain blocked on this host until Java/JDK 21 is installed.
+Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
+
+---
+
+Agent: Gemini CLI
 Date/time: 2026-11-19T11:52:52+01:00
 Task: Execute Fase 6 of `update.md` (Steps 6.1–6.3: CI Node matrix & `engines` alignment, post-build `check-csp` & `test:firebase` JDK 21 CI job, full local verification suite, `README.md`/`README_IT.md` sync, commit/push on `chore/pwa-update-plan`, PR to `main`, and superseded Dependabot PR cleanup) under `cli-collaboration` protocol.
 Status: done; committed and pushed on branch `chore/pwa-update-plan`, PR `#42` opened toward `main` (`https://github.com/Spe1977/EasyTurno_C_PWA/pull/42`), and all 10 superseded Dependabot PRs closed.
@@ -198,41 +220,6 @@ Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external
 
 ---
 
-Agent: Gemini CLI
-Date/time: 2026-11-19T10:56:55+01:00
-Task: Execute Fase 4 of `update.md` (Steps 4.1–4.4: runtime `@angular/compiler` removal, `AppComponent` decomposition into 4 `OnPush` standalone components, `@defer` + lazy Firebase SDK boundaries, `@capacitor/*-notifications` lazy imports, `angular.json` budgets & `inlineCritical` CSP evaluation) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
-Status: done on working tree (uncommitted; user did not authorize commit).
-Files changed:
-- Modified: `index.tsx` (removed runtime `import '@angular/compiler';`).
-- Modified: `src/styles.css` (moved `.modal-fade-in` and `@keyframes fadeIn` globally so extracted components share transitions).
-- Added: `src/utils/lazy-loader.ts` + `.spec.ts` (`createLazyLoader` with promise memoization & error retry reset).
-- Added: `src/components/shift-form-modal.component.{ts,spec.ts}`, `src/components/statistics-drawer.component.{ts,spec.ts}`, `src/components/settings-drawer.component.{ts,spec.ts}`, `src/components/confirm-dialog.component.{ts,spec.ts}`.
-- Modified: `src/app.component.{ts,html,spec.ts}` (slimmed `AppComponent` from 1,276/1,755 lines to 773/402 lines, wired `@defer (when ...; prefetch on immediate)` on `app-shift-form-modal`/`app-calendar` for deterministic offline reliability and strict on-demand `@defer (when ...)` on `app-auth-screen`/`app-email-verification-screen`/`app-settings-drawer`/`app-statistics-drawer`/`app-confirm-dialog`, `DeferBlockBehavior.Playthrough` + coverage tests in `app.component.spec.ts`).
-- Modified: `src/services/firebase-app.service.{ts,spec.ts}`, `src/services/auth.service.{ts,spec.ts}`, `src/services/firestore-user-data.service.{ts,spec.ts}`, `src/services/sync.service.ts`, `src/components/auth-screen.component.ts` (lazy `import('firebase/app' | 'firebase/auth' | 'firebase/firestore')`, `sessionEpoch` guard in `FirestoreUserDataService.start/stop`, removed static `FirebaseError` import in `AuthScreenComponent`).
-- Modified: `src/services/notification.service.ts` & `src/services/push-notification.service.ts` (lazy `import('@capacitor/local-notifications' | '@capacitor/push-notifications')` after `Capacitor.isNativePlatform()`).
-- Modified: `angular.json` (added `production.budgets` `initial` warn `450kB`/error `600kB` and `anyComponentStyle` `4kB`/`8kB`; evaluated `inlineCritical: true` and reverted to `false` because Beasties inlines an executable `<script>` blocked by strict production CSP `script-src 'self'`).
-- Modified: `package.json` (`dev:pw` updated with `--live-reload=false` alongside `--watch=false` to prevent HMR `@ng/component` polling and allow real `@defer` chunk splitting in E2E).
-- Added: `playwright/tests/fase4-optimization.spec.ts` (+2 E2E tests covering zero Firebase/deferred chunks on Guest boot + on-demand fetching + Service Worker offline reload serving `@defer` chunks).
-- Modified: `update.md` (checked off Steps 4.1–4.4, recorded Fase 4 row and exact before/after bundle comparison) & `AGENT_HANDOFF.md` (this block + collapsed `2026-11-18T14:41:00+01:00` Fase 1 handoff).
-Tests red:
-- Step 4.2 TDD extracted components: 4/4 red before component implementation.
-- Step 4.3 TDD lazy Firebase specs: `firebase-app.service.spec.ts` (5 failed) & `firestore-user-data.service.spec.ts` (1 failed) before lazy service refactor.
-- `src/utils/lazy-loader.spec.ts`: red before implementing `lazy-loader.ts`.
-- Pre-existing outside Gate: `tsconfig.spec.json` spec diagnostics & `npm run test:firebase` (no local Java runtime).
-Tests green (verified cleanly after final edits):
-- `npm run lint` & `npm run format:check` & `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit`
-- `npm test -- --coverage --watchAll=false` (30/30 suites, 697/697 passed; 98.85% Stmts / 94.96% Branch / 97.85% Funcs / 99.61% Lines)
-- `npm run build` (Initial total `335.24 kB` raw / `85.23 kB` transfer, down from `1.65 MB` / `383.21 kB`; separate lazy chunks for Auth, Firestore, Capacitor notifications, and all 7 `@defer` UI blocks)
-- `npx jest scripts/check-csp.spec.ts` (19/19 passed)
-- `npm run test:pw` (38/38 passed, including `playwright/tests/fase4-optimization.spec.ts`)
-Open concerns:
-- Working tree is uncommitted on `chore/pwa-update-plan` awaiting explicit user commit authorization (if desired).
-- Branch coverage improved from `94.75%` to `94.96%` (final 0.04% push to ≥95% aligns naturally with Step 6.2).
-Next agent starts from: Review or commit Fase 4 changes (if user instructs), then proceed to Fase 5 (`update.md` Steps 5.1–5.3: PWA SW runtime optimization, icons/manifest, UX/runtime responsiveness).
-Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
-
----
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -258,3 +245,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 1 (`update.md` Steps 1.1–1.2) on `chore/pwa-update-plan`:** aligned ESLint 10 / Prettier 3.10.1 / Jest 30.5.2 / `ts-jest@29.4.15` / `jest-preset-angular@16.2.0` / `@playwright/test@1.65.1` without `--legacy-peer-deps`, removed `handlebars` override (`critical` 7 → 5); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green (committed on `chore/pwa-update-plan`).
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 2 (`update.md` Steps 2.1–2.4) on `chore/pwa-update-plan`:** upgraded Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2` with clean `npm ci` (`--legacy-peer-deps` removed) and `@grpc/grpc-js: ^1.14.7` override (`0` `--omit=dev` high/critical vulns); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green (`test:firebase` blocked locally by missing Java).
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 3 (`update.md` Steps 3.1–3.4) on `chore/pwa-update-plan`:** moved `<app-toast-container>` out of modal `@if`/`@switch`, replaced `bg-opacity-50` with `bg-black/50`, mapped `CalendarComponent` `borderLeftColor` to hex, internationalized Statistics modal (`212/212` i18n keys); Lint/Prettier/TSC/Jest (701/701)/build/CSP (19/19)/Playwright (36/36) green.
+- **2026-11-19, Gemini CLI — Fase 4 (`update.md` Steps 4.1–4.4) on `chore/pwa-update-plan`:** removed runtime `@angular/compiler`, decomposed `AppComponent` into 4 `OnPush` standalone components, added `@defer` + `createLazyLoader` boundaries for Firebase and Capacitor notification plugins, and enforced `angular.json` budgets (Initial bundle `1.65 MB` -> `335.24 kB` raw / `85.23 kB` transfer); Lint/Prettier/TSC/Jest (697/697)/build/CSP (19/19)/Playwright (38/38) green.
