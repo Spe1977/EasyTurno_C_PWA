@@ -19,7 +19,7 @@ import { ToastService } from './services/toast.service';
 import { NotificationService } from './services/notification.service';
 import { SwUpdateService } from './services/sw-update.service';
 import { CryptoService } from './services/crypto.service';
-import { AuthService } from './services/auth.service';
+import { AuthService, mapReauthErrorKey } from './services/auth.service';
 import { TranslatePipe } from './pipes/translate.pipe';
 import { LangDatePipe } from './pipes/date-format.pipe';
 import { ToastContainerComponent } from './components/toast-container.component';
@@ -35,6 +35,7 @@ import { StatisticsDrawerComponent } from './components/statistics-drawer.compon
 import { SettingsDrawerComponent } from './components/settings-drawer.component';
 import {
   ConfirmDialogComponent,
+  type ResetConfirmationPayload,
   type SecondaryDialogMode,
 } from './components/confirm-dialog.component';
 import { SyncService } from './services/sync.service';
@@ -112,6 +113,7 @@ export class AppComponent {
   // Confirmation state
   shiftToDelete = signal<Shift | null>(null);
   isDeletingAccount = signal(false);
+  isResettingData = signal(false);
 
   // Password prompt state
   passwordPromptMode = signal<PasswordPromptMode>('export');
@@ -491,6 +493,9 @@ export class AppComponent {
   }
 
   closeModal(): void {
+    if (this.activeModal() === 'resetConfirm' && this.isResettingData()) {
+      return;
+    }
     if (this.activeModal() === 'passwordPrompt') {
       this.pendingImportData.set(null);
       this.isImporting.set(false);
@@ -850,10 +855,51 @@ export class AppComponent {
     this.openModal('resetConfirm');
   }
 
-  executeReset(): void {
-    this.shiftService.deleteAllShifts();
-    this.closeModal();
-    this.toastService.success(this.translationService.translate('resetSuccess'));
+  async executeReset(payload: ResetConfirmationPayload = {}): Promise<void> {
+    if (this.isResettingData()) return;
+
+    if (!this.authService.isAuthenticated()) {
+      if (payload.confirmationText?.trim() !== 'RESET') {
+        this.toastService.error(this.translationService.translate('resetKeywordInvalid'));
+        return;
+      }
+      this.shiftService.deleteAllShifts();
+      this.activeModal.set('none');
+      this.toastService.success(this.translationService.translate('resetSuccess'));
+      return;
+    }
+
+    if (this.authService.hasPasswordProvider() && !payload.password) {
+      this.toastService.error(this.translationService.translate('resetPasswordRequired'));
+      return;
+    }
+
+    this.isResettingData.set(true);
+    try {
+      await this.authService.reauthenticateForSensitiveAction(
+        this.authService.hasPasswordProvider() ? { password: payload.password } : {}
+      );
+      this.shiftService.deleteAllShifts();
+      this.activeModal.set('none');
+      this.toastService.success(this.translationService.translate('resetSuccess'));
+    } catch (error) {
+      this.handleResetError(error);
+    } finally {
+      this.isResettingData.set(false);
+    }
+  }
+
+  private handleResetError(error: unknown): void {
+    const key = mapReauthErrorKey(error);
+    if (key === 'resetErrorPopupClosed') {
+      this.toastService.info(this.translationService.translate(key));
+      return;
+    }
+    if (key === 'resetErrorOffline' || key === 'authDeleteAccountReauthRequired') {
+      this.toastService.error(this.translationService.translate(key), 6000);
+      return;
+    }
+    this.toastService.error(this.translationService.translate(key));
   }
 
   executeDecryptionReset(): void {

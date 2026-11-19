@@ -21,6 +21,41 @@ export interface DeleteAccountOptions {
   password?: string;
 }
 
+export type ReauthOptions = DeleteAccountOptions;
+
+export function extractAuthErrorCode(error: unknown): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code;
+  }
+  return '';
+}
+
+export function mapReauthErrorKey(error: unknown): string {
+  switch (extractAuthErrorCode(error)) {
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'resetErrorInvalidPassword';
+    case 'auth/too-many-requests':
+      return 'authErrorTooManyRequests';
+    case 'auth/network-request-failed':
+      return 'resetErrorOffline';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'resetErrorPopupClosed';
+    case 'auth/popup-blocked':
+      return 'authErrorPopupBlocked';
+    case 'auth/requires-recent-login':
+      return 'authDeleteAccountReauthRequired';
+    default:
+      return 'authGenericError';
+  }
+}
+
 const AUTH_MODE_STORAGE_KEY = 'easyturno.authMode';
 const VERIFICATION_RESEND_COOLDOWN_MS = 60_000;
 
@@ -124,6 +159,30 @@ export class AuthService {
     this._state.set({ mode: 'unauthenticated' });
   }
 
+  async reauthenticateForSensitiveAction(options: ReauthOptions = {}): Promise<void> {
+    if (this.isDeviceOffline()) {
+      throw this.createAuthError(
+        'auth/network-request-failed',
+        'Network request failed while offline.'
+      );
+    }
+    try {
+      await this.reauthenticateCurrentUser(options);
+    } catch (error) {
+      if (!extractAuthErrorCode(error) && this.isDeviceOffline()) {
+        throw this.createAuthError(
+          'auth/network-request-failed',
+          'Network request failed while offline.'
+        );
+      }
+      throw error;
+    }
+  }
+
+  mapReauthErrorKey(error: unknown): string {
+    return mapReauthErrorKey(error);
+  }
+
   async deleteAccount(options: DeleteAccountOptions = {}): Promise<void> {
     const [auth, sdk] = await Promise.all([this.firebaseApp.getAuth(), this.loadAuthSdk()]);
     const user = auth.currentUser;
@@ -132,21 +191,48 @@ export class AuthService {
       return;
     }
 
+    await this.reauthenticateCurrentUser(options, user);
+
+    await this.firestoreUserData.deleteUserDataTree(user.uid);
+    await sdk.deleteUser(user);
+    this.clearGuestPreference();
+    this._state.set({ mode: 'unauthenticated' });
+  }
+
+  private async reauthenticateCurrentUser(
+    options: ReauthOptions = {},
+    userOverride?: User | null
+  ): Promise<void> {
+    const [auth, sdk] = await Promise.all([this.firebaseApp.getAuth(), this.loadAuthSdk()]);
+    const user = userOverride ?? auth.currentUser;
+    if (!user) {
+      throw this.createAuthError(
+        'auth/requires-recent-login',
+        'No authenticated user available for re-authentication.'
+      );
+    }
+
     const providerIds = user.providerData?.map(provider => provider.providerId) ?? [];
     if (providerIds.includes('password')) {
       if (!user.email || !options.password) {
-        throw new Error('Password re-authentication requires email and password.');
+        throw this.createAuthError(
+          'auth/invalid-credential',
+          'Password re-authentication requires email and password.'
+        );
       }
       const credential = sdk.EmailAuthProvider.credential(user.email, options.password);
       await sdk.reauthenticateWithCredential(user, credential);
     } else if (providerIds.includes('google.com')) {
       await sdk.reauthenticateWithPopup(user, new sdk.GoogleAuthProvider());
     }
+  }
 
-    await this.firestoreUserData.deleteUserDataTree(user.uid);
-    await sdk.deleteUser(user);
-    this.clearGuestPreference();
-    this._state.set({ mode: 'unauthenticated' });
+  private createAuthError(code: string, message: string): Error & { code: string } {
+    return Object.assign(new Error(message), { code });
+  }
+
+  private isDeviceOffline(): boolean {
+    return typeof navigator !== 'undefined' && navigator.onLine === false;
   }
 
   private async bootstrapAuth(): Promise<void> {
