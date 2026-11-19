@@ -100,7 +100,7 @@ src/
     shift-form-modal.component.ts         # Modale creazione/modifica turno
     statistics-drawer.component.ts        # Drawer statistiche (periodi, straordinari, indennita)
     settings-drawer.component.ts          # Tema, lingua, notifiche, account, dispositivi, backup
-    confirm-dialog.component.ts           # Dialoghi di conferma, password e ricerca data
+    confirm-dialog.component.ts           # Dialoghi di conferma, reset protetto, password e ricerca data
     calendar.component.ts                 # Vista calendario con gesture touch e navigazione tastiera
     shift-list-item.component.ts          # Card turno
     toast-container.component.ts          # Notifiche toast
@@ -110,7 +110,7 @@ src/
     user-data.service.ts        # Confine unico locale/cloud per ShiftDataState
     firestore-user-data.service.ts # Listener Firestore lazy, writeBatch e registro dispositivi
     firebase-app.service.ts     # Inizializzazione Firebase lazy + persistentLocalCache
-    auth.service.ts             # Firebase Auth + stato modalita ospite
+    auth.service.ts             # Firebase Auth, ri-autenticazione e stato modalita ospite
     sync.service.ts             # Orchestrazione stato sync e registrazione dispositivo
     device.service.ts           # ID dispositivo, rilevamento piattaforma, limite soft installazioni
     crypto.service.ts           # Cifratura AES-GCM 256-bit e backup PBKDF2
@@ -217,7 +217,7 @@ Il progetto usa **Playwright** su Chromium con gestione automatica del dev serve
 
 - `playwright.config.ts` - configurazione runner, browser e web server
 - `playwright/tests/smoke.spec.ts` - smoke test su bootstrap app, toggle calendario e creazione turno
-- `playwright/tests/app-flows.spec.ts` - flussi browser principali: persistenza, CRUD base, tema/lingua, calendario, reset dati, modifica/cancellazione ricorrenze, rendering statistiche, backup/import cifrato con password e gestione errore decryption
+- `playwright/tests/app-flows.spec.ts` - flussi browser principali: persistenza, CRUD base, tema/lingua, calendario, reset protetto con conferma `RESET`, modifica/cancellazione ricorrenze, rendering statistiche, backup/import cifrato con password e gestione errore decryption
 - `playwright/tests/calendar-offline.spec.ts` - navigazione calendario completa, dark mode/gesture mobile, persistenza offline (`easyturno_user_data_v2`), split ricorrenze, indennità e i18n bidirezionale
 - `playwright/tests/fase3-fixes.spec.ts` - visibilità toast fuori dai modali, backdrop Tailwind v4, bordi colore calendario e traduzioni EN delle statistiche
 - `playwright/tests/fase4-optimization.spec.ts` - avvio Guest senza download SDK Firebase, caricamento chunk `@defer` su richiesta e caching offline dei chunk via Service Worker

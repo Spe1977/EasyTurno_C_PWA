@@ -73,7 +73,7 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
   - `shift-form-modal.component.ts` - Single/recurring shift creation & edit modal
   - `statistics-drawer.component.ts` - Period analytics drawer (presets, hours, overtime, allowances)
   - `settings-drawer.component.ts` - Theme, language, notifications, account, installed devices, encrypted backup/restore
-  - `confirm-dialog.component.ts` - Confirmation, password prompt, account deletion, decryption recovery, and date-search dialogs
+  - `confirm-dialog.component.ts` - Confirmation, protected data-reset (`RESET` / password / Google popup), password prompt, account deletion, decryption recovery, and date-search dialogs
   - `calendar.component.ts` - Monthly calendar grid with touch swipe and keyboard navigation
   - `shift-list-item.component.ts` - Shift list card with recurring indicator
   - `toast-container.component.ts` - Global toast notifications
@@ -84,7 +84,7 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
   - `user-data.service.ts` - Single store boundary switching transparently between local state and `FirestoreUserDataService`
   - `firestore-user-data.service.ts` - Lazy Firestore `onSnapshot` listeners, `writeBatch` mutations, and device registry
   - `firebase-app.service.ts` - Lazy singleton Firebase app, Auth, and Firestore (`persistentLocalCache`)
-  - `auth.service.ts` - Signal-based Firebase Auth + guest mode persistence
+  - `auth.service.ts` - Signal-based Firebase Auth, `reauthenticateForSensitiveAction`, and guest mode persistence
   - `sync.service.ts` - Sync status orchestration and device registration
   - `device.service.ts` - Device ID, platform detection (`native` / `pwa-installed` / `web`), soft limit (`3` installed devices; web sessions unlimited)
   - `crypto.service.ts` - AES-GCM 256-bit local storage encryption (`ETBLOB1:` header, non-extractable IndexedDB `CryptoKey`) & `PBKDF2-SHA256` (600,000 iterations) encrypted backups
@@ -124,7 +124,7 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 - **Unit & Script Tests**: Jest 30 (`jest-preset-angular`)
   - Test files use `.spec.ts` across `src/` and `scripts/` (`check-csp.spec.ts`, `ci-config.spec.ts`, `pwa-manifest.spec.ts`, `sw.spec.ts`)
   - Mock setup in `setup-jest.js` includes Web Crypto API & Firebase modular SDK mocks
-  - Current coverage: `33/33` suites, `742/742` tests passing, `>95%` branch coverage
+  - Current coverage: `33/33` suites, `758/758` tests passing, `98.93%` Stmts / `95.44%` Branch coverage
 - **Browser E2E Tests**: Playwright `1.65.1`
   - Config in `playwright.config.ts` with `npm run dev:pw` on `http://127.0.0.1:3100`
   - `6` spec files in `playwright/tests/` (`smoke`, `app-flows`, `calendar-offline`, `fase3-fixes`, `fase4-optimization`, `fase5-pwa-perf`), `40/40` tests on Chromium

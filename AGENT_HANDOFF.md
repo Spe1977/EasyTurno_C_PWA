@@ -128,21 +128,21 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI
-Date/time: 2026-11-19T12:51:00+01:00
-Task: Execute Fase 7 of `update.md` (Steps 7.1–7.4: strong protection on `resetAllData` across Email/Password, Google Sign-In, and Guest modes, TDD Jest + Playwright verification, doc alignment, commit on `feat/phase7-reset-protection`, and merge/push to `main` local & GitHub) under `cli-collaboration` protocol.
-Status: done; Fase 7 implemented and verified with full lint/format/typecheck/Jest/build/CSP/Playwright suites green, ready for final commit and merge to `main`.
+Date/time: 2026-11-19T12:57:30+01:00
+Task: Execute Fase 7 of `update.md` (Steps 7.1–7.4: strong protection on `resetAllData` across Email/Password, Google Sign-In, and Guest modes, TDD Jest + Playwright verification, doc alignment across `README.md`/`README_IT.md`/`CLAUDE.md`/`GEMINI.md`/`AGENT_HANDOFF.md`/`update.md`, PR `#43` merge onto `main`, and local/GitHub sync) under `cli-collaboration` protocol.
+Status: done; PR `#43` squash-merged onto `main` (`cdd93da`) with all 6 CI checks green, and follow-up doc sync committed & merged onto `main`.
 Files changed:
 - Modified: `src/services/auth.service.ts` & `src/services/auth.service.spec.ts` (shared `reauthenticateCurrentUser`, new `reauthenticateForSensitiveAction`, upfront/mid-flight offline check `auth/network-request-failed`, `extractAuthErrorCode` & `mapReauthErrorKey`).
 - Modified: `src/components/confirm-dialog.component.ts` & `src/components/confirm-dialog.component.spec.ts` (`resetConfirm` profile-specific UI: `current-password` for password accounts, Google verification hint + popup trigger for Google accounts, `RESET` confirmation input for Guest mode, `isResettingData` disabled state, input reset on reopen).
 - Modified: `src/app.component.ts`, `src/app.component.html`, & `src/app.component.spec.ts` (async `executeReset(payload)`, `isResettingData` double-submit & `closeModal()` guards, `handleResetError` toast mapping).
 - Modified: `src/assets/i18n/it.json` & `src/assets/i18n/en.json` (+12 symmetric keys, `224/224` total parity).
 - Modified: `playwright/tests/helpers.ts`, `playwright/tests/app-flows.spec.ts`, `playwright/tests/fase3-fixes.spec.ts` (`confirmGuestDataReset` helper and E2E test verifying disabled button without `RESET`).
-- Modified: `README.md`, `README_IT.md`, `GEMINI.md`, `AGENT_HANDOFF.md`, and local-only `update.md` (gitignored).
+- Modified: `README.md`, `README_IT.md`, `CLAUDE.md`, `GEMINI.md`, `AGENT_HANDOFF.md`, and local-only `update.md` (gitignored).
 Tests red:
 - Step 7.2 TDD: 6 new `AuthService.reauthenticateForSensitiveAction` / `mapReauthErrorKey` tests failed before implementation (`TypeError: ... is not a function`).
 - Step 7.3 TDD: 5 new `ConfirmDialogComponent` `resetConfirm` tests failed before adding inputs/template (`NG0303` / missing elements).
 - Step 7.4 TDD: 6 new `AppComponent` Fase 7 tests failed before updating `executeReset` / `isResettingData` (`deleteAllShifts` called unexpectedly / missing `isResettingData`).
-- Outside local host capability: `npm run test:firebase` requires Java/JDK 21 (automated in GitHub Actions `CI/firebase`).
+- Outside local host capability: `npm run test:firebase` requires Java/JDK 21 (verified green in GitHub Actions `CI/firebase`).
 Tests green:
 - `npm run lint` (`0` errors) & `npm run format:check` & `npx prettier --check "playwright/**/*.ts"` (clean)
 - `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (`0` errors)
@@ -150,6 +150,7 @@ Tests green:
 - `npm test -- --coverage --watchAll=false`: `33/33` suites, `758/758` passed (`98.93%` Stmts / `95.44%` Branch / `97.54%` Funcs / `99.65%` Lines)
 - `npm run build` (`3.142 s`, Initial total `345.16 kB` raw / `87.48 kB` transfer) & `npx jest scripts/check-csp.spec.ts --verbose` (`19/19` passed)
 - `npm run test:pw`: `40/40` passed (45.1s)
+- GitHub PR `#43` CI: `CI/test (22.x)` (1m13s), `CI/test (24.x)` (55s), `CI/firebase` (26s), `CI/playwright` (2m10s), `Cloudflare Pages`, `GitGuardian Security Checks` — all green.
 Open concerns:
 - Local `test:firebase` and Android Gradle runs require Java/JDK 21 on this host; covered in CI by `CI/firebase`.
 Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.
