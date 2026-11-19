@@ -4,45 +4,48 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Multi-Agent Handoff
 
-This repository is also worked on by Codex and sometimes Gemini CLI. Before editing, read `AGENT_HANDOFF.md`, then follow its start-of-shift and end-of-shift checklists. The worktree may be dirty because another CLI agent or the user has active changes; do not reset, revert, delete, or clean changes you did not make. Do not commit unless the user explicitly asks.
+This repository is also worked on by Codex and Gemini CLI. Before editing, read `AGENT_HANDOFF.md` and `README.md` (or `README_IT.md`), then follow the start-of-shift and end-of-shift checklists in `AGENT_HANDOFF.md`. The worktree may be dirty because another CLI agent or the user has active changes; do not reset, revert, delete, or clean changes you did not make. Do not commit unless the user explicitly asks.
 
 ## Project Overview
 
-EasyTurno is a Progressive Web App (PWA) for work shift management, built with Angular and designed to be offline-first. The application allows users to create, edit, and manage work shifts with support for recurring shifts, overtime tracking, allowances management, statistical analysis, and data export/import.
+EasyTurno is a Progressive Web App (PWA) for work shift management, built with Angular and designed to be offline-first. It supports single and recurring shifts, overtime tracking, multiple allowances per shift, a statistics dashboard, encrypted local persistence (`AES-GCM 256-bit`), password-protected encrypted JSON backups, and optional cloud synchronization via Firebase Auth and Firestore.
 
 ## Development Commands
 
 ### Core Development
 
-- `npm run dev` - Start development server on port 3000
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build (serves production build)
-- `npm install` - Install dependencies
+- `npm run dev` - Start development server on port 3000 (`NG_CLI_ANALYTICS=false ng serve`)
+- `npm run build` - Build for production (enforces `angular.json` bundle budgets)
+- `npm run preview` - Preview production build (`ng serve --configuration=production`)
+- `npm install` / `npm ci` - Install dependencies (Node `^22.22.3 || ^24.15.0 || >=26.0.0`)
 
 ### Code Quality
 
-- `npm run lint` - Run ESLint on TypeScript files
+- `npm run lint` - Run ESLint on `src/**/*.ts`
 - `npm run lint:fix` - Fix auto-fixable ESLint errors
-- `npm run format` - Format code with Prettier
-- `npm run format:check` - Check code formatting without modifying files
+- `npm run format` - Format files in `src/` with Prettier
+- `npm run format:check` - Check formatting without modifying files
+- `npx tsc --noEmit` - Standalone TypeScript check for the app
+- `npx tsc -p playwright/tsconfig.json --noEmit` - TypeScript check for Playwright specs
 
 ### Testing
 
-- `npm test` - Run Jest unit tests (single run)
-- `npm run test:watch` - Run Jest in watch mode for development
-- `npm run test:coverage` - Generate test coverage report (output to `coverage/`)
-- `npm run cypress:open` - Open Cypress test runner (interactive)
-- `npm run cypress:run` - Run Cypress E2E tests headlessly
-- `npm run e2e` - Start dev server and run all E2E tests
-- `npm run test:pw` - Run Playwright browser smoke tests on Chromium
+- `npm test` - Run Jest unit & script tests (`src/**/*.spec.ts`, `scripts/*.spec.ts`)
+- `npm run test:watch` - Run Jest in watch mode
+- `npm run test:coverage` - Generate coverage report in `coverage/`
+- `npx jest scripts/check-csp.spec.ts` - Verify CSP headers and built `dist/` output
+- `npm run test:pw:install` - Install Chromium for Playwright
+- `npm run test:pw` - Run full Playwright browser E2E suite (`40` tests across `6` spec files)
 - `npm run test:pw:ui` - Playwright UI mode (interactive)
 - `npm run test:pw:headed` - Playwright headed mode
+- `npm run emulators` - Start local Firebase Auth + Firestore emulators
+- `npm run test:firebase` - Run `src/services/sync-emulator.spec.ts` against local emulators (requires JDK 21)
 
 ### Mobile Development (Capacitor)
 
 - `npm run build:mobile` - Build app and sync with Capacitor
 - `npm run android:dev` - Open Android Studio for development
-- `npm run android:build` - Build production APK (requires Android SDK)
+- `npm run android:build` - Build release APK (`./gradlew assembleRelease`, requires JDK 21 + Android SDK)
 - `npm run cap:sync` - Sync web assets to native platforms
 - `npm run cap:update` - Build and sync to native platforms
 
@@ -50,230 +53,87 @@ EasyTurno is a Progressive Web App (PWA) for work shift management, built with A
 
 ### Core Technologies
 
-- **Angular 21+** with standalone components and signal-based state management
-- **TypeScript 5.9+** with strict mode enabled for maximum type safety
-- **Tailwind CSS 4** for styling with dark mode support (CSS-first config)
-- **PWA** features with service worker and manifest
-- **Capacitor 8** for native mobile deployments (Android support included)
+- **Angular 22** (`22.2.6` core / `22.2.7` CLI/build) with standalone components, signals, `@defer` code splitting, `OnPush` change detection, and zoneless runtime
+- **TypeScript 6.0** (`~6.0.3`) with strict mode enabled
+- **Tailwind CSS 4.3** (`4.3.5`) for styling with light/dark mode support (CSS-first config)
+- **Firebase 13.4** (`13.4.0`, modular Web SDK loaded lazily via `createLazyLoader`) for Auth, Firestore (`persistentLocalCache`), and native FCM push integration
+- **PWA** with Service Worker `v7` (`sw.js`) and `manifest.webmanifest`
+- **Capacitor 8** (`8.6.2`) for native Android deployment
 
 ### Application Structure
 
-The app follows a component-based architecture optimized for a single-page PWA:
+- `sw.js` - Service Worker `v7` (explicit same-origin `SKIP_WAITING`, cache-first hashed chunks, stale-while-revalidate + 60-entry LRU pruning, `{ ignoreVary: true }`)
+- `src/app.component.ts` / `.html` - Main shell, signals, list visibility window, and lazy `@defer` boundaries
+- `src/shift.model.ts` - `Shift`, `ShiftSeries`, `ManualShift`, `ShiftOverride`, `ShiftDataState` (`schemaVersion: 2`), `Repetition`, `Allowance`, `ShiftColor`
+- `src/environments/firebase.config.ts` - Firebase web client config
+- `src/utils/lazy-loader.ts` - Memoized dynamic import helper with retry-on-error
+- `src/components/` - Standalone `OnPush` components:
+  - `auth-screen.component.ts` - Email/password sign-in/up, password reset, Google Sign-In, Guest entry
+  - `email-verification-screen.component.ts` - Email verification gate & 60s resend cooldown
+  - `shift-form-modal.component.ts` - Single/recurring shift creation & edit modal
+  - `statistics-drawer.component.ts` - Period analytics drawer (presets, hours, overtime, allowances)
+  - `settings-drawer.component.ts` - Theme, language, notifications, account, installed devices, encrypted backup/restore
+  - `confirm-dialog.component.ts` - Confirmation, password prompt, account deletion, decryption recovery, and date-search dialogs
+  - `calendar.component.ts` - Monthly calendar grid with touch swipe and keyboard navigation
+  - `shift-list-item.component.ts` - Shift list card with recurring indicator
+  - `toast-container.component.ts` - Global toast notifications
+- `src/services/` - Core business & persistence services:
+  - `shift.service.ts` - Shift CRUD facade, validation (`MAX_TITLE_LENGTH = 200`, `MAX_NOTES_LENGTH = 2000`), occurrence materialization, legacy migration, and backup import/export
+  - `occurrence-generator.ts` - Pure `generateOccurrencesForRange()` materializing `ShiftSeries` + `ManualShift` + `ShiftOverride`
+  - `user-data.model.ts` - `EMPTY_SHIFT_DATA_STATE`, `USER_DATA_STORAGE_KEY` (`easyturno_user_data_v2`), `LEGACY_SHIFT_STORAGE_KEY` (`easyturno_shifts`)
+  - `user-data.service.ts` - Single store boundary switching transparently between local state and `FirestoreUserDataService`
+  - `firestore-user-data.service.ts` - Lazy Firestore `onSnapshot` listeners, `writeBatch` mutations, and device registry
+  - `firebase-app.service.ts` - Lazy singleton Firebase app, Auth, and Firestore (`persistentLocalCache`)
+  - `auth.service.ts` - Signal-based Firebase Auth + guest mode persistence
+  - `sync.service.ts` - Sync status orchestration and device registration
+  - `device.service.ts` - Device ID, platform detection (`native` / `pwa-installed` / `web`), soft limit (`3` installed devices; web sessions unlimited)
+  - `crypto.service.ts` - AES-GCM 256-bit local storage encryption (`ETBLOB1:` header, non-extractable IndexedDB `CryptoKey`) & `PBKDF2-SHA256` (600,000 iterations) encrypted backups
+  - `calendar.service.ts` - Calendar navigation and 42-day grid generation
+  - `translation.service.ts` - i18n with per-language lookup cache (`it` / `en`)
+  - `notification.service.ts` - Lazy Capacitor local notifications (native platforms only)
+  - `push-notification.service.ts` - Lazy Capacitor FCM push registration (native platforms only)
+  - `toast.service.ts` - Toast notifications
+  - `sw-update.service.ts` - Service Worker update detection & activation
+- `src/pipes/` - Memoized translation and date formatting pipes (`translate.pipe.ts`, `date-format.pipe.ts`)
+- `src/assets/i18n/` - Translation JSON files (`it.json`, `en.json`)
 
-- `src/app.component.ts` - Main container component with application state and modal management
-- `src/components/` - Reusable standalone components
-  - `shift-list-item.component.ts` - Individual shift card display
-  - `toast-container.component.ts` - Toast notification UI
-  - `calendar.component.ts` - Mobile-optimized calendar view with touch gestures
-- `src/services/` - Core business logic services
-- `src/pipes/` - Custom Angular pipes for data transformation
-  - `translate.pipe.ts` - Internationalization pipe
-  - `date-format.pipe.ts` - Locale-aware date formatting
-- `src/shift.model.ts` - TypeScript interfaces and type definitions
-- `src/assets/i18n/` - Translation JSON files (it.json, en.json)
+### State Management & Data Persistence Flow
 
-### State Management
-
-The application uses Angular's signal-based reactive state management:
-
-- All state is managed in the main `AppComponent` using Angular signals
-- `ShiftService` handles data persistence to localStorage with automatic sync
-- UI state includes modal management, form state, view mode toggle (list/calendar), and list pagination
-- Calendar state managed by `CalendarService` with signal-based month/year navigation
-
-### Key Services
-
-- **ShiftService** (`src/services/shift.service.ts`) - Manages shift CRUD operations, recurring shift generation, and encrypted localStorage persistence
-- **CryptoService** (`src/services/crypto.service.ts`) - Handles AES-GCM 256-bit encryption/decryption for secure data storage
-- **CalendarService** (`src/services/calendar.service.ts`) - Manages calendar state, month/year navigation, and day grid generation (42-day grid for consistent 6-week display)
-- **TranslationService** (`src/services/translation.service.ts`) - Handles internationalization with JSON-based translations
-- **NotificationService** (`src/services/notification.service.ts`) - Manages local notifications for shift reminders (Capacitor native platforms only)
-- **ToastService** (`src/services/toast.service.ts`) - Displays temporary toast notifications to users
-- **SwUpdateService** (`src/services/sw-update.service.ts`) - Detects and notifies users of available PWA updates automatically
-
-### Data Models
-
-- **Shift** interface defines work shift structure with support for:
-  - Recurring patterns via `Repetition` interface
-  - Optional notes field
-  - Overtime hours tracking (`overtimeHours`)
-  - Multiple allowances via `Allowance[]` array
-- **Repetition** interface defines recurring shift frequency and intervals (daily, weekly, monthly, yearly)
-- **Allowance** interface defines custom allowances with name and amount
-- Shifts are generated up to 2 years in advance for recurring patterns
+- Persistence uses `ShiftDataState` (`schemaVersion: 2`: `shiftSeries`, `manualShifts`, `shiftOverrides`).
+- **Guest / offline mode**: `ShiftService` encrypts `ShiftDataState` via `CryptoService` (`ETBLOB1:` + AES-GCM 256-bit) and persists it under `easyturno_user_data_v2` (reading legacy `easyturno_shifts` read-only for backward-compatible migration).
+- **Authenticated mode**: `UserDataService` mirrors `FirestoreUserDataService.state()` and routes mutations through Firestore `writeBatch` under `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` with `persistentLocalCache` offline support.
+- `ShiftService.shifts` is a `computed<Shift[]>` materializing manual shifts and recurring series (up to `MAX_YEARS_PER_SERIES = 2`, capped by `MAX_RANGE_OCCURRENCES_PER_SERIES = 900` in `occurrence-generator.ts`).
+- `AppComponent` filters the default list view to shifts intersecting `[today - 12 months, today + 24 months]` (`PAST_MONTHS_VISIBLE = 12`, `FUTURE_MONTHS_VISIBLE = 24`) with 50-item pagination (`INITIAL_LIST_SIZE = 50`, `LIST_LOAD_INCREMENT = 50`), while date search bypasses the window and surfaces an info toast when outside range.
 
 ### PWA & Mobile Features
 
 #### Progressive Web App (PWA)
 
-- Offline-first design with encrypted localStorage persistence
-- Web app manifest with shortcuts for quick shift creation
-- Service worker for caching (sw.js)
-- Automatic update detection with user notification (SwUpdateService)
-- Responsive design supporting mobile and desktop
-- Content Security Policy (CSP) for XSS protection
-- AES-GCM 256-bit encryption for sensitive data at rest
+- Offline-first caching via `sw.js` (`v7`): pauses new SW in `waiting` until explicit same-origin `SKIP_WAITING`, uses cache-first for hashed build chunks, stale-while-revalidate + 60-entry LRU pruning for unhashed same-origin runtime assets, and `{ ignoreVary: true }` on cache matches
+- Strict production Content Security Policy (`index.production.html` + `_headers`, verified by `scripts/check-csp.spec.ts`), `inlineCritical: false` in `angular.json`
+- Accessible modals with `role="dialog"` / `role="alertdialog"`, `aria-modal="true"`, `[attr.inert]` on background shell, focus trap, and focus restore on close
 
 #### Native Mobile (Capacitor)
 
-- **Platform Detection**: `Capacitor.isNativePlatform()` used to conditionally enable native features
-- **Local Notifications**: Shift reminders via @capacitor/local-notifications (native platforms only)
-- **Haptics**: Tactile feedback for user interactions
-- **Share API**: Native share sheet integration
-- **Splash Screen**: Branded loading screen with configurable duration
-- **Status Bar**: Theme-aware status bar styling
-- **Android Build**: Gradle-based APK generation with release signing support
-- **Configuration**: `capacitor.config.ts` defines app ID, name, and plugin settings
-
-### Recurring Shifts Logic
-
-The app generates individual shift instances for recurring patterns rather than storing rules:
-
-- Supports daily, weekly, monthly, and yearly repetitions
-- Generates up to 200 instances or 2 years ahead
-- Each instance has unique ID but shares seriesId for group operations
-
-### Advanced Features
-
-#### Overtime Tracking
-
-- Track overtime hours for each shift (single or recurring)
-- Decimal support for precise hour tracking (step 0.5)
-- Aggregate overtime calculations in statistics
-
-#### Allowances Management
-
-- Add multiple custom allowances per shift
-- Each allowance has a customizable name and amount
-- Dynamic UI for adding/removing allowances
-- Statistics aggregate allowances by name across selected period
-
-#### Statistics Dashboard (Premium Drawer)
-
-- Accessible from Settings menu as a premium mobile-first sliding drawer (rounded-t-3xl) or desktop dashboard.
-- **Quick Timeframe Presets**: One-click filters for "This Month", "Last Month", "Last 30 Days", and "This Year" alongside customizable start/end date selectors.
-- **Asymmetric Metric Grid**: Visually stunning dashboard panel integrating:
-  - Active Workload (Total shifts count with visual badge).
-  - Cumulative Hours Worked & Overtime hours (highlighted with color-coded theme and clock icon).
-- **Proportional Chromatic Progress Bars**: Shows worked shifts by type as elegant progress bars inheriting colors dynamically from the custom shift configuration (e.g. sky, green, amber).
-- **Financial Portfolio**: List of aggregated allowances by name shown as digital wallet components with currency formatted in emerald green.
-- **High-Fidelity Empty State**: Illustrated SVG bar charts showing helpful instructions if no shifts are recorded in the selected period.
-
-
-#### Calendar View
-
-- Toggle between list view and calendar view with signal-based `viewMode` state
-- Mobile-optimized monthly calendar grid (6-week layout for consistency)
-- Touch gesture support: swipe left/right to navigate months
-- Visual shift indicators on calendar days (colored dots)
-- Click day to filter shifts, click again to clear selection
-- Selected day shows shift count and formatted date
-- Shift count badge for days with more than 5 shifts
-- Signal-based reactivity for month/year navigation via CalendarService
-
-### Security Features
-
-- **Content Security Policy (CSP)**: Restricts resource origins to prevent XSS attacks
-- **Data Encryption**: AES-GCM 256-bit encryption for localStorage data
-- **Device Key**: Random AES key persisted in IndexedDB (non-extractable CryptoKey); fallback to localStorage only when IndexedDB is unavailable
-- **Password-Protected Backups**: Export/import encrypted with user password (PBKDF2 + AES-GCM)
-- **Backward Compatibility**: Automatic detection and migration of legacy unencrypted data
-- **Secure Error Handling**: Graceful degradation when encryption fails
+- **Platform Detection**: `Capacitor.isNativePlatform()` gates lazy dynamic imports of `@capacitor/local-notifications` and `@capacitor/push-notifications`
+- **Haptics, Share, Splash Screen, Status Bar**: Configured via Capacitor 8 plugins (`com.spe1977.easyturno`)
+- **Android Build**: Gradle APK/AAB generation with release signing support (keystore/google-services excluded from Git)
 
 ### Testing Infrastructure
 
-- **Unit Tests**: Jest with jest-preset-angular
-  - Test files use `.spec.ts` extension
-  - Mock setup in `setup-jest.js` includes Web Crypto API polyfill
-  - Coverage reports generated in `coverage/` directory
-  - Services have comprehensive test coverage
-- **E2E Tests**: Cypress 15+
-  - Test specs in `cypress/e2e/` directory
-  - Custom commands defined in `cypress/support/commands.ts`
-  - Tests cover: shift management, recurring shifts, offline functionality, advanced features, calendar view
-  - Configured for 1280x720 viewport, baseUrl http://localhost:3000
-- **Browser Smoke Tests**: Playwright 1.58+
-  - Config in `playwright.config.ts` with integrated web server (port 3100)
-  - Tests in `playwright/tests/` with shared helpers
-  - Covers: app bootstrap, persistence, CRUD, theme/language, calendar, statistics, encrypted backup/import
-  - Runs on Chromium with tracing on failure
-
-### Development Notes
-
-- Uses Angular's OnPush change detection strategy for performance
-- All dates stored as ISO strings for consistency with optional timezone field
-- Theme persistence with automatic system preference detection
-- TypeScript strict mode enabled for type safety
-- TranslatePipe and LangDatePipe are impure (`pure: false`) to react to language changes
-- Computed signals for reactive statistics calculations with memoization
-- Single-pass algorithm for statistics (O(n) complexity)
-- Automatic date/time synchronization: when start date/time is changed, end date/time automatically aligns
-- Color-coded shift cards with customizable left border (3px width)
-- Tailwind safelist configuration for dynamic color classes
-- CryptoService uses Web Crypto API (mocked in Jest tests for compatibility)
-- WCAG 2.1 AA compliant for keyboard navigation and screen readers
-- Full-height containers use `h-dvh` / `min-h-[100dvh]` (dynamic viewport height), never `h-screen` / `100vh`: on mobile browsers `100vh` is the URL-bar-hidden height, so it overflows the visible area at load and pushes sticky bars (e.g. the Lista/Calendario toggle) behind the header. This is NOT reproducible in headless Jest/Playwright (no dynamic browser chrome → `vh`/`dvh` collapse); verify on a real phone browser.
+- **Unit & Script Tests**: Jest 30 (`jest-preset-angular`)
+  - Test files use `.spec.ts` across `src/` and `scripts/` (`check-csp.spec.ts`, `ci-config.spec.ts`, `pwa-manifest.spec.ts`, `sw.spec.ts`)
+  - Mock setup in `setup-jest.js` includes Web Crypto API & Firebase modular SDK mocks
+  - Current coverage: `33/33` suites, `742/742` tests passing, `>95%` branch coverage
+- **Browser E2E Tests**: Playwright `1.65.1`
+  - Config in `playwright.config.ts` with `npm run dev:pw` on `http://127.0.0.1:3100`
+  - `6` spec files in `playwright/tests/` (`smoke`, `app-flows`, `calendar-offline`, `fase3-fixes`, `fase4-optimization`, `fase5-pwa-perf`), `40/40` tests on Chromium
+- **Firebase Emulator Tests**: `npm run test:firebase` runs `src/services/sync-emulator.spec.ts` against local Auth + Firestore emulators (automated in GitHub Actions `firebase` job with JDK 21)
 
 ### Important Patterns & Conventions
 
-#### Signal-Based State Management
-
-- All component state managed via Angular signals (`signal`, `computed`, `effect`)
-- State updates use `.set()` for replacement or `.update()` for transformations
-- Computed signals automatically memoize and only recalculate when dependencies change
-- Effects handle side effects (theme persistence, keyboard shortcuts, etc.)
-
-#### Modal Management
-
-- Single `activeModal` signal tracks which modal is open (`'none' | 'form' | 'settings' | 'deleteConfirm' | 'statistics' | 'passwordPrompt' | ...`)
-- All modals use `role="dialog"` and `aria-modal="true"` for accessibility
-- Confirmation modals use `role="alertdialog"` semantic role
-- Password input uses dedicated modal instead of `window.prompt()` for security and mobile compatibility
-
-#### View Mode Management
-
-- Single `viewMode` signal toggles between 'list' and 'calendar' views
-- Calendar view integrates CalendarComponent with touch gesture navigation
-- Calendar day selection emits events to filter shifts in list view
-- View mode persists across sessions via localStorage (planned)
-
-#### Form Handling
-
-- Form state managed through individual signals (e.g., `shiftTitle`, `shiftStartDate`)
-- Edit vs. Create determined by `editingShift` signal (null = create, Shift = edit)
-- Recurring shift edits show confirmation modal for "edit series" vs. "edit single"
-- Form validation occurs in `handleFormSubmit()` with toast error notifications
-
-#### Data Persistence Flow
-
-1. User action triggers component method
-2. Component calls ShiftService method
-3. ShiftService updates signal state
-4. ShiftService encrypts data via CryptoService
-5. Encrypted data saved to localStorage
-6. Component signals react automatically via computed dependencies
-
-#### Type Guards & Validation
-
-- Type guard functions in `shift.service.ts` (`isValidShift`, `isValidISODate`) validate runtime data
-- Used during import/export operations to ensure data integrity (includes end >= start check)
-- Pattern: `isValidX(value: unknown): value is X` for TypeScript narrowing
-
-#### Performance Optimizations
-
-- Sorted shifts cached in `sortedShifts` computed signal
-- Statistics use single-pass algorithm instead of multiple reduce operations
-- Recurrence generation extracted into shared `generateRecurringInstances()` helper
-- List pagination with configurable load increment (50 items)
-
-### Code Quality & Roadmap
-
-See `P.md` for:
-
-- Comprehensive code quality analysis (all phases completed)
-- Performance optimization history
-- Type safety improvements implemented
-- Security enhancements (encryption, CSP, password-protected backups)
-- Accessibility compliance (WCAG 2.1 AA)
-
-See `fix.md` for the running security-audit log: residual findings, applied fixes (with file/line references and test impact), and verification status for each item.
+- Angular `OnPush` change detection across components; `@defer` blocks isolate heavy secondary modals/drawers and Firebase SDK imports from initial boot
+- `TranslatePipe` and `LangDatePipe` (`pure: false`) use per-instance memoization (`LangDatePipe` also uses a bounded `WeakMap` cache across `DatePipe` instances)
+- Type guards in `shift.service.ts` (`isValidShift`, `isValidISODate`, `isShiftDataState`) validate imported payloads and reject backups > 5 MB or plaintext exports
+- Full-height containers use `h-dvh` / `min-h-[100dvh]` (never `h-screen` / `100vh`) so mobile browser URL bars do not push sticky bars off-screen
+- Before editing code or docs, always check `AGENT_HANDOFF.md` for current ownership and `Do not touch` boundaries

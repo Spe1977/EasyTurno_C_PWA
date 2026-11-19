@@ -5,8 +5,8 @@ This repository uses a CLI-agent handoff workflow.
 Before making changes, every agent must read:
 
 1. `AGENT_HANDOFF.md`
-2. `firebase.md`
-3. `docs/superpowers/plans/2026-05-17-firestore-sync-series-overrides.md`
+2. `README.md` (or `README_IT.md`) for current architecture and commands
+3. Any active plan/notes present locally (historical docs like `firebase.md` and `docs/superpowers/plans/*` are local-only and excluded from GitHub)
 
 Follow the start-of-shift and end-of-shift checklists in `AGENT_HANDOFF.md`.
 

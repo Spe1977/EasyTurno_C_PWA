@@ -5,9 +5,8 @@ This repository is shared with Codex and Claude Code through a CLI handoff workf
 Before editing, read:
 
 1. `AGENT_HANDOFF.md`
-2. `firebase.md`
-3. `docs/superpowers/plans/2026-05-17-firestore-sync-series-overrides.md`
-4. `docs/superpowers/plans/2026-05-21-test-coverage-hardening-95.md`
+2. `README.md` (or `README_IT.md`) for current architecture and commands
+3. Any active plan/notes present locally (historical docs like `firebase.md` and `docs/superpowers/plans/*` are local-only and excluded from GitHub)
 
 Then follow the start-of-shift checklist in `AGENT_HANDOFF.md` and declare the task, files you will touch, expected red test, and stop conditions.
 
@@ -20,10 +19,10 @@ Important:
 - At the end of the turn, update or report the end-of-shift handoff block from `AGENT_HANDOFF.md`.
 
 ## Context Summary
-- **Fase 3 (Auth UI + Firebase Auth)**: Completata. Supporta registrazione/login e-mail/password con verifica e-mail, Google Login nativo e web, eliminazione account cloud-safe con re-autenticazione.
-- **Fase 5a (Finestra Visibilità Liste)**: Completata. Turni filtrati su [oggi - 12 mesi, oggi + 24 mesi], pagination da 50 turni, bottone sticky "Vai a oggi" ad autocaricamento rapido e toast di ricerca fuori range.
-- **Fase 4 + 5b (Firestore Sync + Refactor Serie/Override)**: Completata. Modello dati sdoppiato in `ShiftSeries`, `ManualShift` e `ShiftOverride`. Creati `UserDataService` come boundary unico locale e `FirestoreUserDataService` con realtime listener persistenti ed IndexedDB cache. Logica di scrittura atomica via `writeBatch` in Firestore per gli utenti autenticati con integrazione trasparente in `ShiftService`.
-- **Fase 6 (Android FCM + Capacitor Native Setup)**: Completata. Package name `com.spe1977.easyturno` configurato, Capacitor Android con Firebase SDK nativo, FCM Push Notifications funzionanti e sincronizzate su Firestore, adaptive icons, splash screen e release keystore configurati. UI Warning per il limite soft di 4 dispositivi attivi completato. Verificata la release build Gradle con JDK 21.
-- **Fase 7 (Advanced Features & Premium Design)**: Completata. Il vecchio modal delle statistiche è stato riprogettato in una Dashboard Drawer PWA premium con sliding drawer animato per mobile, presets temporali rapidi (Mese, Mese Scorso, 30gg, Anno), layout asimmetrico delle metriche ordinarie e straordinarie, barre proporzionali basate dinamicamente sui colori assegnati ai turni, portafoglio indennità ed empty state grafico.
-- **Stato del Progetto**: Tutte le 25 suite Jest sono superate con successo (582/582 test passanti). Raggiunto l'obiettivo di copertura globale superiore al 95% per Statements, Functions e Lines. Linter eslint pulito, build di produzione riuscito. Il prossimo step pianificato è quello di portare anche la copertura dei test del Branch al 95%.
 
+- **Auth UI + Firebase Auth**: Completata. Supporta registrazione/login e-mail/password con verifica e-mail, Google Login nativo e web, modalità ospite offline-first, eliminazione account cloud-safe con re-autenticazione.
+- **Finestra Visibilità Liste**: Completata. Turni filtrati su `[oggi - 12 mesi, oggi + 24 mesi]`, paginazione da `50` turni, bottone sticky "Vai a oggi" e toast informativo per ricerca data fuori range.
+- **Modello Serie/Override & Firestore Sync**: Modello dati `ShiftDataState` (`schemaVersion: 2`) con `ShiftSeries`, `ManualShift` e `ShiftOverride` + `generateOccurrencesForRange()` puro. `UserDataService` come boundary unico e `FirestoreUserDataService` (SDK lazy + `persistentLocalCache` + `writeBatch`) orchestrati da `SyncService` e `DeviceService` (limite soft `3` installazioni `native`/`pwa-installed`, sessioni `web` illimitate, auto-cleanup >90gg, rimozione manuale in Impostazioni).
+- **Android FCM + Capacitor 8 Setup**: Package name `com.spe1977.easyturno`, Capacitor Android con Firebase SDK nativo, Push Notifications FCM sincronizzate su Firestore, adaptive icons, splash screen e release keystore configurati.
+- **Ottimizzazione Bundle, Performance & PWA v7**: Rimozione `@angular/compiler` a runtime, componenti standalone `OnPush` estratti (`ShiftFormModal`, `StatisticsDrawer`, `SettingsDrawer`, `ConfirmDialog`), confini `@defer` e `createLazyLoader` per Firebase/Capacitor, `sw.js` `v7` (attesa `SKIP_WAITING` same-origin, cache-first per chunk con hash, SWR + LRU 60 entry, `{ ignoreVary: true }`), pipe memoizzate, path di sort `O(N)` e focus trap/restore accessibile sui modali.
+- **Stato del Progetto**: `Angular 22.2.6`, `TypeScript 6.0.3`, `Tailwind CSS 4.3.5`, `Firebase 13.4.0`, `Capacitor 8.6.2`. Suite Jest `33/33` (`742/742` test passanti; `98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines), `scripts/check-csp.spec.ts` `19/19`, Playwright E2E `40/40` su 6 spec, `lint` e `format:check` puliti; `npm run test:firebase` automatizzato in CI (job `firebase` con JDK 21).

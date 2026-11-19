@@ -5,15 +5,9 @@ This repository is worked on by multiple CLI agents: Codex, Claude Code, and som
 ## Current Project State
 
 - Project: EasyTurno_C_PWA.
-- Main recovery context: `firebase.md`.
-- Active implementation plan: `docs/superpowers/plans/2026-05-17-firestore-sync-series-overrides.md`.
-- Completed milestone: Phase 3 Auth + Google login + account deletion.
-- Completed milestone: Phase 5a list visibility window.
-- Completed current-plan task: Task 1, series/manual/override model plus pure occurrence generator.
-- Completed current-plan task: Task 2, `ShiftDataState` persistence behind `ShiftService` (storage key migrated to `easyturno_user_data_v2`; legacy `easyturno_shifts` still read for backward-compat migration).
-- Completed current-plan task: Task 3, `UserDataService` extracted as the local store boundary. `ShiftService` now reads `state` through `userDataService.state` (readonly signal) and routes all mutations through `userDataService.setState(...)` / `userDataService.update(...)`.
-- Completed current-plan task: Task 4, `FirestoreUserDataService` added with realtime listeners on `users/{uid}/{shiftSeries,manualShifts,shiftOverrides}` via `onSnapshot`, exposes loaded `ShiftDataState` as readonly signal, Firestore `persistentLocalCache` enabled in `FirebaseAppService`. Not yet wired into `UserDataService`/`ShiftService` (deferred to Task 6 per plan).
-- Completed current app change: reload/update app button in the view-toggle bar, with service-worker update activation when an update is waiting and normal reload otherwise.
+- Architecture & command reference: `README.md` / `README_IT.md` / `CLAUDE.md`.
+- Completed on `main`: Phase 3 Auth + Google login + cloud-safe account deletion; Phase 5a list visibility window `[-12m, +24m]`; Phase 4+5b `ShiftDataState` (`ShiftSeries` / `ManualShift` / `ShiftOverride` + pure `occurrence-generator.ts`), `UserDataService`, lazy `FirestoreUserDataService` + `persistentLocalCache`, `SyncService`, `DeviceService` (soft limit `3` installed devices); Phase 6 Android Capacitor 8 + FCM; Phase 7 Statistics drawer; PWA Modernization Plan Phases 0–6 (Angular `22.2.6`, Tailwind CSS `4.3.5`, Firebase `13.4.0`, `@defer` + lazy SDK boundaries, `sw.js` `v7`, Playwright `40/40`, Jest `33/33` / `742/742` with `>95%` branch coverage).
+- Local-only historical docs (excluded from GitHub via `.gitignore`, retained on local disk): `update.md`, `P.md`, `fix.md`, `ISTRUZIONI.md`, `firebase.md`, `docs/superpowers/`.
 
 ## Next App Changes — Ordered Priority
 
@@ -65,8 +59,6 @@ Not scheduled; do not act on these without the user explicitly authorizing the w
 Do not delete or reset these files unless the user explicitly asks:
 
 - `AGENT_HANDOFF.md`
-- `firebase.md`
-- `docs/superpowers/plans/2026-05-17-firestore-sync-series-overrides.md`
 - `src/services/occurrence-generator.ts`
 - `src/services/occurrence-generator.spec.ts`
 - `src/services/user-data.model.ts`
@@ -91,8 +83,8 @@ The worktree is expected to be dirty because multiple agents may alternate on th
 Every CLI agent must do this before editing:
 
 1. Read this file.
-2. Read `firebase.md`.
-3. Read the active plan.
+2. Read `README.md` (or `README_IT.md`) for current stack/commands.
+3. Read any active plan if present in the workspace (historical plans/notes are local-only and excluded from GitHub).
 4. Run `git status --short --branch`.
 5. State:
 
@@ -134,6 +126,30 @@ Do not touch:
 - Per `cli-collaboration` skill: keep at most the last three detailed handoff blocks below; collapse older entries into the "Older Handoffs (summarized)" section.
 
 ## Current Handoff
+
+Agent: Gemini CLI
+Date/time: 2026-11-19T12:20:00+01:00
+Task: Untrack Group-1 historical docs from GitHub (`git rm --cached` + `.gitignore` keeping local files intact) and align kept Group-2 agent docs (`AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `AGENT_HANDOFF.md`) with current `main` (per user request for online/local parity).
+Status: done; untracked Group-1 docs from GitHub index, updated `.gitignore` + `AGENTS.md` + `GEMINI.md` + `CLAUDE.md` + `AGENT_HANDOFF.md`, and pushed to `origin/main`.
+Files changed:
+- Untracked from GitHub (kept locally): `update.md`, `P.md`, `fix.md`, `ISTRUZIONI.md`, `firebase.md`, `docs/superpowers/plans/*`.
+- Modified: `.gitignore` (ignored Group-1 local-only docs/plans).
+- Modified: `AGENTS.md` & `GEMINI.md` (updated read-first pointers for online/local parity and refreshed `GEMINI.md` Context Summary).
+- Modified: `CLAUDE.md` (removed obsolete Cypress references, updated to Angular 22 / TypeScript 6.0 / Tailwind 4.3 / Firebase 13.4 / Capacitor 8 / `sw.js` v7 / `@defer` / `ShiftDataState` / Playwright `1.65.1`).
+- Modified: `AGENT_HANDOFF.md` (updated state/checklist, added this handoff, and collapsed Fase 5 block into `Older Handoffs`).
+Tests red:
+- Outside local host capability: `npm run test:firebase` exited 1 (`Error: Could not spawn java -version`); automated in GitHub Actions `CI/firebase` job.
+Tests green (verified via `.husky/pre-push` on `main`):
+- `npm test -- --coverage --watchAll=false`: `33/33` suites, `742/742` passed (`98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
+- `npm run build` & `npx jest scripts/check-csp.spec.ts` (`19/19` passed)
+- `npm run test:pw`: `40/40` passed
+- `npm run lint` & `npm run format:check`: clean
+Open concerns:
+- Local `test:firebase` and Android Gradle runs require Java/JDK 21 on this host.
+Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`.
+
+---
 
 Agent: Gemini CLI
 Date/time: 2026-11-19T12:09:00+01:00
@@ -187,40 +203,6 @@ Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external
 
 ---
 
-Agent: Gemini CLI
-Date/time: 2026-11-19T11:30:11+01:00
-Task: Execute Fase 5 of `update.md` (Steps 5.1–5.4: Service Worker update lifecycle fix, versioned cache strategy + LRU pruning + Vary:Origin resilience, pipe memoization & large-dataset occurrence/sort/calendar optimization, PWA manifest + meta + ARIA dialog focus trap/restore & contrast) on branch `chore/pwa-update-plan` under `cli-collaboration` protocol.
-Status: done; committed on branch `chore/pwa-update-plan` (user-authorized, together with Fase 4 working-tree changes).
-Files changed:
-- Modified: `sw.js` (`CACHE_VERSION = 'v7'`, removed auto `self.skipWaiting()` from `install`, kept same-origin-verified `SKIP_WAITING` handler, added cache-first for `-[A-Za-z0-9_-]{8}\.(js|css|woff2?)$`, `staleWhileRevalidate` for unhashed same-origin runtime assets excluding `/sw.js`, `networkFirstNavigation` HTML shell fallback, `{ ignoreVary: true }` on `cache.match` for Vary:Origin resilience, and `MAX_RUNTIME_CACHE_ENTRIES = 60` LRU eviction).
-- Added: `scripts/sw.spec.ts` (VM sandbox unit suite covering Step 5.1 update/pruning lifecycle, Step 5.2 cache-first/SWR/network-first/LRU/Vary:Origin) & `scripts/pwa-manifest.spec.ts` (manifest fields, icon paths, shortcut routes, and index/production PWA meta tag checks).
-- Modified: `src/services/sw-update.service.{ts,spec.ts}` (immediate `registration.waiting` detection + duplicate `controllerchange` reload guard + tests).
-- Modified: `src/services/translation.service.{ts,spec.ts}`, `src/pipes/translate.pipe.{ts,spec.ts}`, `src/pipes/date-format.pipe.{ts,spec.ts}` (per-language lookup cache, per-instance memoization with mock-safe fallback, shared bounded `WeakMap<DatePipe, Map>` cache + `Date.getTime()` mutation guard + tests).
-- Modified: `src/services/shift.service.{ts,spec.ts}` (pre-indexed `overridesBySeries` map, static manual window bounds, `Date.parse` + O(N) sorted fast-path verified on ~7,300 occurrences).
-- Modified: `src/app.component.{ts,html,spec.ts}` (imported `untracked` in `openModal` so effect-driven modals such as `decryptionError` do not reopen after dismiss; `indexedSortedShifts` O(N) sorted fast-path & `Date.parse` in `generateList`/`goToToday`; `[attr.inert]` on background shell, `role="status"` update banner, `aria-label` on `settings-btn`, `role="group"` + `aria-pressed` on `view-toggle`, `type="button"`, `afterEveryRender` focus open/restore + `Tab`/`Shift+Tab` dialog trap + regression tests).
-- Modified: `src/components/{shift-form-modal,statistics-drawer,settings-drawer,confirm-dialog,shift-list-item,calendar}.component.ts` + corresponding `.spec.ts` (`aria-labelledby`, `<label for>`, `aria-pressed`, `tabindex="-1"`, `Date.parse` + `colorByTitle` map in `StatisticsDrawer`, single-pass `shiftsByDay` & cached `Intl.DateTimeFormat` + keyboard Enter/Space navigation in `Calendar`, AA contrast refinements on helper captions).
-- Modified: `manifest.webmanifest` (`"id": "/"`), `index.html`, `index.production.html` (SVG icon link + `apple-mobile-web-app-title`).
-- Added: `playwright/tests/fase5-pwa-perf.spec.ts` (+2 E2E tests covering real `@defer` JS chunk caching, offline reload/calendar rendering, SW `v7` → `v8-e2e` `waiting` pause + `SKIP_WAITING` activation + `v7` cache pruning, manifest/icons HTTP 200, shortcut URL, modal focus trap/restore, and keyboard calendar navigation).
-- Modified: `update.md` (checked off Steps 5.1–5.4 and recorded Fase 5 execution row) & `AGENT_HANDOFF.md` (this block + collapsed `2026-11-18T15:24:00+01:00` Fase 2 handoff).
-Tests red:
-- Step 5.1 & 5.2 TDD: `scripts/sw.spec.ts` failed against legacy `v6` auto-skipWaiting `sw.js`, failed on `Vary: Origin` mismatch test before adding `{ ignoreVary: true }`; `sw-update.service.spec.ts` failed for pre-existing `registration.waiting` detection before service update.
-- Step 5.3 & 5.4 TDD: pipe/service/accessibility unit tests failed before memoization, O(N) sort optimization, ARIA attributes, and `untracked(() => this.activeModal())` fix (`app.component.spec.ts` `dismissDecryptionError` stayed `'decryptionError'` until `untracked` was added).
-- Pre-existing outside Gate: `tsconfig.spec.json` spec diagnostics & `npm run test:firebase` (no local Java runtime).
-Tests green (verified after final code/test edit):
-- `npm run format:check` & `npx prettier --check sw.js manifest.webmanifest scripts/sw.spec.ts scripts/pwa-manifest.spec.ts playwright/tests/fase5-pwa-perf.spec.ts` (clean)
-- `npm run lint` (0 errors) & `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (0 errors)
-- `npm test -- --coverage --watchAll=false` (32/32 suites, 733/733 passed in 7.601 s; 98.85% Stmts / 95.25% Branch / 97.49% Funcs / 99.64% Lines)
-- `npm run build` (2.938 s; Initial total `340.52 kB` raw / `86.56 kB` transfer)
-- `npx jest scripts/check-csp.spec.ts` (19/19 passed)
-- `npm audit --omit=dev --audit-level=high` (0 vulnerabilities)
-- `npm run test:pw` (40/40 passed in 51.7 s, including `playwright/tests/fase5-pwa-perf.spec.ts`)
-Open concerns:
-- `npm run test:firebase` still requires an environment with JDK/Java (scheduled in Fase 6).
-Next agent starts from: Execute Fase 6 (`update.md` Steps 6.1–6.3: CI alignment for `check-csp` post-build and Node matrix, full verification including `test:firebase`, PR & Dependabot cleanup).
-Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
-
----
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -247,3 +229,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 2 (`update.md` Steps 2.1–2.4) on `chore/pwa-update-plan`:** upgraded Angular `22.2.6`/`22.2.7`, TS `~6.0.3`, Tailwind `4.3.5`, Firebase `13.4.0`, Capacitor JS `8.6.2` with clean `npm ci` (`--legacy-peer-deps` removed) and `@grpc/grpc-js: ^1.14.7` override (`0` `--omit=dev` high/critical vulns); Lint/Prettier/TSC/Jest (689/689)/build/CSP/Playwright (30/30) green (`test:firebase` blocked locally by missing Java).
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 3 (`update.md` Steps 3.1–3.4) on `chore/pwa-update-plan`:** moved `<app-toast-container>` out of modal `@if`/`@switch`, replaced `bg-opacity-50` with `bg-black/50`, mapped `CalendarComponent` `borderLeftColor` to hex, internationalized Statistics modal (`212/212` i18n keys); Lint/Prettier/TSC/Jest (701/701)/build/CSP (19/19)/Playwright (36/36) green.
 - **2026-11-19, Gemini CLI — Fase 4 (`update.md` Steps 4.1–4.4) on `chore/pwa-update-plan`:** removed runtime `@angular/compiler`, decomposed `AppComponent` into 4 `OnPush` standalone components, added `@defer` + `createLazyLoader` boundaries for Firebase and Capacitor notification plugins, and enforced `angular.json` budgets (Initial bundle `1.65 MB` -> `335.24 kB` raw / `85.23 kB` transfer); Lint/Prettier/TSC/Jest (697/697)/build/CSP (19/19)/Playwright (38/38) green.
+- **2026-11-19, Gemini CLI — Fase 5 (`update.md` Steps 5.1–5.4) on `chore/pwa-update-plan`:** updated `sw.js` (`v7` waiting `SKIP_WAITING`, hashed cache-first, SWR + 60-entry LRU, `{ ignoreVary: true }`), memoized pipes & `TranslationService`, optimized `ShiftService`/`AppComponent`/`StatisticsDrawer`/`Calendar` (`O(N)` sorted path & `untracked` modal guard), synced PWA manifest/meta, and added ARIA focus trap/restore; Jest (733/733, `95.25%` branch)/Playwright (40/40) green.
