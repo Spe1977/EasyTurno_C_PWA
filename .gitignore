@@ -41,3 +41,11 @@ google-services.json
 
 # Local-only screenshots (not used by the app/build)
 web*.png
+
+# Local-only historical plans, prompts, and audit logs (kept locally, excluded from GitHub)
+update.md
+P.md
+fix.md
+ISTRUZIONI.md
+firebase.md
+docs/superpowers/
