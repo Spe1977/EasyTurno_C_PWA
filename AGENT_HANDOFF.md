@@ -136,20 +136,21 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI
-Date/time: 2026-11-19T12:06:00+01:00
-Task: Full local test verification on `chore/pwa-update-plan`, PR `#42` merge into `main` on GitHub, local `main` fast-forward pull, and `package-lock.json` `engines.node` sync + handoff commit/push to `main`.
-Status: done; PR `#42` squash-merged into `main` (`0febd5b`), local `main` synced, and `package-lock.json` + `AGENT_HANDOFF.md` committed and pushed to `origin/main`.
+Date/time: 2026-11-19T12:09:00+01:00
+Task: Full local test verification, PR `#42` merge into `main`, `package-lock.json` `engines.node` sync, GitHub About description/topic update (`Angular 22`, `Firebase`, `Capacitor 8`), and contributors attribution (`README.md`, `README_IT.md`, commit `Co-authored-by`).
+Status: done; PR `#42` squash-merged into `main` (`0febd5b`), GitHub repository About updated, and `README.md`/`README_IT.md`/`AGENT_HANDOFF.md` committed and pushed to `origin/main`.
 Files changed:
-- Modified: `package-lock.json` (synced root `engines.node` to `^22.22.3 || ^24.15.0 || >=26.0.0` matching `package.json`, triggered by `.husky/post-merge` `npm install`).
-- Modified: `AGENT_HANDOFF.md` (recorded PR `#42` merge onto `main` and collapsed Fase 4 block into `Older Handoffs`).
+- Modified: `package-lock.json` (`33ed245`, synced root `engines.node` to `^22.22.3 || ^24.15.0 || >=26.0.0`).
+- Modified: `README.md` & `README_IT.md` (added `Contributors` / `Contributori` section including `@Spe1977`, `@claude`, Codex, and Gemini CLI / `@gemini-code-assist`).
+- Modified: `AGENT_HANDOFF.md` (recorded PR `#42` merge, GitHub About & contributors updates, and collapsed Fase 4 block into `Older Handoffs`).
 Tests red:
-- Outside local host capability: `npm run test:firebase` exited 1 (`Error: Could not spawn java -version`); covered by GitHub Actions `CI/firebase` job (JDK 21).
-Tests green (verified before and via `.husky/pre-push` on `main`):
+- Outside local host capability: `npm run test:firebase` exited 1 (`Error: Could not spawn java -version`); covered by GitHub Actions `CI/firebase` job (JDK 21, passed on `0febd5b` in 38s).
+Tests green (verified cleanly + via `.husky/pre-push` on `main`):
 - `npm test -- --coverage --watchAll=false`: `33/33` suites, `742/742` passed (`98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
 - `npx jest scripts/check-csp.spec.ts --verbose`: `19/19` passed
 - `npm run build` (via pre-push hook)
 - `npm run test:pw`: `40/40` passed
-- GitHub PR `#42` (`chore/pwa-update-plan` → `main`): all 6 checks passed prior to squash-merge (`0febd5b`); `CI/firebase` on `0febd5b` passed in 38s.
+- `npm run lint` & `npm run format:check`: clean
 Open concerns:
 - None for Web PWA scope on `main`. Local `test:firebase` and Android Gradle test runs remain blocked on this host until Java/JDK 21 is installed.
 Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.

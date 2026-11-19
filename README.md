@@ -223,6 +223,13 @@ The project uses **Playwright** on Chromium with automatic dev-server management
 - `playwright/tests/fase5-pwa-perf.spec.ts` - Service Worker `SKIP_WAITING` update lifecycle, cache-first hashed chunk serving, PWA manifest/icons, focus trap/restore, and keyboard calendar navigation
 - `playwright/tests/helpers.ts` - shared helpers for bootstrap and shift creation
 
+## Contributors
+
+- **Leonardo ([@Spe1977](https://github.com/Spe1977))** — Project creator and maintainer
+- **Claude ([@claude](https://github.com/claude))** — Firebase Auth/Firestore sync, security remediation, device limits, test coverage, and CI/E2E tooling
+- **Codex** — Occurrence generator, sync status orchestration, recurring indicators, and PWA UX/bug fixes
+- **Gemini CLI / Antigravity ([@gemini-code-assist](https://github.com/gemini-code-assist))** — PWA modernization plan (Angular 22, Tailwind CSS 4.3, `@defer` bundle optimization, Service Worker v7, CI alignment, and E2E verification)
+
 ## License
 
 [MIT](LICENSE) - Copyright (c) 2025 Leonardo
