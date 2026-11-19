@@ -6,7 +6,7 @@ This repository is worked on by multiple CLI agents: Codex, Claude Code, and som
 
 - Project: EasyTurno_C_PWA.
 - Architecture & command reference: `README.md` / `README_IT.md` / `CLAUDE.md`.
-- Completed on `main`: Phase 3 Auth + Google login + cloud-safe account deletion; Phase 5a list visibility window `[-12m, +24m]`; Phase 4+5b `ShiftDataState` (`ShiftSeries` / `ManualShift` / `ShiftOverride` + pure `occurrence-generator.ts`), `UserDataService`, lazy `FirestoreUserDataService` + `persistentLocalCache`, `SyncService`, `DeviceService` (soft limit `3` installed devices); Phase 6 Android Capacitor 8 + FCM; Phase 7 Statistics drawer; PWA Modernization Plan Phases 0–6 (Angular `22.2.6`, Tailwind CSS `4.3.5`, Firebase `13.4.0`, `@defer` + lazy SDK boundaries, `sw.js` `v7`, Playwright `40/40`, Jest `33/33` / `742/742` with `>95%` branch coverage).
+- Completed on `main`: Phase 3 Auth + Google login + cloud-safe account deletion; Phase 5a list visibility window `[-12m, +24m]`; Phase 4+5b `ShiftDataState` (`ShiftSeries` / `ManualShift` / `ShiftOverride` + pure `occurrence-generator.ts`), `UserDataService`, lazy `FirestoreUserDataService` + `persistentLocalCache`, `SyncService`, `DeviceService` (soft limit `3` installed devices); Phase 6 Android Capacitor 8 + FCM; Phase 7 Statistics drawer; PWA Modernization Plan Phases 0–7 (Angular `22.2.6`, Tailwind CSS `4.3.5`, Firebase `13.4.0`, `@defer` + lazy SDK boundaries, `sw.js` `v7`, protected `resetAllData` with Firebase re-auth / `RESET`, Playwright `40/40`, Jest `33/33` / `758/758` with `>95%` branch coverage).
 - Local-only historical docs (excluded from GitHub via `.gitignore`, retained on local disk): `update.md`, `P.md`, `fix.md`, `ISTRUZIONI.md`, `firebase.md`, `docs/superpowers/`.
 
 ## Next App Changes — Ordered Priority
@@ -128,6 +128,36 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI
+Date/time: 2026-11-19T12:51:00+01:00
+Task: Execute Fase 7 of `update.md` (Steps 7.1–7.4: strong protection on `resetAllData` across Email/Password, Google Sign-In, and Guest modes, TDD Jest + Playwright verification, doc alignment, commit on `feat/phase7-reset-protection`, and merge/push to `main` local & GitHub) under `cli-collaboration` protocol.
+Status: done; Fase 7 implemented and verified with full lint/format/typecheck/Jest/build/CSP/Playwright suites green, ready for final commit and merge to `main`.
+Files changed:
+- Modified: `src/services/auth.service.ts` & `src/services/auth.service.spec.ts` (shared `reauthenticateCurrentUser`, new `reauthenticateForSensitiveAction`, upfront/mid-flight offline check `auth/network-request-failed`, `extractAuthErrorCode` & `mapReauthErrorKey`).
+- Modified: `src/components/confirm-dialog.component.ts` & `src/components/confirm-dialog.component.spec.ts` (`resetConfirm` profile-specific UI: `current-password` for password accounts, Google verification hint + popup trigger for Google accounts, `RESET` confirmation input for Guest mode, `isResettingData` disabled state, input reset on reopen).
+- Modified: `src/app.component.ts`, `src/app.component.html`, & `src/app.component.spec.ts` (async `executeReset(payload)`, `isResettingData` double-submit & `closeModal()` guards, `handleResetError` toast mapping).
+- Modified: `src/assets/i18n/it.json` & `src/assets/i18n/en.json` (+12 symmetric keys, `224/224` total parity).
+- Modified: `playwright/tests/helpers.ts`, `playwright/tests/app-flows.spec.ts`, `playwright/tests/fase3-fixes.spec.ts` (`confirmGuestDataReset` helper and E2E test verifying disabled button without `RESET`).
+- Modified: `README.md`, `README_IT.md`, `GEMINI.md`, `AGENT_HANDOFF.md`, and local-only `update.md` (gitignored).
+Tests red:
+- Step 7.2 TDD: 6 new `AuthService.reauthenticateForSensitiveAction` / `mapReauthErrorKey` tests failed before implementation (`TypeError: ... is not a function`).
+- Step 7.3 TDD: 5 new `ConfirmDialogComponent` `resetConfirm` tests failed before adding inputs/template (`NG0303` / missing elements).
+- Step 7.4 TDD: 6 new `AppComponent` Fase 7 tests failed before updating `executeReset` / `isResettingData` (`deleteAllShifts` called unexpectedly / missing `isResettingData`).
+- Outside local host capability: `npm run test:firebase` requires Java/JDK 21 (automated in GitHub Actions `CI/firebase`).
+Tests green:
+- `npm run lint` (`0` errors) & `npm run format:check` & `npx prettier --check "playwright/**/*.ts"` (clean)
+- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (`0` errors)
+- `npm audit --omit=dev --audit-level=high` (`0` vulnerabilities)
+- `npm test -- --coverage --watchAll=false`: `33/33` suites, `758/758` passed (`98.93%` Stmts / `95.44%` Branch / `97.54%` Funcs / `99.65%` Lines)
+- `npm run build` (`3.142 s`, Initial total `345.16 kB` raw / `87.48 kB` transfer) & `npx jest scripts/check-csp.spec.ts --verbose` (`19/19` passed)
+- `npm run test:pw`: `40/40` passed (45.1s)
+Open concerns:
+- Local `test:firebase` and Android Gradle runs require Java/JDK 21 on this host; covered in CI by `CI/firebase`.
+Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.
+Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`.
+
+---
+
+Agent: Gemini CLI
 Date/time: 2026-11-19T12:20:00+01:00
 Task: Untrack Group-1 historical docs from GitHub (`git rm --cached` + `.gitignore` keeping local files intact) and align kept Group-2 agent docs (`AGENTS.md`, `GEMINI.md`, `CLAUDE.md`, `AGENT_HANDOFF.md`) with current `main` (per user request for online/local parity).
 Status: done; untracked Group-1 docs from GitHub index, updated `.gitignore` + `AGENTS.md` + `GEMINI.md` + `CLAUDE.md` + `AGENT_HANDOFF.md`, and pushed to `origin/main`.
@@ -172,37 +202,6 @@ Open concerns:
 Next agent starts from: Start any follow-up scope authorized by the user (e.g., Android native sync or Stitch restyling) from clean `main`.
 Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
 
----
-
-Agent: Gemini CLI
-Date/time: 2026-11-19T11:52:52+01:00
-Task: Execute Fase 6 of `update.md` (Steps 6.1–6.3: CI Node matrix & `engines` alignment, post-build `check-csp` & `test:firebase` JDK 21 CI job, full local verification suite, `README.md`/`README_IT.md` sync, commit/push on `chore/pwa-update-plan`, PR to `main`, and superseded Dependabot PR cleanup) under `cli-collaboration` protocol.
-Status: done; committed and pushed on branch `chore/pwa-update-plan`, PR `#42` opened toward `main` (`https://github.com/Spe1977/EasyTurno_C_PWA/pull/42`), and all 10 superseded Dependabot PRs closed.
-Files changed:
-- Added: `scripts/ci-config.spec.ts` (TDD verification for `package.json` `engines`, `.github/workflows/ci.yml`, and `angular.json` bundle budgets).
-- Modified: `package.json` (`engines.node` aligned to `^22.22.3 || ^24.15.0 || >=26.0.0`).
-- Modified: `.github/workflows/ci.yml` (`test` matrix `[22.x, 24.x]` with `dist-node-${{ matrix.node-version }}` artifacts, `npx tsc --noEmit` + `npx tsc -p playwright/tsconfig.json --noEmit`, post-build `npx jest scripts/check-csp.spec.ts`, new `firebase` job with `actions/setup-java@v4` JDK 21 + `npm run test:firebase`, `playwright` job on `24.x`).
-- Modified: `README.md` & `README_IT.md` (removed Cypress/`npm run e2e`, updated tech stack versions, Node requirements, Phase 4/5 architecture tree, Current Status metrics, Playwright specs list, and 3-installed-device soft limit).
-- Modified: `update.md` & `AGENT_HANDOFF.md`.
-Tests red:
-- Step 6.1 TDD: `scripts/ci-config.spec.ts` failed (`7 failed, 2 passed`) before aligning `package.json` `engines.node` and `.github/workflows/ci.yml`.
-- Outside local host capability: `npm run test:firebase` blocked locally by missing Java runtime (`java` absent); verified green in GitHub Actions CI (`CI/firebase` job with JDK 21).
-Tests green (verified cleanly after final edits + CI on PR `#42`):
-- `npm ci` (clean, no `--legacy-peer-deps`)
-- `npm audit --omit=dev --audit-level=high` (`0` vulnerabilities)
-- `npm run lint` (`0` errors) & `npm run format:check` & Prettier on modified root/CI/script files (clean)
-- `npx tsc --noEmit` & `npx tsc -p playwright/tsconfig.json --noEmit` (`0` errors)
-- `npm test -- --coverage --watchAll=false` (`33/33` suites, `742/742` passed in 9.36 s; `98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
-- `npm run build` (`2.889 s`, Initial total `340.52 kB` raw / `86.56 kB` transfer) & `npx jest scripts/check-csp.spec.ts` (`19/19` passed, 0 skipped)
-- `npm run test:pw` (`40/40` passed in 49.3 s)
-- GitHub PR `#42` checks: `CI/test (22.x)` (58s), `CI/test (24.x)` (58s), `CI/firebase` (48s), `CI/playwright` (5m27s), `Cloudflare Pages`, `GitGuardian Security Checks` — all green; Dependabot PRs `#6`, `#18`, `#30`, `#31`, `#32`, `#35`, `#36`, `#37`, `#40`, `#41` closed.
-Open concerns:
-- None for Web PWA scope (Fases 0–6 of `update.md` complete). Android native (`android/`) and Stitch restyling (`EasyTurno_C_PWA`) remain intentionally excluded per `update.md` Appendix B.
-Next agent starts from: Review and merge PR `#42` (`chore/pwa-update-plan` → `main`) when authorized by the user, or start any separate follow-up scope (e.g. Android native sync / Stitch restyling).
-Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
-
----
-
 ## Older Handoffs (summarized)
 
 Chronological, oldest first. One line per past handoff; full detail is recoverable from git history of this file.
@@ -230,3 +229,4 @@ Chronological, oldest first. One line per past handoff; full detail is recoverab
 - **2026-11-18, Gemini CLI (Antigravity Swarm) — Fase 3 (`update.md` Steps 3.1–3.4) on `chore/pwa-update-plan`:** moved `<app-toast-container>` out of modal `@if`/`@switch`, replaced `bg-opacity-50` with `bg-black/50`, mapped `CalendarComponent` `borderLeftColor` to hex, internationalized Statistics modal (`212/212` i18n keys); Lint/Prettier/TSC/Jest (701/701)/build/CSP (19/19)/Playwright (36/36) green.
 - **2026-11-19, Gemini CLI — Fase 4 (`update.md` Steps 4.1–4.4) on `chore/pwa-update-plan`:** removed runtime `@angular/compiler`, decomposed `AppComponent` into 4 `OnPush` standalone components, added `@defer` + `createLazyLoader` boundaries for Firebase and Capacitor notification plugins, and enforced `angular.json` budgets (Initial bundle `1.65 MB` -> `335.24 kB` raw / `85.23 kB` transfer); Lint/Prettier/TSC/Jest (697/697)/build/CSP (19/19)/Playwright (38/38) green.
 - **2026-11-19, Gemini CLI — Fase 5 (`update.md` Steps 5.1–5.4) on `chore/pwa-update-plan`:** updated `sw.js` (`v7` waiting `SKIP_WAITING`, hashed cache-first, SWR + 60-entry LRU, `{ ignoreVary: true }`), memoized pipes & `TranslationService`, optimized `ShiftService`/`AppComponent`/`StatisticsDrawer`/`Calendar` (`O(N)` sorted path & `untracked` modal guard), synced PWA manifest/meta, and added ARIA focus trap/restore; Jest (733/733, `95.25%` branch)/Playwright (40/40) green.
+- **2026-11-19, Gemini CLI — Fase 6 (`update.md` Steps 6.1–6.3) on `chore/pwa-update-plan` → PR `#42`:** aligned Node `engines`/`ci.yml` (`[22.x, 24.x]`, `tsc`, post-build `check-csp`, JDK 21 `CI/firebase`, `playwright`), added `scripts/ci-config.spec.ts` (+9 tests), synced `README.md`/`README_IT.md`, closed 10 Dependabot PRs, all CI checks green (Jest `742/742`, Playwright `40/40`).

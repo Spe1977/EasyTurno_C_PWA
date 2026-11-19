@@ -943,7 +943,7 @@ describe('AppComponent - Integration Tests', () => {
       expect(component.activeModal()).toBe('resetConfirm');
     });
 
-    it('should delete all shifts on reset confirmation', () => {
+    it('should delete all shifts on reset confirmation', async () => {
       shiftService.addShift({
         title: 'Test',
         start: '2025-10-15T08:00:00',
@@ -955,7 +955,7 @@ describe('AppComponent - Integration Tests', () => {
       expect(shiftService.shifts()).toHaveLength(1);
 
       component.confirmReset();
-      component.executeReset();
+      await component.executeReset({ confirmationText: 'RESET' });
 
       expect(shiftService.shifts()).toHaveLength(0);
       expect(component.activeModal()).toBe('none');
@@ -1929,7 +1929,7 @@ describe('AppComponent - Integration Tests', () => {
         expect(host.querySelectorAll('app-toast-container').length).toBe(1);
       });
 
-      it('renders toast in the DOM after executeReset() closes the modal', () => {
+      it('renders toast in the DOM after executeReset() closes the modal', async () => {
         jest.useFakeTimers();
         try {
           setupAuthMode('guest');
@@ -1937,7 +1937,7 @@ describe('AppComponent - Integration Tests', () => {
 
           component.confirmReset();
           fixture.detectChanges();
-          component.executeReset();
+          await component.executeReset({ confirmationText: 'RESET' });
           fixture.detectChanges();
 
           const host = fixture.nativeElement as HTMLElement;
@@ -2412,6 +2412,211 @@ describe('AppComponent - Integration Tests', () => {
         fixture.detectChanges();
         (component as any).tryFocusActiveDialog();
       });
+    });
+  });
+
+  describe('Fase 7: Protected Reset All Data flow', () => {
+    const seedShift = () => {
+      shiftService.addShift({
+        title: 'Protected Shift',
+        start: '2026-06-15T08:00:00.000Z',
+        end: '2026-06-15T16:00:00.000Z',
+        color: 'sky',
+        isRecurring: false,
+      });
+    };
+
+    const mockAuthProfile = (profile: 'guest' | 'password' | 'google') => {
+      const reauthSpy = jest.fn().mockResolvedValue(undefined);
+      const stateSig = signal<AuthState>(
+        profile === 'guest'
+          ? { mode: 'guest' }
+          : {
+              mode: 'authenticated',
+              uid: `uid-${profile}`,
+              email: `${profile}@example.com`,
+              emailVerified: true,
+              providerIds: [profile === 'password' ? 'password' : 'google.com'],
+            }
+      );
+      component.authService = {
+        state: stateSig.asReadonly(),
+        isGuest: () => profile === 'guest',
+        isAuthenticated: () => profile !== 'guest',
+        hasPasswordProvider: () => profile === 'password',
+        reauthenticateForSensitiveAction: reauthSpy,
+      } as unknown as AuthService;
+      return reauthSpy;
+    };
+
+    it('rejects guest reset when confirmation text is not RESET without deleting shifts', async () => {
+      const reauthSpy = mockAuthProfile('guest');
+      seedShift();
+      const deleteSpy = jest.spyOn(shiftService, 'deleteAllShifts');
+      const errorSpy = jest.spyOn(toastService, 'error');
+
+      component.confirmReset();
+      await component.executeReset({ confirmationText: 'reset' });
+
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(reauthSpy).not.toHaveBeenCalled();
+      expect(shiftService.shifts()).toHaveLength(1);
+      expect(component.activeModal()).toBe('resetConfirm');
+      expect(errorSpy).toHaveBeenCalledWith(translationService.translate('resetKeywordInvalid'));
+    });
+
+    it('executes guest reset with RESET keyword via DOM dialog without calling Firebase reauth', async () => {
+      const reauthSpy = mockAuthProfile('guest');
+      seedShift();
+      fixture.detectChanges();
+
+      component.confirmReset();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      const keywordInput = host.querySelector(
+        '[data-cy="reset-keyword-input"]'
+      ) as HTMLInputElement;
+      expect(keywordInput).not.toBeNull();
+      keywordInput.value = 'RESET';
+      keywordInput.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const confirmBtn = host.querySelector('[data-cy="reset-confirm-btn"]') as HTMLButtonElement;
+      expect(confirmBtn.disabled).toBe(false);
+      confirmBtn.click();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(reauthSpy).not.toHaveBeenCalled();
+      expect(shiftService.shifts()).toHaveLength(0);
+      expect(component.activeModal()).toBe('none');
+    });
+
+    it('requires password and verifies reauthentication before deleting shifts for Email/Password users', async () => {
+      const reauthSpy = mockAuthProfile('password');
+      seedShift();
+      const deleteSpy = jest.spyOn(shiftService, 'deleteAllShifts');
+      const errorSpy = jest.spyOn(toastService, 'error');
+      const successSpy = jest.spyOn(toastService, 'success');
+
+      component.confirmReset();
+      await component.executeReset({});
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(reauthSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(translationService.translate('resetPasswordRequired'));
+
+      await component.executeReset({ password: 'CorrectPassword1!' });
+      expect(reauthSpy).toHaveBeenCalledWith({ password: 'CorrectPassword1!' });
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      expect(shiftService.shifts()).toHaveLength(0);
+      expect(component.activeModal()).toBe('none');
+      expect(component.isResettingData()).toBe(false);
+      expect(successSpy).toHaveBeenCalledWith(translationService.translate('resetSuccess'));
+    });
+
+    it('keeps shifts and modal intact when Email/Password reauthentication fails (wrong-password, invalid-credential, too-many-requests, offline, requires-recent-login, unknown)', async () => {
+      const reauthSpy = mockAuthProfile('password');
+      seedShift();
+      const deleteSpy = jest.spyOn(shiftService, 'deleteAllShifts');
+      const errorSpy = jest.spyOn(toastService, 'error');
+
+      const cases: Array<{ err: unknown; key: string; duration?: number }> = [
+        { err: { code: 'auth/wrong-password' }, key: 'resetErrorInvalidPassword' },
+        { err: { code: 'auth/invalid-credential' }, key: 'resetErrorInvalidPassword' },
+        { err: { code: 'auth/too-many-requests' }, key: 'authErrorTooManyRequests' },
+        {
+          err: { code: 'auth/network-request-failed' },
+          key: 'resetErrorOffline',
+          duration: 6000,
+        },
+        {
+          err: { code: 'auth/requires-recent-login' },
+          key: 'authDeleteAccountReauthRequired',
+          duration: 6000,
+        },
+        { err: 'unexpected-error', key: 'authGenericError' },
+      ];
+
+      for (const testCase of cases) {
+        errorSpy.mockClear();
+        reauthSpy.mockRejectedValueOnce(testCase.err);
+        component.confirmReset();
+        await component.executeReset({ password: 'AttemptPassword1!' });
+
+        expect(deleteSpy).not.toHaveBeenCalled();
+        expect(shiftService.shifts()).toHaveLength(1);
+        expect(component.activeModal()).toBe('resetConfirm');
+        expect(component.isResettingData()).toBe(false);
+        if (testCase.duration) {
+          expect(errorSpy).toHaveBeenCalledWith(
+            translationService.translate(testCase.key),
+            testCase.duration
+          );
+        } else {
+          expect(errorSpy).toHaveBeenCalledWith(translationService.translate(testCase.key));
+        }
+      }
+    });
+
+    it('reauthenticates Google users via popup and handles popup-closed / popup-blocked without deleting shifts', async () => {
+      const reauthSpy = mockAuthProfile('google');
+      seedShift();
+      const deleteSpy = jest.spyOn(shiftService, 'deleteAllShifts');
+      const infoSpy = jest.spyOn(toastService, 'info');
+      const errorSpy = jest.spyOn(toastService, 'error');
+
+      component.confirmReset();
+
+      reauthSpy.mockRejectedValueOnce({ code: 'auth/popup-closed-by-user' });
+      await component.executeReset({});
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(infoSpy).toHaveBeenCalledWith(translationService.translate('resetErrorPopupClosed'));
+      expect(component.activeModal()).toBe('resetConfirm');
+
+      reauthSpy.mockRejectedValueOnce({ code: 'auth/popup-blocked' });
+      await component.executeReset({});
+      expect(deleteSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(translationService.translate('authErrorPopupBlocked'));
+      expect(component.activeModal()).toBe('resetConfirm');
+
+      reauthSpy.mockResolvedValueOnce(undefined);
+      await component.executeReset({});
+      expect(reauthSpy).toHaveBeenCalledWith({});
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      expect(shiftService.shifts()).toHaveLength(0);
+      expect(component.activeModal()).toBe('none');
+    });
+
+    it('ignores duplicate reset submissions and blocks closing resetConfirm while resetting', async () => {
+      const reauthSpy = mockAuthProfile('google');
+      let resolveReauth!: () => void;
+      reauthSpy.mockReturnValueOnce(
+        new Promise<void>(resolve => {
+          resolveReauth = resolve;
+        })
+      );
+      seedShift();
+      const deleteSpy = jest.spyOn(shiftService, 'deleteAllShifts');
+
+      component.confirmReset();
+      const firstAttempt = component.executeReset({});
+      expect(component.isResettingData()).toBe(true);
+
+      await component.executeReset({});
+      expect(reauthSpy).toHaveBeenCalledTimes(1);
+
+      component.closeModal();
+      expect(component.activeModal()).toBe('resetConfirm');
+
+      resolveReauth();
+      await firstAttempt;
+
+      expect(deleteSpy).toHaveBeenCalledTimes(1);
+      expect(component.isResettingData()).toBe(false);
+      expect(component.activeModal()).toBe('none');
     });
   });
 });

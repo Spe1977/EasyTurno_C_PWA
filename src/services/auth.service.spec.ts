@@ -3,7 +3,7 @@ import * as fbApp from 'firebase/app';
 import * as fbAuth from 'firebase/auth';
 import * as fbFirestore from 'firebase/firestore';
 
-import { AuthService } from './auth.service';
+import { AuthService, mapReauthErrorKey } from './auth.service';
 import { FirebaseAppService } from './firebase-app.service';
 
 const flushMicrotasks = async () => {
@@ -447,5 +447,213 @@ describe('AuthService', () => {
 
     expect(service.state().mode).toBe('unauthenticated');
     expect((service as any).authInitialized).toBe(false);
+  });
+
+  describe('Fase 7: reauthenticateForSensitiveAction & error mapping', () => {
+    const restoreOnline = (originalDescriptor?: PropertyDescriptor) => {
+      if (originalDescriptor) {
+        Object.defineProperty(navigator, 'onLine', originalDescriptor);
+      } else {
+        Object.defineProperty(navigator, 'onLine', {
+          configurable: true,
+          value: true,
+        });
+      }
+    };
+
+    it('reauthenticates Email/Password users via EmailAuthProvider.credential without deleting user', async () => {
+      const currentUser = {
+        uid: 'u-pwd',
+        email: 'user@example.com',
+        displayName: null,
+        emailVerified: true,
+        providerData: [{ providerId: 'password' }],
+      };
+      (fbAuth.getAuth as jest.Mock).mockReturnValue({ currentUser });
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      await flushMicrotasks();
+
+      await service.reauthenticateForSensitiveAction({ password: 'MySecretPassword1!' });
+
+      expect(fbAuth.EmailAuthProvider.credential).toHaveBeenCalledWith(
+        'user@example.com',
+        'MySecretPassword1!'
+      );
+      expect(fbAuth.reauthenticateWithCredential).toHaveBeenCalledWith(
+        currentUser,
+        expect.objectContaining({ providerId: 'password' })
+      );
+      expect(fbAuth.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('reauthenticates Google users via reauthenticateWithPopup without deleting user', async () => {
+      const currentUser = {
+        uid: 'u-google',
+        email: 'google@example.com',
+        displayName: 'Google User',
+        emailVerified: true,
+        providerData: [{ providerId: 'google.com' }],
+      };
+      (fbAuth.getAuth as jest.Mock).mockReturnValue({ currentUser });
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      await flushMicrotasks();
+
+      await service.reauthenticateForSensitiveAction();
+
+      expect(fbAuth.reauthenticateWithPopup).toHaveBeenCalledWith(
+        currentUser,
+        expect.any(fbAuth.GoogleAuthProvider)
+      );
+      expect(fbAuth.reauthenticateWithCredential).not.toHaveBeenCalled();
+      expect(fbAuth.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects immediately with auth/network-request-failed when offline (navigator.onLine === false)', async () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      Object.defineProperty(navigator, 'onLine', {
+        configurable: true,
+        value: false,
+      });
+
+      try {
+        const currentUser = {
+          uid: 'u-pwd',
+          email: 'user@example.com',
+          emailVerified: true,
+          providerData: [{ providerId: 'password' }],
+        };
+        (fbAuth.getAuth as jest.Mock).mockReturnValue({ currentUser });
+        const service = TestBed.runInInjectionContext(() => new AuthService());
+        await flushMicrotasks();
+
+        await expect(
+          service.reauthenticateForSensitiveAction({ password: 'Password1!' })
+        ).rejects.toMatchObject({ code: 'auth/network-request-failed' });
+
+        expect(fbAuth.reauthenticateWithCredential).not.toHaveBeenCalled();
+        expect(fbAuth.reauthenticateWithPopup).not.toHaveBeenCalled();
+      } finally {
+        restoreOnline(originalDescriptor);
+      }
+    });
+
+    it('propagates expected Firebase reauthentication errors cleanly', async () => {
+      const authStub: { currentUser: unknown } = {
+        currentUser: {
+          uid: 'u-pwd',
+          email: 'user@example.com',
+          emailVerified: true,
+          providerData: [{ providerId: 'password' }],
+        },
+      };
+      (fbAuth.getAuth as jest.Mock).mockReturnValue(authStub);
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      await flushMicrotasks();
+
+      const expectedCodes = [
+        'auth/wrong-password',
+        'auth/invalid-credential',
+        'auth/too-many-requests',
+        'auth/network-request-failed',
+      ];
+
+      for (const code of expectedCodes) {
+        const firebaseError = Object.assign(new Error(code), { code });
+        (fbAuth.reauthenticateWithCredential as jest.Mock).mockRejectedValueOnce(firebaseError);
+
+        await expect(
+          service.reauthenticateForSensitiveAction({ password: 'WrongPassword!' })
+        ).rejects.toMatchObject({ code });
+      }
+
+      authStub.currentUser = {
+        uid: 'u-google',
+        email: 'google@example.com',
+        emailVerified: true,
+        providerData: [{ providerId: 'google.com' }],
+      };
+      const popupError = Object.assign(new Error('Popup closed'), {
+        code: 'auth/popup-closed-by-user',
+      });
+      (fbAuth.reauthenticateWithPopup as jest.Mock).mockRejectedValueOnce(popupError);
+
+      await expect(service.reauthenticateForSensitiveAction()).rejects.toMatchObject({
+        code: 'auth/popup-closed-by-user',
+      });
+    });
+
+    it('normalizes an uncoded error thrown during mid-flight offline disconnect to auth/network-request-failed', async () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+      const authStub = {
+        currentUser: {
+          uid: 'u-pwd',
+          email: 'user@example.com',
+          emailVerified: true,
+          providerData: [{ providerId: 'password' }],
+        },
+      };
+      (fbAuth.getAuth as jest.Mock).mockReturnValue(authStub);
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      await flushMicrotasks();
+
+      (fbAuth.reauthenticateWithCredential as jest.Mock).mockImplementationOnce(async () => {
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+        throw new Error('Failed to fetch');
+      });
+
+      try {
+        await expect(
+          service.reauthenticateForSensitiveAction({ password: 'Password1!' })
+        ).rejects.toMatchObject({ code: 'auth/network-request-failed' });
+      } finally {
+        restoreOnline(originalDescriptor);
+      }
+    });
+
+    it('throws auth/requires-recent-login when no currentUser is present and auth/invalid-credential when password is missing', async () => {
+      const authStub: { currentUser: unknown } = { currentUser: null };
+      (fbAuth.getAuth as jest.Mock).mockReturnValue(authStub);
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      await flushMicrotasks();
+
+      await expect(
+        service.reauthenticateForSensitiveAction({ password: 'Password1!' })
+      ).rejects.toMatchObject({ code: 'auth/requires-recent-login' });
+
+      authStub.currentUser = {
+        uid: 'u-pwd',
+        email: 'user@example.com',
+        emailVerified: true,
+        providerData: [{ providerId: 'password' }],
+      };
+
+      await expect(service.reauthenticateForSensitiveAction()).rejects.toMatchObject({
+        code: 'auth/invalid-credential',
+      });
+    });
+
+    it('maps reauth error codes to clear i18n translation keys', () => {
+      const service = TestBed.runInInjectionContext(() => new AuthService());
+      expect(mapReauthErrorKey({ code: 'auth/wrong-password' })).toBe('resetErrorInvalidPassword');
+      expect(mapReauthErrorKey({ code: 'auth/invalid-credential' })).toBe(
+        'resetErrorInvalidPassword'
+      );
+      expect(mapReauthErrorKey({ code: 'auth/too-many-requests' })).toBe(
+        'authErrorTooManyRequests'
+      );
+      expect(mapReauthErrorKey({ code: 'auth/network-request-failed' })).toBe('resetErrorOffline');
+      expect(mapReauthErrorKey({ code: 'auth/popup-closed-by-user' })).toBe(
+        'resetErrorPopupClosed'
+      );
+      expect(mapReauthErrorKey({ code: 'auth/cancelled-popup-request' })).toBe(
+        'resetErrorPopupClosed'
+      );
+      expect(mapReauthErrorKey({ code: 'auth/popup-blocked' })).toBe('authErrorPopupBlocked');
+      expect(mapReauthErrorKey({ code: 'auth/requires-recent-login' })).toBe(
+        'authDeleteAccountReauthRequired'
+      );
+      expect(service.mapReauthErrorKey(new Error('unknown'))).toBe('authGenericError');
+      expect(service.mapReauthErrorKey('non-object')).toBe('authGenericError');
+    });
   });
 });

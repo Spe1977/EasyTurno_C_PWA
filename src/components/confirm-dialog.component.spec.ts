@@ -62,17 +62,129 @@ describe('ConfirmDialogComponent', () => {
     expect(editSpy.mock.calls).toEqual([[true], [false]]);
   });
 
-  it('emits confirmReset in resetConfirm mode', () => {
+  it('requires typing RESET in Guest resetConfirm mode before emitting confirmReset', () => {
     fixture.componentRef.setInput('mode', 'resetConfirm');
+    fixture.componentRef.setInput('isAuthenticated', false);
     fixture.detectChanges();
 
+    const host = fixture.nativeElement as HTMLElement;
     const resetSpy = jest.fn();
     component.confirmReset.subscribe(resetSpy);
 
-    const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
-    buttons[0].click();
+    const keywordInput = host.querySelector('[data-cy="reset-keyword-input"]') as HTMLInputElement;
+    const confirmBtn = host.querySelector('[data-cy="reset-confirm-btn"]') as HTMLButtonElement;
+    const form = host.querySelector('form')!;
 
-    expect(resetSpy).toHaveBeenCalledTimes(1);
+    expect(keywordInput).not.toBeNull();
+    expect(host.querySelector('[data-cy="reset-password-input"]')).toBeNull();
+    expect(confirmBtn.disabled).toBe(true);
+
+    // Non-matching text keeps confirm disabled and blocks submission
+    keywordInput.value = 'reset';
+    keywordInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(confirmBtn.disabled).toBe(true);
+    form.dispatchEvent(new Event('submit'));
+    expect(resetSpy).not.toHaveBeenCalled();
+
+    // Matching RESET enables button and emits trimmed confirmationText
+    keywordInput.value = ' RESET ';
+    keywordInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(confirmBtn.disabled).toBe(false);
+    form.dispatchEvent(new Event('submit'));
+    expect(resetSpy).toHaveBeenCalledWith({ confirmationText: 'RESET' });
+  });
+
+  it('requires password in Email/Password resetConfirm mode and emits password payload', () => {
+    fixture.componentRef.setInput('mode', 'resetConfirm');
+    fixture.componentRef.setInput('isAuthenticated', true);
+    fixture.componentRef.setInput('hasPasswordProvider', true);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const resetSpy = jest.fn();
+    component.confirmReset.subscribe(resetSpy);
+
+    const passwordInput = host.querySelector(
+      '[data-cy="reset-password-input"]'
+    ) as HTMLInputElement;
+    const confirmBtn = host.querySelector('[data-cy="reset-confirm-btn"]') as HTMLButtonElement;
+    const form = host.querySelector('form')!;
+
+    expect(passwordInput).not.toBeNull();
+    expect(passwordInput.type).toBe('password');
+    expect(passwordInput.autocomplete).toBe('current-password');
+    expect(host.querySelector('[data-cy="reset-keyword-input"]')).toBeNull();
+    expect(confirmBtn.disabled).toBe(true);
+
+    passwordInput.value = 'SecretPass1!';
+    passwordInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(confirmBtn.disabled).toBe(false);
+
+    form.dispatchEvent(new Event('submit'));
+    expect(resetSpy).toHaveBeenCalledWith({ password: 'SecretPass1!' });
+  });
+
+  it('shows Google verification hint and emits empty payload in Google resetConfirm mode', () => {
+    fixture.componentRef.setInput('mode', 'resetConfirm');
+    fixture.componentRef.setInput('isAuthenticated', true);
+    fixture.componentRef.setInput('hasPasswordProvider', false);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const resetSpy = jest.fn();
+    component.confirmReset.subscribe(resetSpy);
+
+    expect(host.querySelector('[data-cy="reset-password-input"]')).toBeNull();
+    expect(host.querySelector('[data-cy="reset-keyword-input"]')).toBeNull();
+    const hint = host.querySelector('[data-cy="reset-google-hint"]');
+    expect(hint?.textContent).toContain(translationService.translate('resetConfirmGoogleHint'));
+
+    const confirmBtn = host.querySelector('[data-cy="reset-confirm-btn"]') as HTMLButtonElement;
+    expect(confirmBtn.disabled).toBe(false);
+    expect(confirmBtn.textContent).toContain(
+      translationService.translate('resetConfirmGoogleButton')
+    );
+
+    const form = host.querySelector('form')!;
+    form.dispatchEvent(new Event('submit'));
+    expect(resetSpy).toHaveBeenCalledWith({});
+  });
+
+  it('disables reset buttons while isResettingData is true and clears inputs when reopening resetConfirm', () => {
+    fixture.componentRef.setInput('mode', 'resetConfirm');
+    fixture.componentRef.setInput('isAuthenticated', false);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const resetSpy = jest.fn();
+    component.confirmReset.subscribe(resetSpy);
+
+    const keywordInput = host.querySelector('[data-cy="reset-keyword-input"]') as HTMLInputElement;
+    keywordInput.value = 'RESET';
+    keywordInput.dispatchEvent(new Event('input'));
+    fixture.componentRef.setInput('isResettingData', true);
+    fixture.detectChanges();
+
+    const confirmBtn = host.querySelector('[data-cy="reset-confirm-btn"]') as HTMLButtonElement;
+    const cancelBtn = host.querySelector('[data-cy="reset-cancel-btn"]') as HTMLButtonElement;
+    expect(confirmBtn.disabled).toBe(true);
+    expect(cancelBtn.disabled).toBe(true);
+    expect(confirmBtn.textContent).toContain(translationService.translate('resettingData'));
+
+    host.querySelector('form')!.dispatchEvent(new Event('submit'));
+    expect(resetSpy).not.toHaveBeenCalled();
+
+    fixture.componentRef.setInput('isResettingData', false);
+    fixture.componentRef.setInput('mode', 'deleteConfirm');
+    fixture.detectChanges();
+    fixture.componentRef.setInput('mode', 'resetConfirm');
+    fixture.detectChanges();
+
+    const reopenedInput = host.querySelector('[data-cy="reset-keyword-input"]') as HTMLInputElement;
+    expect(reopenedInput.value).toBe('');
   });
 
   it('syncs initialSearchDate and emits searchDateSubmit in searchDate mode', () => {
@@ -204,6 +316,22 @@ describe('ConfirmDialogComponent', () => {
       const searchInput = host.querySelector('input[name="searchDate"]') as HTMLInputElement;
       expect(searchInput.id).toBeTruthy();
       expect(host.querySelector(`label[for="${searchInput.id}"]`)).not.toBeNull();
+
+      fixture.componentRef.setInput('mode', 'resetConfirm');
+      fixture.componentRef.setInput('isAuthenticated', false);
+      fixture.detectChanges();
+      const guestInput = host.querySelector('[data-cy="reset-keyword-input"]') as HTMLInputElement;
+      expect(guestInput.id).toBeTruthy();
+      expect(host.querySelector(`label[for="${guestInput.id}"]`)).not.toBeNull();
+
+      fixture.componentRef.setInput('isAuthenticated', true);
+      fixture.componentRef.setInput('hasPasswordProvider', true);
+      fixture.detectChanges();
+      const passwordInput = host.querySelector(
+        '[data-cy="reset-password-input"]'
+      ) as HTMLInputElement;
+      expect(passwordInput.id).toBeTruthy();
+      expect(host.querySelector(`label[for="${passwordInput.id}"]`)).not.toBeNull();
     });
   });
 });

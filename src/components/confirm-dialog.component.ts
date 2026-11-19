@@ -1,6 +1,19 @@
-import { ChangeDetectionStrategy, Component, effect, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslatePipe } from '../pipes/translate.pipe';
+
+export interface ResetConfirmationPayload {
+  password?: string;
+  confirmationText?: string;
+}
 
 export type SecondaryDialogMode =
   | 'deleteConfirm'
@@ -316,6 +329,112 @@ export type SecondaryDialogMode =
           </div>
         </div>
       }
+      @case ('resetConfirm') {
+        <div
+          class="modal-fade-in w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-slate-800 dark:text-slate-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="resetConfirmTitle"
+          tabindex="-1"
+          (click)="$event.stopPropagation()"
+        >
+          <form (ngSubmit)="submitReset()">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="mx-auto h-12 w-12 text-amber-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+              />
+            </svg>
+            <p id="resetConfirmTitle" class="mt-4 text-lg font-semibold">
+              {{ 'resetConfirm' | translate }}
+            </p>
+
+            @if (isAuthenticated() && hasPasswordProvider()) {
+              <div class="mt-4 text-left">
+                <label for="reset-confirm-password" class="mb-1 block text-sm font-semibold">
+                  {{ 'resetConfirmPasswordLabel' | translate }}
+                </label>
+                <input
+                  id="reset-confirm-password"
+                  type="password"
+                  name="resetPassword"
+                  autocomplete="current-password"
+                  [value]="resetPasswordInput()"
+                  (input)="resetPasswordInput.set($any($event.target).value)"
+                  [disabled]="isResettingData()"
+                  data-cy="reset-password-input"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 transition-shadow outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:bg-slate-700 dark:text-slate-100"
+                />
+              </div>
+            } @else if (isAuthenticated()) {
+              <p
+                data-cy="reset-google-hint"
+                class="mt-3 text-sm text-slate-600 dark:text-slate-300"
+              >
+                {{ 'resetConfirmGoogleHint' | translate }}
+              </p>
+            } @else {
+              <div class="mt-4 space-y-2 text-left">
+                <label for="reset-confirm-keyword" class="block text-sm font-semibold">
+                  {{ 'resetConfirmGuestLabel' | translate }}
+                </label>
+                <input
+                  id="reset-confirm-keyword"
+                  type="text"
+                  name="resetKeyword"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  [attr.placeholder]="'resetConfirmGuestPlaceholder' | translate"
+                  [value]="resetKeywordInput()"
+                  (input)="resetKeywordInput.set($any($event.target).value)"
+                  [disabled]="isResettingData()"
+                  data-cy="reset-keyword-input"
+                  class="w-full rounded-lg border-0 bg-slate-100 p-2.5 font-mono transition-shadow outline-none focus:ring-2 focus:ring-rose-500 disabled:opacity-60 dark:bg-slate-700 dark:text-slate-100"
+                />
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  {{ 'resetConfirmGuestHint' | translate }}
+                </p>
+              </div>
+            }
+
+            <div class="mt-6 flex flex-col space-y-2">
+              <button
+                type="submit"
+                [disabled]="!canSubmitReset()"
+                data-cy="reset-confirm-btn"
+                class="w-full rounded-lg bg-rose-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                @if (isResettingData()) {
+                  {{ 'resettingData' | translate }}
+                } @else if (isAuthenticated() && !hasPasswordProvider()) {
+                  {{ 'resetConfirmGoogleButton' | translate }}
+                } @else {
+                  {{ 'resetAllData' | translate }}
+                }
+              </button>
+              <button
+                type="button"
+                [disabled]="isResettingData()"
+                data-cy="reset-cancel-btn"
+                (click)="closed.emit()"
+                class="w-full rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+              >
+                {{ 'cancel' | translate }}
+              </button>
+            </div>
+          </form>
+        </div>
+      }
       @default {
         <div
           class="modal-fade-in w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-slate-800 dark:text-slate-200"
@@ -369,9 +488,6 @@ export type SecondaryDialogMode =
               }
               @case ('editSeriesConfirm') {
                 {{ 'editSeriesConfirm' | translate }}
-              }
-              @case ('resetConfirm') {
-                {{ 'resetConfirm' | translate }}
               }
             }
           </p>
@@ -436,21 +552,6 @@ export type SecondaryDialogMode =
               >
                 {{ 'cancel' | translate }}
               </button>
-            } @else if (mode() === 'resetConfirm') {
-              <button
-                type="button"
-                (click)="confirmReset.emit()"
-                class="w-full rounded-lg bg-rose-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-rose-700"
-              >
-                {{ 'resetAllData' | translate }}
-              </button>
-              <button
-                type="button"
-                (click)="closed.emit()"
-                class="w-full rounded-lg bg-slate-200 px-4 py-2.5 font-semibold text-slate-800 transition-colors hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
-              >
-                {{ 'cancel' | translate }}
-              </button>
             }
           </div>
         </div>
@@ -461,13 +562,15 @@ export type SecondaryDialogMode =
 export class ConfirmDialogComponent {
   readonly mode = input.required<SecondaryDialogMode>();
   readonly passwordPromptMode = input<'export' | 'import'>('export');
+  readonly isAuthenticated = input(false);
   readonly hasPasswordProvider = input(false);
   readonly isDeletingAccount = input(false);
+  readonly isResettingData = input(false);
   readonly initialSearchDate = input('');
 
   readonly confirmDelete = output<boolean>();
   readonly confirmEditSeries = output<boolean>();
-  readonly confirmReset = output<void>();
+  readonly confirmReset = output<ResetConfirmationPayload>();
   readonly searchDateSubmit = output<string>();
   readonly deleteAccountProceed = output<void>();
   readonly deleteAccountConfirm = output<{ email: string; password: string }>();
@@ -481,6 +584,19 @@ export class ConfirmDialogComponent {
   readonly deleteAccountPasswordInput = signal('');
   readonly passwordInput = signal('');
   readonly passwordConfirmInput = signal('');
+  readonly resetPasswordInput = signal('');
+  readonly resetKeywordInput = signal('');
+
+  readonly canSubmitReset = computed(() => {
+    if (this.isResettingData()) return false;
+    if (!this.isAuthenticated()) {
+      return this.resetKeywordInput().trim() === 'RESET';
+    }
+    if (this.hasPasswordProvider()) {
+      return this.resetPasswordInput().length > 0;
+    }
+    return true;
+  });
 
   constructor() {
     effect(() => {
@@ -494,7 +610,23 @@ export class ConfirmDialogComponent {
       } else if (currentMode === 'passwordPrompt') {
         this.passwordInput.set('');
         this.passwordConfirmInput.set('');
+      } else if (currentMode === 'resetConfirm') {
+        this.resetPasswordInput.set('');
+        this.resetKeywordInput.set('');
       }
     });
+  }
+
+  submitReset(): void {
+    if (!this.canSubmitReset()) return;
+    if (!this.isAuthenticated()) {
+      this.confirmReset.emit({ confirmationText: this.resetKeywordInput().trim() });
+      return;
+    }
+    if (this.hasPasswordProvider()) {
+      this.confirmReset.emit({ password: this.resetPasswordInput() });
+      return;
+    }
+    this.confirmReset.emit({});
   }
 }
