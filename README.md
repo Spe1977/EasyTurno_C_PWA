@@ -100,7 +100,7 @@ src/
     shift-form-modal.component.ts         # Shift create/edit modal
     statistics-drawer.component.ts        # Analytics drawer (periods, overtime, allowances)
     settings-drawer.component.ts          # Theme, language, notifications, account, devices, backup
-    confirm-dialog.component.ts           # Confirmation, password, and date-search dialogs
+    confirm-dialog.component.ts           # Confirmation, protected reset, password, and date-search dialogs
     calendar.component.ts                 # Calendar view with touch & keyboard navigation
     shift-list-item.component.ts          # Shift card
     toast-container.component.ts          # Toast notifications
@@ -110,7 +110,7 @@ src/
     user-data.service.ts        # Single local/cloud ShiftDataState boundary
     firestore-user-data.service.ts # Lazy Firestore listeners, batch writes, device registry
     firebase-app.service.ts     # Lazy Firebase initialization + persistentLocalCache
-    auth.service.ts             # Firebase Auth + guest mode state
+    auth.service.ts             # Firebase Auth, re-authentication & guest mode state
     sync.service.ts             # Sync status orchestration & device registration
     device.service.ts           # Device ID, platform detection, installed-device soft limit
     crypto.service.ts           # 256-bit AES-GCM encryption & PBKDF2 backups
@@ -217,7 +217,7 @@ The project uses **Playwright** on Chromium with automatic dev-server management
 
 - `playwright.config.ts` - runner, browser, and web server configuration
 - `playwright/tests/smoke.spec.ts` - smoke tests for app bootstrap, calendar toggle, and shift creation
-- `playwright/tests/app-flows.spec.ts` - core browser flows: persistence, CRUD, theme/language, calendar, reset, recurring edit/delete, statistics, encrypted backup/import with password, and decryption error handling
+- `playwright/tests/app-flows.spec.ts` - core browser flows: persistence, CRUD, theme/language, calendar, strong `RESET` confirmation, recurring edit/delete, statistics, encrypted backup/import with password, and decryption error handling
 - `playwright/tests/calendar-offline.spec.ts` - full calendar navigation, dark mode/mobile gestures, offline persistence (`easyturno_user_data_v2`), recurring split edits, allowances, and bidirectional i18n
 - `playwright/tests/fase3-fixes.spec.ts` - toast visibility outside modals, Tailwind v4 backdrop opacity, calendar color borders, and English statistics i18n
 - `playwright/tests/fase4-optimization.spec.ts` - guest boot zero-Firebase lazy loading, `@defer` chunk loading, and offline Service Worker chunk caching
