@@ -133,6 +133,7 @@ src/
 - Exportable backups encrypted with a user password (`PBKDF2` + `AES-GCM`)
 - Hardened Content Security Policy (CSP), with `unsafe-inline` still allowed in local development for `ng serve` compatibility
 - Automatic migration of legacy unencrypted data
+- Protected full-data reset requiring Firebase re-authentication (password or Google popup) for signed-in accounts, or explicit `RESET` confirmation in guest mode
 
 ### Security model
 
@@ -157,8 +158,8 @@ Important note:
 - Build verified with Angular 22.2.6, TypeScript 6.0.3, Tailwind CSS 4.3.5, and Firebase 13.4.0
 - Bundle optimization with `@defer` lazy views, lazy Firebase/Capacitor SDK loading, and production bundle budgets enforced in `angular.json`
 - Cloud synchronization with Firebase Firestore (`ShiftSeries`, `ManualShift`, `ShiftOverride`) implemented and tested
-- Full Authentication (Email/Password + verification, Google Login, cloud-safe account deletion) complete
-- Unit tests: **33 suites, 742 tests passing** (including Service Worker, PWA manifest, CSP, CI config, Sync, Auth, Firestore, and Push Notifications; >95% branch coverage)
+- Full Authentication (Email/Password + verification, Google Login, cloud-safe account deletion, re-authenticated full-data reset)
+- Unit tests: **33 suites, 758 tests passing** (including Service Worker, PWA manifest, CSP, CI config, Sync, Auth, Firestore, and Push Notifications; >95% branch coverage)
 - Playwright browser flows: **40/40 passing** across 6 E2E spec files
 - Firebase Emulator Suite integrated for Auth + Firestore integration testing
 - Push Notifications (FCM) configured and tested on native Android
