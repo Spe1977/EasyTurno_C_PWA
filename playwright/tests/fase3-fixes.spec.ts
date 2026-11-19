@@ -1,5 +1,11 @@
 import { expect, Page, test } from '@playwright/test';
-import { bootEmptyApp, createShift, isoDateDaysFromToday, openStatistics } from './helpers';
+import {
+  bootEmptyApp,
+  confirmGuestDataReset,
+  createShift,
+  isoDateDaysFromToday,
+  openStatistics,
+} from './helpers';
 
 const HARDCODED_ITALIAN_STATS_PATTERNS: RegExp[] = [
   /Analisi e resoconto/i,
@@ -75,20 +81,7 @@ test.describe('Fase 3 bug fixes & Tailwind v4 / i18n regressions', () => {
   test('Step 3.1: displays success toast after resetting all data and closing confirmation modal', async ({
     page,
   }) => {
-    await page.locator('[data-cy="settings-btn"]').click();
-    await expect(page.locator('.modal-fade-in')).toBeVisible();
-
-    await page
-      .locator('.modal-fade-in')
-      .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-      .first()
-      .click();
-
-    const confirmationModal = page.locator('.modal-fade-in').last();
-    await expect(confirmationModal.getByText(/warning|attenzione/i)).toBeVisible();
-    await confirmationModal
-      .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-      .click();
+    await confirmGuestDataReset(page);
 
     await expect(page.locator('.modal-fade-in')).toHaveCount(0);
     await expect(page.locator('div.fixed.inset-0')).toHaveCount(0);

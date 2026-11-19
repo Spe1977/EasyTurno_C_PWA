@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   bootEmptyApp,
+  confirmGuestDataReset,
   createRecurringShift,
   createShift,
   isoDateDaysFromToday,
@@ -102,7 +103,7 @@ test('shows shift details from calendar day selection', async ({ page }) => {
   await expect(page.getByText(/\+1\.5h/i)).toBeVisible();
 });
 
-test('resets all data after confirmation', async ({ page }) => {
+test('resets all data only after typing RESET confirmation in guest mode', async ({ page }) => {
   await createShift(page, {
     title: 'Shift To Reset',
     date: isoDateDaysFromToday(1),
@@ -122,9 +123,20 @@ test('resets all data after confirmation', async ({ page }) => {
   const confirmationModal = page.locator('.modal-fade-in').last();
   await expect(confirmationModal.getByText(/warning|attenzione/i)).toBeVisible();
 
-  await confirmationModal
-    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-    .click();
+  const keywordInput = confirmationModal.locator('[data-cy="reset-keyword-input"]');
+  const confirmBtn = confirmationModal.locator('[data-cy="reset-confirm-btn"]');
+  await expect(keywordInput).toBeVisible();
+  await expect(confirmBtn).toBeDisabled();
+
+  // Lowercase or partial input must keep the destructive button disabled
+  await keywordInput.fill('reset');
+  await expect(confirmBtn).toBeDisabled();
+  await expect(page.getByText('Shift To Reset')).toBeVisible();
+
+  // Exact RESET keyword enables confirmation and completes the reset
+  await keywordInput.fill('RESET');
+  await expect(confirmBtn).toBeEnabled();
+  await confirmBtn.click();
 
   await expect(page.getByText('Shift To Reset')).not.toBeVisible();
 
@@ -163,17 +175,7 @@ test('exports an encrypted backup and imports it back with the password', async 
   await page.reload();
   await expect(page.getByText('Backup Shift')).toBeVisible();
 
-  await page.locator('[data-cy="settings-btn"]').click();
-  await page
-    .locator('.modal-fade-in')
-    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-    .first()
-    .click();
-
-  const confirmationModal = page.locator('.modal-fade-in').last();
-  await confirmationModal
-    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-    .click();
+  await confirmGuestDataReset(page);
 
   await expect(page.getByText('Backup Shift')).not.toBeVisible();
 
@@ -331,17 +333,7 @@ test('rejects import of an encrypted backup when the wrong password is provided'
   await page.reload();
   await expect(page.getByText('Protected Backup Shift')).toBeVisible();
 
-  await page.locator('[data-cy="settings-btn"]').click();
-  await page
-    .locator('.modal-fade-in')
-    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-    .first()
-    .click();
-
-  const resetModal = page.locator('.modal-fade-in').last();
-  await resetModal
-    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
-    .click();
+  await confirmGuestDataReset(page);
   await expect(page.getByText('Protected Backup Shift')).not.toBeVisible();
 
   await page.locator('[data-cy="settings-btn"]').click();

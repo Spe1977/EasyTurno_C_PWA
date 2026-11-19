@@ -113,3 +113,25 @@ export async function openStatistics(page: Page): Promise<void> {
   await page.locator('[data-cy="statistics-btn"]').click();
   await expect(page.getByRole('heading', { name: /statistics|statistiche/i })).toBeVisible();
 }
+
+export async function confirmGuestDataReset(page: Page): Promise<void> {
+  await page.locator('[data-cy="settings-btn"]').click();
+  await expect(page.getByText(/settings|impostazioni/i)).toBeVisible();
+
+  await page
+    .locator('.modal-fade-in')
+    .getByRole('button', { name: /^(reset all data|resetta tutti i dati)$/i })
+    .first()
+    .click();
+
+  const confirmationModal = page.locator('.modal-fade-in').last();
+  await expect(confirmationModal.getByText(/warning|attenzione/i)).toBeVisible();
+
+  const keywordInput = confirmationModal.locator('[data-cy="reset-keyword-input"]');
+  await expect(keywordInput).toBeVisible();
+  await keywordInput.fill('RESET');
+
+  const confirmBtn = confirmationModal.locator('[data-cy="reset-confirm-btn"]');
+  await expect(confirmBtn).toBeEnabled();
+  await confirmBtn.click();
+}
