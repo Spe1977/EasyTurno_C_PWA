@@ -136,9 +136,9 @@ Do not touch:
 ## Current Handoff
 
 Agent: Gemini CLI
-Date/time: 2026-11-19T11:44:36+01:00
+Date/time: 2026-11-19T11:52:52+01:00
 Task: Execute Fase 6 of `update.md` (Steps 6.1–6.3: CI Node matrix & `engines` alignment, post-build `check-csp` & `test:firebase` JDK 21 CI job, full local verification suite, `README.md`/`README_IT.md` sync, commit/push on `chore/pwa-update-plan`, PR to `main`, and superseded Dependabot PR cleanup) under `cli-collaboration` protocol.
-Status: in-progress (local verification green; preparing commit, push, PR, and Dependabot closure).
+Status: done; committed and pushed on branch `chore/pwa-update-plan`, PR `#42` opened toward `main` (`https://github.com/Spe1977/EasyTurno_C_PWA/pull/42`), and all 10 superseded Dependabot PRs closed.
 Files changed:
 - Added: `scripts/ci-config.spec.ts` (TDD verification for `package.json` `engines`, `.github/workflows/ci.yml`, and `angular.json` bundle budgets).
 - Modified: `package.json` (`engines.node` aligned to `^22.22.3 || ^24.15.0 || >=26.0.0`).
@@ -147,8 +147,8 @@ Files changed:
 - Modified: `update.md` & `AGENT_HANDOFF.md`.
 Tests red:
 - Step 6.1 TDD: `scripts/ci-config.spec.ts` failed (`7 failed, 2 passed`) before aligning `package.json` `engines.node` and `.github/workflows/ci.yml`.
-- Outside local host capability: `npm run test:firebase` blocked locally by missing Java runtime (`java` absent); added `firebase` job with JDK 21 in `.github/workflows/ci.yml` per user choice.
-Tests green (verified cleanly after final code/README edits):
+- Outside local host capability: `npm run test:firebase` blocked locally by missing Java runtime (`java` absent); verified green in GitHub Actions CI (`CI/firebase` job with JDK 21).
+Tests green (verified cleanly after final edits + CI on PR `#42`):
 - `npm ci` (clean, no `--legacy-peer-deps`)
 - `npm audit --omit=dev --audit-level=high` (`0` vulnerabilities)
 - `npm run lint` (`0` errors) & `npm run format:check` & Prettier on modified root/CI/script files (clean)
@@ -156,9 +156,10 @@ Tests green (verified cleanly after final code/README edits):
 - `npm test -- --coverage --watchAll=false` (`33/33` suites, `742/742` passed in 9.36 s; `98.85%` Stmts / `95.25%` Branch / `97.49%` Funcs / `99.64%` Lines)
 - `npm run build` (`2.889 s`, Initial total `340.52 kB` raw / `86.56 kB` transfer) & `npx jest scripts/check-csp.spec.ts` (`19/19` passed, 0 skipped)
 - `npm run test:pw` (`40/40` passed in 49.3 s)
+- GitHub PR `#42` checks: `CI/test (22.x)` (58s), `CI/test (24.x)` (58s), `CI/firebase` (48s), `CI/playwright` (5m27s), `Cloudflare Pages`, `GitGuardian Security Checks` — all green; Dependabot PRs `#6`, `#18`, `#30`, `#31`, `#32`, `#35`, `#36`, `#37`, `#40`, `#41` closed.
 Open concerns:
-- Awaiting GitHub Actions CI run on the PR for live verification of the new `firebase` (`test:firebase` with JDK 21) and `22.x`/`24.x` matrix jobs.
-Next agent starts from: Push `chore/pwa-update-plan`, open PR to `main`, close superseded Dependabot PRs, and monitor CI checks.
+- None for Web PWA scope (Fases 0–6 of `update.md` complete). Android native (`android/`) and Stitch restyling (`EasyTurno_C_PWA`) remain intentionally excluded per `update.md` Appendix B.
+Next agent starts from: Review and merge PR `#42` (`chore/pwa-update-plan` → `main`) when authorized by the user, or start any separate follow-up scope (e.g. Android native sync / Stitch restyling).
 Do not touch: `.~lock.update.md#` (if present), `web9.png`, `android/`, external `EasyTurno_C_PWA`, `occurrence-generator.*`, `user-data.model.ts`, `user-data.service.*`, `firebase.md`, `docs/superpowers/plans/*`.
 
 ---
